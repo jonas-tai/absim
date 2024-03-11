@@ -39,7 +39,7 @@ def printMonitorTimeSeriesToFile(fileDesc, prefix, monitor):
 
 
 class ClientAdder(Simulation.Process):
-    def __init__(self,):
+    def __init__(self, ):
         Simulation.Process.__init__(self, name='ClientAdder')
 
     def run(self, clientToAdd):
@@ -47,7 +47,6 @@ class ClientAdder(Simulation.Process):
 
 
 def runExperiment(args):
-
     # Set the random seed
     random.seed(args.seed)
     numpy.random.seed(args.seed)
@@ -74,15 +73,15 @@ def runExperiment(args):
                                  serviceTime=(args.serviceTime),
                                  serviceTimeModel=args.serviceTimeModel)
             servers.append(serv)
-    elif(args.expScenario == "multipleServiceTimeServers"):
-      # Start the servers
+    elif (args.expScenario == "multipleServiceTimeServers"):
+        # Start the servers
         for i in range(args.numServers):
             serv = server.Server(i,
                                  resourceCapacity=args.serverConcurrency,
                                  serviceTime=((i + 1) * args.serviceTime),
                                  serviceTimeModel=args.serviceTimeModel)
             servers.append(serv)
-    elif(args.expScenario == "heterogenousStaticServiceTimeScenario"):
+    elif (args.expScenario == "heterogenousStaticServiceTimeScenario"):
         baseServiceTime = args.serviceTime
 
         assert args.slowServerFraction >= 0 and args.slowServerFraction < 1.0
@@ -92,40 +91,40 @@ def runExperiment(args):
         assert not (args.slowServerSlowness != 0
                     and args.slowServerFraction == 0)
 
-        if(args.slowServerFraction > 0.0):
+        if (args.slowServerFraction > 0.0):
             slowServerRate = (args.serverConcurrency *
-                              1/float(baseServiceTime)) *\
-                args.slowServerSlowness
+                              1 / float(baseServiceTime)) * \
+                             args.slowServerSlowness
             numSlowServers = int(args.slowServerFraction * args.numServers)
             slowServerRates = [slowServerRate] * numSlowServers
 
             numFastServers = args.numServers - numSlowServers
             totalRate = (args.serverConcurrency *
-                         1/float(args.serviceTime) * args.numServers)
-            fastServerRate = (totalRate - sum(slowServerRates))\
-                / float(numFastServers)
+                         1 / float(args.serviceTime) * args.numServers)
+            fastServerRate = (totalRate - sum(slowServerRates)) \
+                             / float(numFastServers)
             fastServerRates = [fastServerRate] * numFastServers
             serviceRatePerServer = slowServerRates + fastServerRates
         else:
             serviceRatePerServer = [args.serverConcurrency *
-                                    1/float(args.serviceTime)] * args.numServers
+                                    1 / float(args.serviceTime)] * args.numServers
 
         random.shuffle(serviceRatePerServer)
-        # print sum(serviceRatePerServer), (1/float(baseServiceTime)) * args.numServers
-        assert sum(serviceRatePerServer) > 0.99 *\
-            (1/float(baseServiceTime)) * args.numServers
-        assert sum(serviceRatePerServer) <=\
-            (1/float(baseServiceTime)) * args.numServers
+        # print(sum(serviceRatePerServer), (1/float(baseServiceTime)) * args.numServers)
+        assert sum(serviceRatePerServer) > 0.99 * \
+               (1 / float(baseServiceTime)) * args.numServers
+        assert sum(serviceRatePerServer) <= \
+               (1 / float(baseServiceTime)) * args.numServers
 
         # Start the servers
         for i in range(args.numServers):
-            st = 1/float(serviceRatePerServer[i])
+            st = 1 / float(serviceRatePerServer[i])
             serv = server.Server(i,
                                  resourceCapacity=args.serverConcurrency,
                                  serviceTime=st,
                                  serviceTimeModel=args.serviceTimeModel)
             servers.append(serv)
-    elif(args.expScenario == "timeVaryingServiceTimeServers"):
+    elif (args.expScenario == "timeVaryingServiceTimeServers"):
         assert args.intervalParam != 0.0
         assert args.timeVaryingDrift != 0.0
 
@@ -141,7 +140,7 @@ def runExperiment(args):
             Simulation.activate(mup, mup.run(), at=0.0)
             servers.append(serv)
     else:
-        print "Unknown experiment scenario"
+        print("Unknown experiment scenario")
         sys.exit(-1)
 
     baseDemandWeight = 1.0
@@ -151,14 +150,14 @@ def runExperiment(args):
     assert not (args.demandSkew == 0 and args.highDemandFraction != 0)
     assert not (args.demandSkew != 0 and args.highDemandFraction == 0)
 
-    if(args.highDemandFraction > 0.0 and args.demandSkew >= 0):
-        heavyClientWeight = baseDemandWeight *\
-            args.demandSkew/args.highDemandFraction
+    if (args.highDemandFraction > 0.0 and args.demandSkew >= 0):
+        heavyClientWeight = baseDemandWeight * \
+                            args.demandSkew / args.highDemandFraction
         numHeavyClients = int(args.highDemandFraction * args.numClients)
         heavyClientWeights = [heavyClientWeight] * numHeavyClients
 
-        lightClientWeight = baseDemandWeight *\
-            (1 - args.demandSkew)/(1 - args.highDemandFraction)
+        lightClientWeight = baseDemandWeight * \
+                            (1 - args.demandSkew) / (1 - args.highDemandFraction)
         numLightClients = args.numClients - numHeavyClients
         lightClientWeights = [lightClientWeight] * numLightClients
         clientWeights = heavyClientWeights + lightClientWeights
@@ -194,21 +193,21 @@ def runExperiment(args):
     arrivalRate = 0
     interArrivalTime = 0
     if (len(serviceRatePerServer) > 0):
-        print serviceRatePerServer
+        print(serviceRatePerServer)
         arrivalRate = (args.utilization * sum(serviceRatePerServer))
-        interArrivalTime = 1/float(arrivalRate)
+        interArrivalTime = 1 / float(arrivalRate)
     else:
-        arrivalRate = args.numServers *\
-            (args.utilization * args.serverConcurrency *
-             1/float(args.serviceTime))
-        interArrivalTime = 1/float(arrivalRate)
+        arrivalRate = args.numServers * \
+                      (args.utilization * args.serverConcurrency *
+                       1 / float(args.serviceTime))
+        interArrivalTime = 1 / float(arrivalRate)
 
     for i in range(args.numWorkload):
         w = workload.Workload(i, latencyMonitor,
                               clients,
                               args.workloadModel,
                               interArrivalTime * args.numWorkload,
-                              args.numRequests/args.numWorkload)
+                              args.numRequests / args.numWorkload)
         Simulation.activate(w, w.run(),
                             at=0.0),
         workloadGens.append(w)
@@ -217,7 +216,7 @@ def runExperiment(args):
     Simulation.simulate(until=args.simulationDuration)
 
     #
-    # Print a bunch of timeseries
+    # print(a bunch of timeseries)
     #
     pendingRequestsFD = open("../%s/%s_PendingRequests" %
                              (args.logFolder,
@@ -270,15 +269,15 @@ def runExperiment(args):
         printMonitorTimeSeriesToFile(serverRRFD,
                                      serv.id,
                                      serv.serverRRMonitor)
-        print "------- Server:%s %s ------" % (serv.id, "WaitMon")
-        print "Mean:", serv.queueResource.waitMon.mean()
+        print("------- Server:%s %s ------" % (serv.id, "WaitMon"))
+        print("Mean:", serv.queueResource.waitMon.mean())
 
-        print "------- Server:%s %s ------" % (serv.id, "ActMon")
-        print "Mean:", serv.queueResource.actMon.mean()
+        print("------- Server:%s %s ------" % (serv.id, "ActMon"))
+        print("Mean:", serv.queueResource.actMon.mean())
 
-    print "------- Latency ------"
-    print "Mean Latency:",\
-      sum([float(entry[1].split()[0]) for entry in latencyMonitor])/float(len(latencyMonitor))
+    print("------- Latency ------")
+    print("Mean Latency:",
+          sum([float(entry[1].split()[0]) for entry in latencyMonitor]) / float(len(latencyMonitor)))
 
     printMonitorTimeSeriesToFile(latencyFD, "0",
                                  latencyMonitor)

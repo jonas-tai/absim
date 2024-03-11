@@ -31,7 +31,7 @@ class Server():
                 + self.serviceTime \
                 * math.sin(1 + Simulation.now()/100)
         else:
-            print "Unknown service time model"
+            print("Unknown service time model")
             sys.exit(-1)
 
         return serviceTime

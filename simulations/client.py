@@ -218,7 +218,7 @@ class Client():
                        > badnessThreshold):
                         replicaSet.sort(key=self.dsScores.get)
         else:
-            print self.REPLICA_SELECTION_STRATEGY
+            print(self.REPLICA_SELECTION_STRATEGY)
             assert False, "REPLICA_SELECTION_STRATEGY isn't set or is invalid"
 
         return replicaSet

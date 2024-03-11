@@ -42,12 +42,11 @@ slowServerSlowness = [0]
 intervalParam = [10, 50, 100, 200, 300, 500]
 timeVaryingDrift = [5]
 
-
 logFolder = "post-nsdi-tv-sweep" + uniqId
 # logFolder = "paperSkewSweep" + uniqId
 
 if not os.path.exists(logFolder):
-        os.makedirs(logFolder)
+    os.makedirs(logFolder)
 
 LIST = [numClients,
         numServers,
@@ -82,33 +81,33 @@ LIST = [numClients,
         ]
 PARAM_COMBINATIONS = list(itertools.product(*LIST))
 
-print len(PARAM_COMBINATIONS)
+print(len(PARAM_COMBINATIONS))
 
 basePath = os.getcwd()
 
 for combination in PARAM_COMBINATIONS:
-        numClients, numServers, numWorkload, \
-            workloadModel, serverConcurrency, \
-            serviceTime, utilization, \
-            serviceTimeModel, replicationFactor, selectionStrategy, \
-            rateInterval, cubicC, cubicSmax, \
-            cubicBeta, hysterisisFactor, shadowReadRatio, \
-            accessPattern, nwLatencyBase, \
-            nwLatencyMu, nwLatencySigma, \
-            simulationDuration, seed, \
-            numRequests, expScenario, \
-            demandSkew, highDemandFraction, \
-            slowServerFraction, \
-            slowServerSlowness, intervalParam, \
-            timeVaryingDrift, = combination
+    numClients, numServers, numWorkload, \
+        workloadModel, serverConcurrency, \
+        serviceTime, utilization, \
+        serviceTimeModel, replicationFactor, selectionStrategy, \
+        rateInterval, cubicC, cubicSmax, \
+        cubicBeta, hysterisisFactor, shadowReadRatio, \
+        accessPattern, nwLatencyBase, \
+        nwLatencyMu, nwLatencySigma, \
+        simulationDuration, seed, \
+        numRequests, expScenario, \
+        demandSkew, highDemandFraction, \
+        slowServerFraction, \
+        slowServerSlowness, intervalParam, \
+        timeVaryingDrift, = combination
 
-        os.chdir(basePath + "/simulations")
-        backpressure = ""
+    os.chdir(basePath + "/simulations")
+    backpressure = ""
 
-        if (selectionStrategy == "expDelay"):
-            backpressure = "--backpressure"
+    if (selectionStrategy == "expDelay"):
+        backpressure = "--backpressure"
 
-        cmd = "python factorialExperiment.py \
+    cmd = "python factorialExperiment.py \
                 --numClients %s\
                 --numServers %s\
                 --numWorkload %s\
@@ -140,63 +139,63 @@ for combination in PARAM_COMBINATIONS:
                 --slowServerSlowness %s\
                 --intervalParam %s\
                 --timeVaryingDrift %s\
-                --logFolder %s %s"\
-                  % (numClients,
-                     numServers,
-                     numWorkload,
-                     workloadModel,
-                     serverConcurrency,
-                     serviceTime,
-                     utilization,
-                     serviceTimeModel,
-                     replicationFactor,
-                     selectionStrategy,
-                     shadowReadRatio,
-                     rateInterval,
-                     cubicC,
-                     cubicSmax,
-                     cubicBeta,
-                     hysterisisFactor,
-                     accessPattern,
-                     nwLatencyBase,
-                     nwLatencyMu,
-                     nwLatencySigma,
-                     selectionStrategy,
-                     simulationDuration,
-                     seed,
-                     numRequests,
-                     expScenario,
-                     demandSkew,
-                     highDemandFraction,
-                     slowServerFraction,
-                     slowServerSlowness,
-                     intervalParam,
-                     timeVaryingDrift,
-                     logFolder,
-                     backpressure)
+                --logFolder %s %s" \
+          % (numClients,
+             numServers,
+             numWorkload,
+             workloadModel,
+             serverConcurrency,
+             serviceTime,
+             utilization,
+             serviceTimeModel,
+             replicationFactor,
+             selectionStrategy,
+             shadowReadRatio,
+             rateInterval,
+             cubicC,
+             cubicSmax,
+             cubicBeta,
+             hysterisisFactor,
+             accessPattern,
+             nwLatencyBase,
+             nwLatencyMu,
+             nwLatencySigma,
+             selectionStrategy,
+             simulationDuration,
+             seed,
+             numRequests,
+             expScenario,
+             demandSkew,
+             highDemandFraction,
+             slowServerFraction,
+             slowServerSlowness,
+             intervalParam,
+             timeVaryingDrift,
+             logFolder,
+             backpressure)
+    proc = subprocess.Popen(cmd.split(),
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    out, err = proc.communicate()
+
+    if (proc.returncode != 0):
+        print(' '.join(map(lambda x: str(x), combination)) + " ERROR")
+    else:
+        os.chdir(basePath + "/plotting")
+        cmd = "Rscript factorialResults.r %s %s" \
+              % (selectionStrategy, logFolder)
         proc = subprocess.Popen(cmd.split(),
                                 stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
         out, err = proc.communicate()
-
-        if (proc.returncode != 0):
-            print ' '.join(map(lambda x: str(x), combination)) + " ERROR"
-        else:
-            os.chdir(basePath + "/plotting")
-            cmd = "Rscript factorialResults.r %s %s"\
-                % (selectionStrategy, logFolder)
-            proc = subprocess.Popen(cmd.split(),
-                                    stdin=subprocess.PIPE,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
-            out, err = proc.communicate()
-            for line in out.split("\n"):
-                if (selectionStrategy in line):
-                    parts = line.split()
-                    for i in range(len(parts)):
-                        parts[i] = parts[i][1:-1]
-                    print ' '.join(map(lambda x: str(x), combination))\
-                        + " " + ' '.join(parts)
-                    sys.stdout.flush()
-        os.chdir(basePath)
+        for line in out.split("\n"):
+            if (selectionStrategy in line):
+                parts = line.split()
+                for i in range(len(parts)):
+                    parts[i] = parts[i][1:-1]
+                print(' '.join(map(lambda x: str(x), combination))
+                      + " " + ' '.join(parts))
+                sys.stdout.flush()
+    os.chdir(basePath)
