@@ -295,11 +295,11 @@ if __name__ == '__main__':
     parser.add_argument('--serviceTime', nargs='?',
                         type=float, default=1)
     parser.add_argument('--workloadModel', nargs='?',
-                        type=str, default="constant")
+                        type=str, default="poisson")
     parser.add_argument('--utilization', nargs='?',
                         type=float, default=0.90)
     parser.add_argument('--serviceTimeModel', nargs='?',
-                        type=str, default="constant")
+                        type=str, default="random.expovariate")
     parser.add_argument('--replicationFactor', nargs='?',
                         type=int, default=1)
     parser.add_argument('--selectionStrategy', nargs='?',

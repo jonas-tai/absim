@@ -36,8 +36,7 @@ class Workload:
 
             # Simulate client delay
             if (self.model == "poisson"):
-                yield Simulation.hold, self,\
-                    numpy.random.poisson(self.model_param)
+                yield Simulation.timeout(numpy.random.poisson(self.model_param))
 
             # If model is gaussian, add gaussian delay
             # If model is constant, add fixed delay

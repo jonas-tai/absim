@@ -424,7 +424,7 @@ class BackpressureScheduler:
                     # Backpressure mode. Wait for the least amount of time
                     # necessary until at least one rate limiter is expected
                     # to be available
-                    yield Simulation.hold, self, minDurationToWait
+                    yield Simulation.timeout(minDurationToWait)
                     # NOTE: In principle, these 2 lines below would not be
                     # necessary because the rate limiter would have exactly 1
                     # token after minDurationWait. However, due to
@@ -520,7 +520,7 @@ class DynamicSnitch:
         # Start each process with a minor delay
 
         while (1):
-            yield Simulation.hold, self, self.SNITCHING_INTERVAL
+            yield Simulation.timeout(self.SNITCHING_INTERVAL)
 
             # Adaptation of DynamicEndpointSnitch algorithm
             maxLatency = 1.0
