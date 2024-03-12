@@ -1,7 +1,9 @@
-import SimPy.Simulation as Simulation
+from global_sim import Simulation
+import simpy
 import math
 import random
 import sys
+from monitor import Monitor
 
 
 class Server():
@@ -11,14 +13,16 @@ class Server():
         self.id = id_
         self.serviceTime = serviceTime
         self.serviceTimeModel = serviceTimeModel
-        self.queueResource = Simulation.Resource(capacity=resourceCapacity,
-                                                 monitored=True)
-        self.serverRRMonitor = Simulation.Monitor(name="ServerMonitor")
+        self.queueResource = simpy.Resource(capacity=resourceCapacity, env=Simulation)
+        self.serverRRMonitor = Monitor()
+        self.waitMon = Monitor()
+        self.actMon = Monitor()
 
     def enqueueTask(self, task):
         executor = Executor(self, task)
         self.serverRRMonitor.observe(1)
-        Simulation.activate(executor, executor.run(), Simulation.now())
+        Simulation.process(executor.run())
+        # Simulation.activate(executor, executor.run(), Simulation.now)
 
     def getServiceTime(self):
         serviceTime = 0.0
@@ -29,7 +33,7 @@ class Server():
         elif(self.serviceTimeModel == "math.sin"):
             serviceTime = self.serviceTime \
                 + self.serviceTime \
-                * math.sin(1 + Simulation.now()/100)
+                * math.sin(1 + Simulation.now/100)
         else:
             print("Unknown service time model")
             sys.exit(-1)
@@ -37,24 +41,28 @@ class Server():
         return serviceTime
 
 
-class Executor(Simulation.Process):
+class Executor:
 
     def __init__(self, server, task):
         self.server = server
         self.task = task
-        Simulation.Process.__init__(self, name='Executor')
+        # Simulation.process(self.run(), 'Executor')
 
     def run(self):
-        start = Simulation.now()
-        queueSizeBefore = len(self.server.queueResource.waitQ)
-        yield Simulation.hold, self
-        yield Simulation.request, self, self.server.queueResource
-        waitTime = Simulation.now() - start         # W_i
+        start = Simulation.now
+        queueSizeBefore = len(self.server.queueResource.queue)
+        yield Simulation.timeout(0)
+        request = self.server.queueResource.request()
+        yield request
+        waitTime = Simulation.now - start         # W_i
         serviceTime = self.server.getServiceTime()  # Mu_i
-        yield Simulation.hold, self, serviceTime
-        yield Simulation.release, self, self.server.queueResource
+        yield Simulation.timeout(serviceTime)
+        self.server.queueResource.release(request)
 
-        queueSizeAfter = len(self.server.queueResource.waitQ)
+        self.server.waitMon.observe(waitTime)
+        self.server.actMon.observe(serviceTime)
+
+        queueSizeAfter = len(self.server.queueResource.queue)
         self.task.sigTaskComplete({"waitingTime": waitTime,
                                    "serviceTime": serviceTime,
                                    "queueSizeBefore": queueSizeBefore,

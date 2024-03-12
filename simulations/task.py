@@ -1,4 +1,4 @@
-import SimPy.Simulation as Simulation
+from global_sim import Simulation
 
 
 class Task():
@@ -6,11 +6,11 @@ class Task():
        for holding specific attributes if need be"""
     def __init__(self, id_, latencyMonitor):
         self.id = id_
-        self.start = Simulation.now()
-        self.completionEvent = Simulation.SimEvent("ClientToServerCompletion")
+        self.start = Simulation.now
+        self.completionEvent = Simulation.event()
         self.latencyMonitor = latencyMonitor
 
     # Used as a notifier mechanism
-    def sigTaskComplete(self, piggyBack=None):
+    def sigTaskComplete(self, piggyback=None):
         if (self.completionEvent is not None):
-            self.completionEvent.signal(piggyBack)
+            self.completionEvent.succeed(piggyback)

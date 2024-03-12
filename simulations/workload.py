@@ -1,10 +1,10 @@
-import SimPy.Simulation as Simulation
+from global_sim import Simulation
 import random
 import task
 import numpy
 
 
-class Workload(Simulation.Process):
+class Workload:
 
     def __init__(self, id_, latencyMonitor, clientList,
                  model, model_param, numRequests):
@@ -14,7 +14,7 @@ class Workload(Simulation.Process):
         self.model_param = model_param
         self.numRequests = numRequests
         self.total = sum(client.demandWeight for client in self.clientList)
-        Simulation.Process.__init__(self, name='Workload' + str(id_))
+        # self.proc = Simulation.process(self.run(), 'Workload' + str(id_))
 
     # TODO: also need non-uniform client access
     # Need to pin workload to a client
@@ -23,7 +23,7 @@ class Workload(Simulation.Process):
         taskCounter = 0
 
         while(self.numRequests != 0):
-            yield Simulation.hold, self,
+            yield Simulation.timeout(0)
 
             taskToSchedule = task.Task("Task" + str(taskCounter),
                                        self.latencyMonitor)
@@ -42,7 +42,7 @@ class Workload(Simulation.Process):
             # If model is gaussian, add gaussian delay
             # If model is constant, add fixed delay
             if (self.model == "constant"):
-                yield Simulation.hold, self, self.model_param
+                yield Simulation.timeout(self.model_param)
 
             self.numRequests -= 1
 

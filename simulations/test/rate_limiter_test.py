@@ -52,7 +52,7 @@ class Observer(Simulation.Process):
         # repair activity
         rl.tryAcquire()
         rl.tokens = 10
-        rl.lastSent = Simulation.now()
+        rl.lastSent = Simulation.now
         self.forceConsumeNTokens(rl, 30)
         assert rl.getTokens() == -20, rl.getTokens()
 

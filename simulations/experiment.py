@@ -1,13 +1,15 @@
-import SimPy.Simulation as Simulation
+from global_sim import Simulation
 import server
 import client
 import workload
 import argparse
 import random
 import constants
-import numpy
+import numpy as np
 import sys
 import muUpdater
+from simulations.monitor import Monitor
+from pathlib import Path
 
 
 def printMonitorTimeSeriesToFile(fileDesc, prefix, monitor):
@@ -38,20 +40,10 @@ def printMonitorTimeSeriesToFile(fileDesc, prefix, monitor):
 #             self.servers[0].serviceTime = 1000
 
 
-class ClientAdder(Simulation.Process):
-    def __init__(self, ):
-        Simulation.Process.__init__(self, name='ClientAdder')
-
-    def run(self, clientToAdd):
-        yield Simulation.hold, self,
-
-
 def runExperiment(args):
     # Set the random seed
     random.seed(args.seed)
-    numpy.random.seed(args.seed)
-
-    Simulation.initialize()
+    np.random.seed(args.seed)
 
     servers = []
     clients = []
@@ -137,7 +129,7 @@ def runExperiment(args):
             mup = muUpdater.MuUpdater(serv, args.intervalParam,
                                       args.serviceTime,
                                       args.timeVaryingDrift)
-            Simulation.activate(mup, mup.run(), at=0.0)
+            Simulation.process(mup.run(),at=0.0)
             servers.append(serv)
     else:
         print("Unknown experiment scenario")
@@ -185,7 +177,7 @@ def runExperiment(args):
         clients.append(c)
 
     # Start workload generators (analogous to YCSB)
-    latencyMonitor = Simulation.Monitor(name="Latency")
+    latencyMonitor = Monitor(name="Latency")
 
     # This is where we set the inter-arrival times based on
     # the required utilization level and the service time
@@ -208,16 +200,23 @@ def runExperiment(args):
                               args.workloadModel,
                               interArrivalTime * args.numWorkload,
                               args.numRequests / args.numWorkload)
-        Simulation.activate(w, w.run(),
-                            at=0.0),
+        Simulation.process(w.run())
         workloadGens.append(w)
 
     # Begin simulation
-    Simulation.simulate(until=args.simulationDuration)
+    Simulation.run(until=args.simulationDuration)
 
     #
     # print(a bunch of timeseries)
     #
+
+    exp_path = Path('..', args.logFolder, args.expPrefix)
+
+    if not exp_path.exists():
+        exp_path.mkdir(parents=True, exist_ok=True)
+
+
+
     pendingRequestsFD = open("../%s/%s_PendingRequests" %
                              (args.logFolder,
                               args.expPrefix), 'w')
@@ -262,22 +261,21 @@ def runExperiment(args):
     for serv in servers:
         printMonitorTimeSeriesToFile(waitMonFD,
                                      serv.id,
-                                     serv.queueResource.waitMon)
+                                     serv.waitMon)
         printMonitorTimeSeriesToFile(actMonFD,
                                      serv.id,
-                                     serv.queueResource.actMon)
+                                     serv.actMon)
         printMonitorTimeSeriesToFile(serverRRFD,
                                      serv.id,
                                      serv.serverRRMonitor)
         print("------- Server:%s %s ------" % (serv.id, "WaitMon"))
-        print("Mean:", serv.queueResource.waitMon.mean())
+        print("Mean:", serv.waitMon.mean())
 
         print("------- Server:%s %s ------" % (serv.id, "ActMon"))
-        print("Mean:", serv.queueResource.actMon.mean())
+        print("Mean:", serv.actMon.mean())
 
     print("------- Latency ------")
-    print("Mean Latency:",
-          sum([float(entry[1].split()[0]) for entry in latencyMonitor]) / float(len(latencyMonitor)))
+    print("Mean Latency:", np.mean([entry[0] for entry in latencyMonitor]))
 
     printMonitorTimeSeriesToFile(latencyFD, "0",
                                  latencyMonitor)
@@ -289,7 +287,7 @@ if __name__ == '__main__':
     parser.add_argument('--numClients', nargs='?',
                         type=int, default=1)
     parser.add_argument('--numServers', nargs='?',
-                        type=int, default=1)
+                        type=int, default=5)
     parser.add_argument('--numWorkload', nargs='?',
                         type=int, default=1)
     parser.add_argument('--serverConcurrency', nargs='?',
@@ -329,7 +327,7 @@ if __name__ == '__main__':
     parser.add_argument('--nwLatencySigma', nargs='?',
                         type=float, default=0.0)
     parser.add_argument('--expPrefix', nargs='?',
-                        type=str, default="")
+                        type=str, default="0")
     parser.add_argument('--seed', nargs='?',
                         type=int, default=25072014)
     parser.add_argument('--simulationDuration', nargs='?',
@@ -339,7 +337,7 @@ if __name__ == '__main__':
     parser.add_argument('--logFolder', nargs='?',
                         type=str, default="logs")
     parser.add_argument('--expScenario', nargs='?',
-                        type=str, default="")
+                        type=str, default="base")
     parser.add_argument('--demandSkew', nargs='?',
                         type=float, default=0)
     parser.add_argument('--highDemandFraction', nargs='?',
