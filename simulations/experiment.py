@@ -10,6 +10,7 @@ import sys
 import muUpdater
 from simulations.monitor import Monitor
 from pathlib import Path
+from model_trainer import Trainer
 
 
 def printMonitorTimeSeriesToFile(fileDesc, prefix, monitor):
@@ -17,30 +18,17 @@ def printMonitorTimeSeriesToFile(fileDesc, prefix, monitor):
         fileDesc.write("%s %s %s\n" % (prefix, entry[0], entry[1]))
 
 
-# class WorkloadUpdater(Simulation.Process):
-#     def __init__(self, workload, value, clients, servers):
-#         self.workload = workload
-#         self.value = value
-#         self.clients = clients
-#         self.servers = servers
-#         Simulation.Process.__init__(self, name='WorkloadUpdater')
+def rlExperimentWrapper(args):
+    # Start the models and etc.
+    # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
+    trainer = Trainer(args.num_servers)
+    NUM_EPSIODES = 10
 
-#     def run(self):
-#         # while(1):
-#             yield Simulation.hold, self,
-#             # self.workload.model_param = random.uniform(self.value,
-#                                                        # self.value * 40)
-#             # old = self.workload.model_param
-#             # self.workload.model_param = self.value
-#             # self.workload.clientList = self.clients
-#             # self.workload.total = \
-#             #     sum(client.demandWeight for client in self.clients)
-#             # yield Simulation.hold, self, 1000
-#             # self.workload.model_param = old
-#             self.servers[0].serviceTime = 1000
+    for i_episode in range(NUM_EPSIODES):
+        runExperiment(args, trainer)
+    
 
-
-def runExperiment(args):
+def runExperiment(args, trainer : Trainer = None):
     # Set the random seed
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -173,7 +161,8 @@ def runExperiment(args):
                           cubicSmax=args.cubicSmax,
                           cubicBeta=args.cubicBeta,
                           hysterisisFactor=args.hysterisisFactor,
-                          demandWeight=clientWeights[i])
+                          demandWeight=clientWeights[i],
+                          trainer=trainer)
         clients.append(c)
 
     # Start workload generators (analogous to YCSB)
@@ -279,6 +268,28 @@ def runExperiment(args):
                                  latencyMonitor)
     assert args.numRequests == len(latencyMonitor)
 
+
+# class WorkloadUpdater(Simulation.Process):
+#     def __init__(self, workload, value, clients, servers):
+#         self.workload = workload
+#         self.value = value
+#         self.clients = clients
+#         self.servers = servers
+#         Simulation.Process.__init__(self, name='WorkloadUpdater')
+
+#     def run(self):
+#         # while(1):
+#             yield Simulation.hold, self,
+#             # self.workload.model_param = random.uniform(self.value,
+#                                                        # self.value * 40)
+#             # old = self.workload.model_param
+#             # self.workload.model_param = self.value
+#             # self.workload.clientList = self.clients
+#             # self.workload.total = \
+#             #     sum(client.demandWeight for client in self.clients)
+#             # yield Simulation.hold, self, 1000
+#             # self.workload.model_param = old
+#             self.servers[0].serviceTime = 1000
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Absinthe sim.')

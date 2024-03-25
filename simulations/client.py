@@ -14,7 +14,7 @@ class Client():
                  accessPattern, replicationFactor, backpressure,
                  shadowReadRatio, rateInterval,
                  cubicC, cubicSmax, cubicBeta, hysterisisFactor,
-                 demandWeight):
+                 demandWeight, trainer = None):
         self.id = id_
         self.serverList = serverList
         self.accessPattern = accessPattern
@@ -29,6 +29,7 @@ class Client():
         self.backpressure = backpressure  # True/Flase
         self.shadowReadRatio = shadowReadRatio
         self.demandWeight = demandWeight
+        self.trainer = trainer
 
         # Book-keeping and metrics to be recorded follow...
 
@@ -115,6 +116,8 @@ class Client():
             sortedReplicaSet = self.sort(replicaSet)
             replicaToServe = sortedReplicaSet[0]
             self.sendRequest(task, replicaToServe)
+            # TODO: GET THE REWARD SOMEHOW
+            # self.trainer.training_step(obs, action, reward, terminated)
             self.maybeSendShadowReads(replicaToServe, replicaSet)
         else:
             self.backpressureSchedulers[replicaSet[0]].enqueue(task, replicaSet)
@@ -210,6 +213,11 @@ class Client():
                     if ((firstNodeScore - newNodeScore) / firstNodeScore
                             > badnessThreshold):
                         replicaSet.sort(key=self.dsScores.get)
+        elif (self.REPLICA_SELECTION_STRATEGY == "dqn"):
+            # TODO: get state
+            state = None
+            # set the first replica to be the "action"
+            replicaSet[0] = self.trainer.select_action(state)
         else:
             print(self.REPLICA_SELECTION_STRATEGY)
             assert False, "REPLICA_SELECTION_STRATEGY isn't set or is invalid"
