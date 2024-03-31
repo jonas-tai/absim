@@ -9,7 +9,7 @@ class MuUpdater:
         self.intervalParam = intervalParam
         self.serviceTime = serviceTime
         self.rateChangeFactor = rateChangeFactor
-        Simulation.process(self.run(), 'MuUpdater')
+        Simulation.process(self.run())
 
     def run(self):
         while (1):

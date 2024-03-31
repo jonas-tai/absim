@@ -73,7 +73,7 @@ class Client():
                 {node: BackpressureScheduler("BP-%s" % node.id, self)
                  for node in serverList}
             for node in serverList:
-                Simulation.process(self.backpressureSchedulers[node].run(), at=Simulation.now)
+                Simulation.process(self.backpressureSchedulers[node].run())
 
         # ds-metrics
         if (replicaSelectionStrategy == "ds"):
@@ -84,7 +84,7 @@ class Client():
             self.dsScores = {node: 0 for node in serverList}
             for node, rateLimiter in self.rateLimiters.items():
                 ds = DynamicSnitch(self, 100)
-                Simulation.process(ds.run(), at=Simulation.now)
+                Simulation.process(ds.run())
 
     def clock(self):
         '''
@@ -390,12 +390,13 @@ class ResponseHandler:
 
 class BackpressureScheduler:
     def __init__(self, id_, client):
+        raise NotImplementedError('BackpressureScheduler not used')
         self.id = id_
         self.backlogQueue = []
         self.client = client
         self.count = 0
-        self.backlogReadyEvent = Simulation.event("BacklogReady")
-        Simulation.Process.__init__(self, name='BackpressureScheduler')
+        self.backlogReadyEvent = Simulation.event()
+        Simulation.Process.__init__(self)
 
     def run(self):
         while (1):
@@ -444,7 +445,7 @@ class BackpressureScheduler:
                     minReplica = None
             else:
                 yield Simulation.waitevent, self, self.backlogReadyEvent
-                self.backlogReadyEvent = Simulation.SimEvent("BacklogReady")
+                self.backlogReadyEvent = Simulation.SimEvent()
 
     def enqueue(self, task, replicaSet):
         self.backlogQueue.append((task, replicaSet))
