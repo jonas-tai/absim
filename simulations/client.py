@@ -29,6 +29,7 @@ class Client():
         self.backpressure = backpressure  # True/Flase
         self.shadowReadRatio = shadowReadRatio
         self.demandWeight = demandWeight
+        self.last_req_start_time = Simulation.now
         self.trainer = trainer
 
         # Book-keeping and metrics to be recorded follow...
@@ -110,6 +111,7 @@ class Client():
                                          firstReplicaIndex +
                                          self.replicationFactor)]
         startTime = Simulation.now
+        self.last_req_start_time = startTime
         self.taskArrivalTimeTracker[task] = startTime
 
         if (self.backpressure is False):
