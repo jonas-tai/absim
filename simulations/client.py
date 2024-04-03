@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 
 from global_sim import Simulation
 from monitor import Monitor
@@ -14,12 +14,14 @@ from simulations.test.state import NodeState, State
 from collections import defaultdict
 
 
-class Client():
+class Client:
     def __init__(self, id_, serverList, replicaSelectionStrategy,
                  accessPattern, replicationFactor, backpressure,
                  shadowReadRatio, rateInterval,
                  cubicC, cubicSmax, cubicBeta, hysterisisFactor,
-                 demandWeight, trainer=None):
+                 demandWeight, rate_intervals=None, trainer=None):
+        if rate_intervals is None:
+            rate_intervals = [1000, 500, 100]
         self.id = id_
         self.serverList = serverList
         self.accessPattern = accessPattern
@@ -35,7 +37,9 @@ class Client():
         self.shadowReadRatio = shadowReadRatio
         self.demandWeight = demandWeight
         self.last_req_start_time = Simulation.now
+        self.time_since_last_req = 0
         self.trainer = trainer
+        self.request_rate_monitor = RequestRateMonitor(rate_intervals)
 
         # Book-keeping and metrics to be recorded follow...
 
@@ -61,7 +65,7 @@ class Client():
                                                self, 50, rateInterval)
                              for node in serverList}
         self.lastRateDecrease = defaultdict(int)
-        self.valueOfLastDecrease = defaultdict(lambda : 10)
+        self.valueOfLastDecrease = defaultdict(lambda: 10)
         self.receiveRate = {node: ReceiveRate("RL-%s" % node.id, rateInterval)
                             for node in serverList}
         self.lastRateIncrease = defaultdict(int)
@@ -115,22 +119,23 @@ class Client():
                           for i in range(firstReplicaIndex,
                                          firstReplicaIndex +
                                          self.replicationFactor)]
-        startTime = Simulation.now
-        self.time_since_last_req = startTime - self.last_req_start_time
-        self.last_req_start_time = startTime
-        self.taskArrivalTimeTracker[task] = startTime
+        start_time = Simulation.now
+        self.request_rate_monitor.add_request(start_time=start_time)
+        self.time_since_last_req = start_time - self.last_req_start_time
+        self.last_req_start_time = start_time
+        self.taskArrivalTimeTracker[task] = start_time
 
-        if (self.backpressure is False):
+        if self.backpressure is False:
             sortedReplicaSet = self.sort(replicaSet)
             replicaToServe = sortedReplicaSet[0]
-            self.sendRequest(task, replicaToServe)
+            self.send_request(task, replicaToServe)
             # TODO: GET THE REWARD SOMEHOW
             # self.trainer.training_step(obs, action, reward, terminated)
             self.maybeSendShadowReads(replicaToServe, replicaSet)
         else:
             self.backpressureSchedulers[replicaSet[0]].enqueue(task, replicaSet)
 
-    def sendRequest(self, task, replicaToServe):
+    def send_request(self, task, replicaToServe):
         delay = constants.NW_LATENCY_BASE + \
                 random.normalvariate(constants.NW_LATENCY_MU,
                                      constants.NW_LATENCY_SIGMA)
@@ -222,11 +227,10 @@ class Client():
                             > badnessThreshold):
                         replica_set.sort(key=self.dsScores.get)
         elif self.REPLICA_SELECTION_STRATEGY == "dqn":
-            # TODO: get state
             node_states = [self.get_node_state(replica) for replica in replica_set]
 
-            request_trend = []
-            state = State(time_since_last_req=self.time_since_last_req, request_trend=request_trend,
+            request_rates = self.request_rate_monitor.get_rates()
+            state = State(time_since_last_req=self.time_since_last_req, request_trend=request_rates,
                           node_states=node_states)
             # set the first replica to be the "action"
             replica_set[0] = self.trainer.select_action(state)
@@ -285,7 +289,7 @@ class Client():
                     self.taskArrivalTimeTracker[shadowReadTask] = \
                         Simulation.now
                     self.taskSentTimeTracker[shadowReadTask] = Simulation.now
-                    self.sendRequest(shadowReadTask, replica)
+                    self.send_request(shadowReadTask, replica)
                     self.rateLimiters[replica].forceUpdates()
 
     def update_ema(self, replica, metric_map):
@@ -417,6 +421,36 @@ class ResponseHandler:
             task.latencyMonitor.observe((Simulation.now - task.start))
 
 
+class RequestRateMonitor:
+    def __init__(self, rate_intervals: List[int]) -> None:
+        # TODO: What time unit does the simulation assume?
+        self.rate_intervals = rate_intervals
+        self.request_times = []
+
+    def add_request(self, start_time: int) -> None:
+        self.request_times.append(start_time)
+
+    def get_rates(self) -> List[int]:
+        now = Simulation.now
+        rates = defaultdict(int)
+        last_index = len(self.request_times)
+        max_interval_boundary_reached = False
+        # iterate through requests, new requests are at the back of the list
+        for index, start_time in enumerate(reversed(self.request_times)):
+            if max_interval_boundary_reached:
+                break
+            max_interval_boundary_reached = True
+            for interval in self.rate_intervals:
+                if start_time >= (now - interval):
+                    last_index = index
+                    max_interval_boundary_reached = True
+                    rates[interval] += 1
+        # Remove requests that are not part of any interval anymore
+        self.request_times = self.request_times[(len(self.request_times) - last_index):]
+
+        return [rates[interval] for interval in self.rate_intervals]
+
+
 class BackpressureScheduler:
     def __init__(self, id_, client):
         raise NotImplementedError('BackpressureScheduler not used')
@@ -447,7 +481,7 @@ class BackpressureScheduler:
                     if (durationToWait == 0):
                         assert self.client.rateLimiters[replica].tokens >= 1
                         self.backlogQueue.pop(0)
-                        self.client.sendRequest(task, replica)
+                        self.client.send_request(task, replica)
                         self.client.maybeSendShadowReads(replica, replicaSet)
                         sent = True
                         self.client.rateLimiters[replica].update()
@@ -517,7 +551,7 @@ class RateLimiter():
                    * (Simulation.now - self.lastSent))
 
 
-class ReceiveRate():
+class ReceiveRate:
     def __init__(self, id, interval):
         self.rate = 10
         self.id = id
@@ -531,9 +565,9 @@ class ReceiveRate():
 
     def add(self, requests):
         now = int(Simulation.now / self.interval)
-        if (now - self.last < self.interval):
+        if now - self.last < self.interval:
             self.count += requests
-            if (now > self.last):
+            if now > self.last:
                 # alpha = (now - self.last)/float(self.interval)
                 alpha = 0.9
                 self.rate = alpha * self.count + (1 - alpha) * self.rate

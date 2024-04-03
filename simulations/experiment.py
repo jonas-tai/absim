@@ -163,6 +163,7 @@ def runExperiment(args, trainer : Trainer = None):
                           cubicBeta=args.cubicBeta,
                           hysterisisFactor=args.hysterisisFactor,
                           demandWeight=clientWeights[i],
+                          rate_intervals=args.rate_intervals,
                           trainer=trainer)
         clients.append(c)
 

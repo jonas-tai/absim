@@ -90,6 +90,7 @@ class SimulationArgs:
         parser.add_argument('--timeVaryingDrift', nargs='?',
                             type=float, default=0.0, help='How much service times change '
                                                           '(expScenario=timeVaryingServiceTimeServers)')
+        parser.add_argument('--rate_intervals', nargs='+', default=[1000, 500, 100])
 
         self.parser = parser
         self.args = parser.parse_args()

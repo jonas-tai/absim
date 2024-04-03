@@ -20,32 +20,32 @@ class Workload:
     # Need to pin workload to a client
     def run(self):
 
-        taskCounter = 0
+        task_counter = 0
 
-        while(self.numRequests != 0):
+        while self.numRequests != 0:
             yield Simulation.timeout(0)
 
-            taskToSchedule = task.Task("Task" + str(taskCounter),
-                                       self.latencyMonitor)
-            taskCounter += 1
+            task_to_schedule = task.Task("Task" + str(task_counter),
+                                         self.latencyMonitor)
+            task_counter += 1
 
             # Push out a task...
-            clientNode = self.weightedChoice()
+            client_node = self.weighted_choice()
 
-            clientNode.schedule(taskToSchedule)
+            client_node.schedule(task_to_schedule)
 
             # Simulate client delay
-            if (self.model == "poisson"):
+            if self.model == "poisson":
                 yield Simulation.timeout(numpy.random.poisson(self.model_param))
 
             # If model is gaussian, add gaussian delay
             # If model is constant, add fixed delay
-            if (self.model == "constant"):
+            if self.model == "constant":
                 yield Simulation.timeout(self.model_param)
 
             self.numRequests -= 1
 
-    def weightedChoice(self):
+    def weighted_choice(self):
         r = random.uniform(0, self.total)
         upto = 0
         for client in self.clientList:
