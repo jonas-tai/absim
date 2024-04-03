@@ -1,3 +1,5 @@
+from typing import List
+
 from global_sim import Simulation
 from monitor import Monitor
 import random
@@ -8,13 +10,16 @@ import math
 
 from yunomi.stats.exp_decay_sample import ExponentiallyDecayingSample
 
+from simulations.test.state import NodeState, State
+from collections import defaultdict
+
 
 class Client():
     def __init__(self, id_, serverList, replicaSelectionStrategy,
                  accessPattern, replicationFactor, backpressure,
                  shadowReadRatio, rateInterval,
                  cubicC, cubicSmax, cubicBeta, hysterisisFactor,
-                 demandWeight, trainer = None):
+                 demandWeight, trainer=None):
         self.id = id_
         self.serverList = serverList
         self.accessPattern = accessPattern
@@ -35,31 +40,31 @@ class Client():
         # Book-keeping and metrics to be recorded follow...
 
         # Number of outstanding requests at the client
-        self.pendingRequestsMap = {node: 0 for node in serverList}
+        self.pendingRequestsMap = defaultdict(int)
 
         # Number of outstanding requests times oracle-service time of replica
-        self.pendingXserviceMap = {node: 0 for node in serverList}
+        self.pendingXserviceMap = defaultdict(int)
 
         # Last-received response time of server
-        self.responseTimesMap = {node: 0 for node in serverList}
+        self.responseTimesMap = defaultdict(int)
 
         # Used to track response time from the perspective of the client
         self.taskSentTimeTracker = {}
         self.taskArrivalTimeTracker = {}
 
         # Record waiting and service times as relayed by the server
-        self.expectedDelayMap = {node: {} for node in serverList}
-        self.lastSeen = {node: 0 for node in serverList}
+        self.expected_delay_map = {node: {} for node in serverList}
+        self.lastSeen = defaultdict(int)
 
         # Rate limiters per replica
         self.rateLimiters = {node: RateLimiter("RL-%s" % node.id,
                                                self, 50, rateInterval)
                              for node in serverList}
-        self.lastRateDecrease = {node: 0 for node in serverList}
-        self.valueOfLastDecrease = {node: 10 for node in serverList}
+        self.lastRateDecrease = defaultdict(int)
+        self.valueOfLastDecrease = defaultdict(lambda : 10)
         self.receiveRate = {node: ReceiveRate("RL-%s" % node.id, rateInterval)
                             for node in serverList}
-        self.lastRateIncrease = {node: 0 for node in serverList}
+        self.lastRateIncrease = defaultdict(int)
         self.rateInterval = rateInterval
 
         # Parameters for congestion control
@@ -111,6 +116,7 @@ class Client():
                                          firstReplicaIndex +
                                          self.replicationFactor)]
         startTime = Simulation.now
+        self.time_since_last_req = startTime - self.last_req_start_time
         self.last_req_start_time = startTime
         self.taskArrivalTimeTracker[task] = startTime
 
@@ -148,38 +154,38 @@ class Client():
                        self.pendingRequestsMap[replicaToServe]))
         self.taskSentTimeTracker[task] = Simulation.now
 
-    def sort(self, originalReplicaSet):
+    def sort(self, original_replica_set: List[str]):
 
-        replicaSet = originalReplicaSet[0:]
+        replica_set = original_replica_set[0:]
 
-        if (self.REPLICA_SELECTION_STRATEGY == "random"):
+        if self.REPLICA_SELECTION_STRATEGY == "random":
             # Pick a random node for the request.
             # Represents SimpleSnitch + uniform request access.
             # Ignore scores and everything else.
-            random.shuffle(replicaSet)
+            random.shuffle(replica_set)
 
-        elif (self.REPLICA_SELECTION_STRATEGY == "pending"):
+        elif self.REPLICA_SELECTION_STRATEGY == "pending":
             # Sort by number of pending requests
-            replicaSet.sort(key=self.pendingRequestsMap.get)
-        elif (self.REPLICA_SELECTION_STRATEGY == "response_time"):
+            replica_set.sort(key=self.pendingRequestsMap.get)
+        elif self.REPLICA_SELECTION_STRATEGY == "response_time":
             # Sort by response times
-            replicaSet.sort(key=self.responseTimesMap.get)
-        elif (self.REPLICA_SELECTION_STRATEGY == "weighted_response_time"):
+            replica_set.sort(key=self.responseTimesMap.get)
+        elif self.REPLICA_SELECTION_STRATEGY == "weighted_response_time":
             # Weighted random proportional to response times
             m = {}
-            for each in replicaSet:
-                if ("serviceTime" not in self.expectedDelayMap[each]):
+            for each in replica_set:
+                if ("serviceTime" not in self.expected_delay_map[each]):
                     m[each] = 0.0
                 else:
-                    m[each] = self.expectedDelayMap[each]["serviceTime"]
-            replicaSet.sort(key=m.get)
-            total = sum(map(lambda x: self.responseTimesMap[x], replicaSet))
+                    m[each] = self.expected_delay_map[each]["serviceTime"]
+            replica_set.sort(key=m.get)
+            total = sum(map(lambda x: self.responseTimesMap[x], replica_set))
             selection = random.uniform(0, total)
             cumSum = 0
             nodeToSelect = None
             i = 0
             if (total != 0):
-                for entry in replicaSet:
+                for entry in replica_set:
                     cumSum += self.responseTimesMap[entry]
                     if (selection < cumSum):
                         nodeToSelect = entry
@@ -187,64 +193,85 @@ class Client():
                     i += 1
                 assert nodeToSelect is not None
 
-                replicaSet[0], replicaSet[i] = replicaSet[i], replicaSet[0]
-        elif (self.REPLICA_SELECTION_STRATEGY == "primary"):
+                replica_set[0], replica_set[i] = replica_set[i], replica_set[0]
+        elif self.REPLICA_SELECTION_STRATEGY == "primary":
             pass
-        elif (self.REPLICA_SELECTION_STRATEGY == "pendingXserviceTime"):
+        elif self.REPLICA_SELECTION_STRATEGY == "pendingXserviceTime":
             # Sort by response times * client-local-pending-requests
-            replicaSet.sort(key=self.pendingXserviceMap.get)
-        elif (self.REPLICA_SELECTION_STRATEGY == "clairvoyant"):
+            replica_set.sort(key=self.pendingXserviceMap.get)
+        elif self.REPLICA_SELECTION_STRATEGY == "clairvoyant":
             # Sort by response times * pending-requests
             oracleMap = {replica: (1 + len(replica.queueResource.queue))
                                   * replica.serviceTime
-                         for replica in originalReplicaSet}
-            replicaSet.sort(key=oracleMap.get)
-        elif (self.REPLICA_SELECTION_STRATEGY == "expDelay"):
+                         for replica in original_replica_set}
+            replica_set.sort(key=oracleMap.get)
+        elif self.REPLICA_SELECTION_STRATEGY == "expDelay":
             sortMap = {}
-            for replica in originalReplicaSet:
-                sortMap[replica] = self.computeExpectedDelay(replica)
-            replicaSet.sort(key=sortMap.get)
-        elif (self.REPLICA_SELECTION_STRATEGY == "ds"):
-            firstNode = replicaSet[0]
+            for replica in original_replica_set:
+                sortMap[replica] = self.compute_expected_delay(replica)
+            replica_set.sort(key=sortMap.get)
+        elif self.REPLICA_SELECTION_STRATEGY == "ds":
+            firstNode = replica_set[0]
             firstNodeScore = self.dsScores[firstNode]
             badnessThreshold = 0.0
 
             if (firstNodeScore != 0.0):
-                for node in replicaSet[1:]:
+                for node in replica_set[1:]:
                     newNodeScore = self.dsScores[node]
                     if ((firstNodeScore - newNodeScore) / firstNodeScore
                             > badnessThreshold):
-                        replicaSet.sort(key=self.dsScores.get)
-        elif (self.REPLICA_SELECTION_STRATEGY == "dqn"):
+                        replica_set.sort(key=self.dsScores.get)
+        elif self.REPLICA_SELECTION_STRATEGY == "dqn":
             # TODO: get state
-            state = None
+            node_states = [self.get_node_state(replica) for replica in replica_set]
+
+            request_trend = []
+            state = State(time_since_last_req=self.time_since_last_req, request_trend=request_trend,
+                          node_states=node_states)
             # set the first replica to be the "action"
-            replicaSet[0] = self.trainer.select_action(state)
+            replica_set[0] = self.trainer.select_action(state)
         else:
             print(self.REPLICA_SELECTION_STRATEGY)
             assert False, "REPLICA_SELECTION_STRATEGY isn't set or is invalid"
 
-        return replicaSet
+        return replica_set
+
+    def get_node_state(self, replica: str) -> NodeState:
+        outstanding_requests = self.pendingRequestsMap[replica]
+        response_time = self.responseTimesMap[replica]
+
+        if len(self.expected_delay_map[replica]) != 0:
+            metric_map = self.expected_delay_map[replica]
+            twice_network_latency = metric_map["nw"]
+            service_time = metric_map["serviceTime"]
+            wait_time = metric_map["waitingTime"]
+            queue_size = metric_map["queueSizeAfter"]
+            return NodeState(queue_size=queue_size, service_time=service_time, wait_time=wait_time,
+                             outstanding_requests=outstanding_requests, response_time=response_time,
+                             twice_network_latency=twice_network_latency)
+        else:
+            # TOOD: Should we init an empty node state?
+            return NodeState(outstanding_requests=outstanding_requests, response_time=response_time)
 
     def metricDecay(self, replica):
         return math.exp(-(Simulation.now - self.lastSeen[replica])
                         / (2 * self.rateInterval))
 
-    def computeExpectedDelay(self, replica):
+    def compute_expected_delay(self, replica):
         total = 0
-        if (len(self.expectedDelayMap[replica]) != 0):
-            metricMap = self.expectedDelayMap[replica]
-            twiceNetworkLatency = metricMap["nw"]
-            theta = (1 + self.pendingRequestsMap[replica]
-                     * constants.NUMBER_OF_CLIENTS
-                     + metricMap["queueSizeAfter"])
-            total += (twiceNetworkLatency +
-                      ((theta ** 3) * (metricMap["serviceTime"])))
+        if len(self.expected_delay_map[replica]) != 0:
+            metric_map = self.expected_delay_map[replica]
+            twice_network_latency = metric_map["nw"]
+            queue_size_est = (1 + self.pendingRequestsMap[replica]
+                              * constants.NUMBER_OF_CLIENTS
+                              + metric_map["queueSizeAfter"])
+            total += (twice_network_latency +
+                      ((queue_size_est ** 3) * (metric_map["serviceTime"])))
             self.edScoreMonitor.observe("%s %s %s %s %s" %
                                         (replica.id,
-                                         metricMap["queueSizeAfter"],
-                                         metricMap["serviceTime"],
-                                         theta,
+                                         metric_map["queueSizeAfter"],
+                                         metric_map["serviceTime"],
+                                         queue_size_est,
                                          total))
         else:
             return 0
@@ -261,16 +288,16 @@ class Client():
                     self.sendRequest(shadowReadTask, replica)
                     self.rateLimiters[replica].forceUpdates()
 
-    def updateEma(self, replica, metricMap):
+    def update_ema(self, replica, metric_map):
         alpha = 0.9
-        if (len(self.expectedDelayMap[replica]) == 0):
-            self.expectedDelayMap[replica] = metricMap
+        if len(self.expected_delay_map[replica]) == 0:
+            self.expected_delay_map[replica] = metric_map
             return
 
-        for metric in metricMap:
-            self.expectedDelayMap[replica][metric] \
-                = alpha * metricMap[metric] + (1 - alpha) \
-                  * self.expectedDelayMap[replica][metric]
+        for metric in metric_map:
+            self.expected_delay_map[replica][metric] \
+                = alpha * metric_map[metric] + (1 - alpha) \
+                  * self.expected_delay_map[replica][metric]
 
     def updateRates(self, replica, metricMap, task):
         # Cubic Parameters go here
@@ -368,7 +395,7 @@ class ResponseHandler:
         metricMap = task.completionEvent.value
         metricMap["responseTime"] = client.responseTimesMap[replicaThatServed]
         metricMap["nw"] = metricMap["responseTime"] - metricMap["serviceTime"]
-        client.updateEma(replicaThatServed, metricMap)
+        client.update_ema(replicaThatServed, metricMap)
         client.receiveRate[replicaThatServed].add(1)
 
         # Backpressure related book-keeping

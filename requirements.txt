@@ -1,3 +1,4 @@
 simpy==3.0.13
 yunomi
 numpy
+torch
