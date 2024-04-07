@@ -91,6 +91,8 @@ class SimulationArgs:
                             type=float, default=0.0, help='How much service times change '
                                                           '(expScenario=timeVaryingServiceTimeServers)')
         parser.add_argument('--rate_intervals', nargs='+', default=[1000, 500, 100])
+        parser.add_argument('--print', action='store_true',
+                            default=True, help='Prints latency at the end of the experiment')
 
         self.parser = parser
         self.args = parser.parse_args()
@@ -100,6 +102,9 @@ class SimulationArgs:
 
     def set_policy(self, policy):
         self.args.selectionStrategy = policy
+
+    def set_print(self, to_print):
+        self.args.print = to_print
 
 
 class TimeVaryingArgs(SimulationArgs):

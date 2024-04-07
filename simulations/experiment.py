@@ -12,6 +12,7 @@ from simulations.monitor import Monitor
 from simulation_args import SimulationArgs, TimeVaryingArgs, SlowServerArgs
 from pathlib import Path
 from model_trainer import Trainer
+from simulations.plotting import ExperimentPlot
 
 
 def printMonitorTimeSeriesToFile(fileDesc, prefix, monitor):
@@ -26,7 +27,7 @@ def rlExperimentWrapper(args):
     NUM_EPSIODES = 10
 
     for i_episode in range(NUM_EPSIODES):
-        runExperiment(args, trainer)
+        latencies = runExperiment(args, trainer)
     
 
 def runExperiment(args, trainer : Trainer = None):
@@ -247,31 +248,39 @@ def runExperiment(args, trainer : Trainer = None):
         printMonitorTimeSeriesToFile(edScoreFD,
                                      clientNode.id,
                                      clientNode.edScoreMonitor)
-    for serv in servers:
-        printMonitorTimeSeriesToFile(waitMonFD,
-                                     serv.id,
-                                     serv.waitMon)
-        printMonitorTimeSeriesToFile(actMonFD,
-                                     serv.id,
-                                     serv.actMon)
-        printMonitorTimeSeriesToFile(serverRRFD,
-                                     serv.id,
-                                     serv.serverRRMonitor)
-        print("------- Server:%s %s ------" % (serv.id, "WaitMon"))
-        print("Mean:", serv.waitMon.mean())
 
-        print("------- Server:%s %s ------" % (serv.id, "ActMon"))
-        print("Mean:", serv.actMon.mean())
+    if args.print:
+        for serv in servers:
+            printMonitorTimeSeriesToFile(waitMonFD,
+                                         serv.id,
+                                         serv.waitMon)
+            printMonitorTimeSeriesToFile(actMonFD,
+                                         serv.id,
+                                         serv.actMon)
+            printMonitorTimeSeriesToFile(serverRRFD,
+                                         serv.id,
+                                         serv.serverRRMonitor)
+            print("------- Server:%s %s ------" % (serv.id, "WaitMon"))
+            print("Mean:", serv.waitMon.mean())
 
-    print("------- Latency ------")
-    print("Mean Latency:", np.mean([entry[0] for entry in latencyMonitor]))
-    for p in [50, 95, 99]:
-        print(f"p{p} Latency: {np.percentile([entry[0] for entry in latencyMonitor], p)}")
+            print("------- Server:%s %s ------" % (serv.id, "ActMon"))
+            print("Mean:", serv.actMon.mean())
+
+        print("------- Latency ------")
+        print("Mean Latency:", latencyMonitor.mean())
+        for p in [50, 95, 99]:
+            print(f"p{p} Latency: {latencyMonitor.percentile(p)}")
 
 
-    printMonitorTimeSeriesToFile(latencyFD, "0",
-                                 latencyMonitor)
-    assert args.numRequests == len(latencyMonitor)
+        printMonitorTimeSeriesToFile(latencyFD, "0",
+                                     latencyMonitor)
+        assert args.numRequests == len(latencyMonitor)
+
+    plotter = ExperimentPlot()
+
+    plotter.add_data(latencyMonitor)
+
+    return latencyMonitor
 
 
 # class WorkloadUpdater(Simulation.Process):
