@@ -63,7 +63,7 @@ class Executor:
         self.server.actMon.observe(serviceTime)
 
         queueSizeAfter = len(self.server.queueResource.queue)
-        self.task.sigTaskComplete({"waitingTime": waitTime,
+        self.task.signal_task_complete({"waitingTime": waitTime,
                                    "serviceTime": serviceTime,
                                    "queueSizeBefore": queueSizeBefore,
                                    "queueSizeAfter": queueSizeAfter})

@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List
 
 from global_sim import Simulation
 from monitor import Monitor
@@ -10,7 +10,7 @@ import math
 
 from yunomi.stats.exp_decay_sample import ExponentiallyDecayingSample
 
-from simulations.test.state import NodeState, State
+from simulations.state import NodeState, State
 from collections import defaultdict
 
 
@@ -109,12 +109,12 @@ class Client:
         firstReplicaIndex = None
 
         # Pick a random node and it's next RF - 1 number of neighbours
-        if (self.accessPattern == "uniform"):
+        if self.accessPattern == "uniform":
             firstReplicaIndex = random.randint(0, len(self.serverList) - 1)
-        elif (self.accessPattern == "zipfian"):
+        elif self.accessPattern == "zipfian":
             firstReplicaIndex = numpy.random.zipf(1.5) % len(self.serverList)
 
-        if (replicaSet is None):
+        if replicaSet is None:
             replicaSet = [self.serverList[i % len(self.serverList)]
                           for i in range(firstReplicaIndex,
                                          firstReplicaIndex +
@@ -374,7 +374,7 @@ class ResponseHandler:
 
     def run(self, client, task, replicaThatServed):
         yield Simulation.timeout(0)
-        yield task.completionEvent
+        yield task.completion_event
 
         delay = constants.NW_LATENCY_BASE + \
                 random.normalvariate(constants.NW_LATENCY_MU,
@@ -396,7 +396,7 @@ class ResponseHandler:
         client.latencyTrackerMonitor \
             .observe("%s %s" % (replicaThatServed.id,
                                 Simulation.now - client.taskSentTimeTracker[task]))
-        metricMap = task.completionEvent.value
+        metricMap = task.completion_event.value
         metricMap["responseTime"] = client.responseTimesMap[replicaThatServed]
         metricMap["nw"] = metricMap["responseTime"] - metricMap["serviceTime"]
         client.update_ema(replicaThatServed, metricMap)
@@ -417,8 +417,8 @@ class ResponseHandler:
 
         # Does not make sense to record shadow read latencies
         # as a latency measurement
-        if (task.latencyMonitor is not None):
-            task.latencyMonitor.observe((Simulation.now - task.start))
+        if task.latency_monitor is not None:
+            task.latency_monitor.observe((Simulation.now - task.start))
 
 
 class RequestRateMonitor:
