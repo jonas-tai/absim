@@ -69,20 +69,20 @@ def runExperiment(args):
         # Start the servers
         for i in range(args.numServers):
             serv = server.Server(i,
-                                 resourceCapacity=args.serverConcurrency,
-                                 serviceTime=(args.serviceTime),
-                                 serviceTimeModel=args.serviceTimeModel)
+                                 resource_capacity=args.serverConcurrency,
+                                 service_time=(args.service_time),
+                                 service_time_model=args.service_time_model)
             servers.append(serv)
     elif (args.expScenario == "multipleServiceTimeServers"):
         # Start the servers
         for i in range(args.numServers):
             serv = server.Server(i,
-                                 resourceCapacity=args.serverConcurrency,
-                                 serviceTime=((i + 1) * args.serviceTime),
-                                 serviceTimeModel=args.serviceTimeModel)
+                                 resource_capacity=args.serverConcurrency,
+                                 service_time=((i + 1) * args.service_time),
+                                 service_time_model=args.service_time_model)
             servers.append(serv)
     elif (args.expScenario == "heterogenousStaticServiceTimeScenario"):
-        baseServiceTime = args.serviceTime
+        baseServiceTime = args.service_time
 
         assert args.slowServerFraction >= 0 and args.slowServerFraction < 1.0
         assert args.slowServerSlowness >= 0 and args.slowServerSlowness < 1.0
@@ -100,14 +100,14 @@ def runExperiment(args):
 
             numFastServers = args.numServers - numSlowServers
             totalRate = (args.serverConcurrency *
-                         1 / float(args.serviceTime) * args.numServers)
+                         1 / float(args.service_time) * args.numServers)
             fastServerRate = (totalRate - sum(slowServerRates)) \
                              / float(numFastServers)
             fastServerRates = [fastServerRate] * numFastServers
             serviceRatePerServer = slowServerRates + fastServerRates
         else:
             serviceRatePerServer = [args.serverConcurrency *
-                                    1 / float(args.serviceTime)] * args.numServers
+                                    1 / float(args.service_time)] * args.numServers
 
         random.shuffle(serviceRatePerServer)
         # print(sum(serviceRatePerServer), (1/float(baseServiceTime)) * args.numServers)
@@ -120,9 +120,9 @@ def runExperiment(args):
         for i in range(args.numServers):
             st = 1 / float(serviceRatePerServer[i])
             serv = server.Server(i,
-                                 resourceCapacity=args.serverConcurrency,
-                                 serviceTime=st,
-                                 serviceTimeModel=args.serviceTimeModel)
+                                 resource_capacity=args.serverConcurrency,
+                                 service_time=st,
+                                 service_time_model=args.service_time_model)
             servers.append(serv)
     elif (args.expScenario == "timeVaryingServiceTimeServers"):
         assert args.intervalParam != 0.0
@@ -131,11 +131,11 @@ def runExperiment(args):
         # Start the servers
         for i in range(args.numServers):
             serv = server.Server(i,
-                                 resourceCapacity=args.serverConcurrency,
-                                 serviceTime=(args.serviceTime),
-                                 serviceTimeModel=args.serviceTimeModel)
+                                 resource_capacity=args.serverConcurrency,
+                                 service_time=(args.service_time),
+                                 service_time_model=args.service_time_model)
             mup = muUpdater.MuUpdater(serv, args.intervalParam,
-                                      args.serviceTime,
+                                      args.service_time,
                                       args.timeVaryingDrift)
             Simulation.activate(mup, mup.run(), at=0.0)
             servers.append(serv)
@@ -170,7 +170,7 @@ def runExperiment(args):
     # Start the clients
     for i in range(args.numClients):
         c = client.Client(id_="Client%s" % (i),
-                          serverList=servers,
+                          server_list=servers,
                           replicaSelectionStrategy=args.selectionStrategy,
                           accessPattern=args.accessPattern,
                           replicationFactor=args.replicationFactor,
@@ -199,7 +199,7 @@ def runExperiment(args):
     else:
         arrivalRate = args.numServers * \
                       (args.utilization * args.serverConcurrency *
-                       1 / float(args.serviceTime))
+                       1 / float(args.service_time))
         interArrivalTime = 1 / float(arrivalRate)
 
     for i in range(args.numWorkload):
@@ -260,15 +260,15 @@ def runExperiment(args):
     for serv in servers:
         printMonitorTimeSeriesToFile(waitMonFD,
                                      serv.id,
-                                     serv.queueResource.waitMon)
+                                     serv.queue_resource.wait_monitor)
         printMonitorTimeSeriesToFile(actMonFD,
                                      serv.id,
-                                     serv.queueResource.actMon)
+                                     serv.queue_resource.act_monitor)
         print("------- Server:%s %s ------" % (serv.id, "WaitMon"))
-        print("Mean:", serv.queueResource.waitMon.mean())
+        print("Mean:", serv.queue_resource.wait_monitor.mean())
 
         print("------- Server:%s %s ------" % (serv.id, "ActMon"))
-        print("Mean:", serv.queueResource.actMon.mean())
+        print("Mean:", serv.queue_resource.act_monitor.mean())
 
     print("------- Latency ------")
     print("Mean Latency:",

@@ -17,10 +17,10 @@ class MuUpdater:
 
             if (random.uniform(0, 1.0) >= 0.5):
                 rate = 1 / float(self.serviceTime)
-                self.server.serviceTime = 1 / float(rate)
+                self.server.service_time = 1 / float(rate)
             else:
                 rate = 1 / float(self.serviceTime)
                 rate += self.rateChangeFactor * rate
-                self.server.serviceTime = 1 / float(rate)
+                self.server.service_time = 1 / float(rate)
             # print(Simulation.now, self.server.id, self.server.serviceTime)
             yield Simulation.timeout(self.intervalParam)

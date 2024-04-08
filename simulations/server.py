@@ -6,39 +6,40 @@ import sys
 from monitor import Monitor
 
 
-class Server():
+class Server:
     """A representation of a physical server that holds resources"""
-    def __init__(self, id_, resourceCapacity,
-                 serviceTime, serviceTimeModel):
-        self.id = id_
-        self.serviceTime = serviceTime
-        self.serviceTimeModel = serviceTimeModel
-        self.queueResource = simpy.Resource(capacity=resourceCapacity, env=Simulation)
-        self.serverRRMonitor = Monitor()
-        self.waitMon = Monitor()
-        self.actMon = Monitor()
 
-    def enqueueTask(self, task):
+    def __init__(self, id_, resource_capacity,
+                 service_time, service_time_model):
+        self.id = id_
+        self.service_time = service_time
+        self.service_time_model = service_time_model
+        self.queue_resource = simpy.Resource(capacity=resource_capacity, env=Simulation)
+        self.server_RR_monitor = Monitor()
+        self.wait_monitor = Monitor()
+        self.act_monitor = Monitor()
+
+    def get_server_id(self):
+        return self.id
+
+    def enqueue_task(self, task):
         executor = Executor(self, task)
-        self.serverRRMonitor.observe(1)
+        self.server_RR_monitor.observe(1)
         Simulation.process(executor.run())
         # Simulation.activate(executor, executor.run(), Simulation.now)
 
-    def getServiceTime(self):
-        serviceTime = 0.0
-        if (self.serviceTimeModel == "random.expovariate"):
-            serviceTime = random.expovariate(1.0/(self.serviceTime))
-        elif (self.serviceTimeModel == "constant"):
-            serviceTime = self.serviceTime
-        elif(self.serviceTimeModel == "math.sin"):
-            serviceTime = self.serviceTime \
-                + self.serviceTime \
-                * math.sin(1 + Simulation.now/100)
+    def get_service_time(self):
+        if self.service_time_model == "random.expovariate":
+            service_time = random.expovariate(1.0 / self.service_time)
+        elif self.service_time_model == "constant":
+            service_time = self.service_time
+        elif self.service_time_model == "math.sin":
+            service_time = self.service_time + self.service_time * math.sin(1 + Simulation.now / 100)
         else:
             print("Unknown service time model")
             sys.exit(-1)
 
-        return serviceTime
+        return service_time
 
 
 class Executor:
@@ -50,20 +51,20 @@ class Executor:
 
     def run(self):
         start = Simulation.now
-        queueSizeBefore = len(self.server.queueResource.queue)
+        queue_size_before = len(self.server.queue_resource.queue)
         yield Simulation.timeout(0)
-        request = self.server.queueResource.request()
+        request = self.server.queue_resource.request()
         yield request
-        waitTime = Simulation.now - start         # W_i
-        serviceTime = self.server.getServiceTime()  # Mu_i
-        yield Simulation.timeout(serviceTime)
-        self.server.queueResource.release(request)
+        wait_time = Simulation.now - start  # W_i
+        service_time = self.server.get_service_time()  # Mu_i
+        yield Simulation.timeout(service_time)
+        self.server.queue_resource.release(request)
 
-        self.server.waitMon.observe(waitTime)
-        self.server.actMon.observe(serviceTime)
+        self.server.wait_monitor.observe(wait_time)
+        self.server.act_monitor.observe(service_time)
 
-        queueSizeAfter = len(self.server.queueResource.queue)
-        self.task.signal_task_complete({"waitingTime": waitTime,
-                                   "serviceTime": serviceTime,
-                                   "queueSizeBefore": queueSizeBefore,
-                                   "queueSizeAfter": queueSizeAfter})
+        queue_size_after = len(self.server.queue_resource.queue)
+        self.task.signal_task_complete({"waitingTime": wait_time,
+                                        "serviceTime": service_time,
+                                        "queueSizeBefore": queue_size_before,
+                                        "queueSizeAfter": queue_size_after})

@@ -193,11 +193,11 @@ class TestServerLoop(unittest.TestCase):
     def testBackPressureLoopSingleServer1(self):
         Simulation.initialize()
         s1 = server.Server(1,
-                           resourceCapacity=1,
-                           serviceTime=4,
-                           serviceTimeModel="constant")
+                           resource_capacity=1,
+                           service_time=4,
+                           service_time_model="constant")
         c1 = client.Client(id_="Client1",
-                           serverList=[s1],
+                           server_list=[s1],
                            replicaSelectionStrategy="expDelay",
                            accessPattern="uniform",
                            replicationFactor=1,
@@ -218,11 +218,11 @@ class TestServerLoop(unittest.TestCase):
     def testBackPressureLoopSingleServer2(self):
         Simulation.initialize()
         s1 = server.Server(1,
-                           resourceCapacity=1,
-                           serviceTime=4,
-                           serviceTimeModel="constant")
+                           resource_capacity=1,
+                           service_time=4,
+                           service_time_model="constant")
         c1 = client.Client(id_="Client1",
-                           serverList=[s1],
+                           server_list=[s1],
                            replicaSelectionStrategy="expDelay",
                            accessPattern="uniform",
                            replicationFactor=1,
@@ -243,11 +243,11 @@ class TestServerLoop(unittest.TestCase):
     def testBackPressureLoopSingleServer3(self):
         Simulation.initialize()
         s1 = server.Server(1,
-                           resourceCapacity=1,
-                           serviceTime=4,
-                           serviceTimeModel="constant")
+                           resource_capacity=1,
+                           service_time=4,
+                           service_time_model="constant")
         c1 = client.Client(id_="Client1",
-                           serverList=[s1],
+                           server_list=[s1],
                            replicaSelectionStrategy="expDelay",
                            accessPattern="uniform",
                            replicationFactor=1,
@@ -268,15 +268,15 @@ class TestServerLoop(unittest.TestCase):
     def testBackPressureLoopTwoServers(self):
         Simulation.initialize()
         s1 = server.Server(1,
-                           resourceCapacity=1,
-                           serviceTime=4,
-                           serviceTimeModel="constant")
+                           resource_capacity=1,
+                           service_time=4,
+                           service_time_model="constant")
         s2 = server.Server(2,
-                           resourceCapacity=1,
-                           serviceTime=4,
-                           serviceTimeModel="constant")
+                           resource_capacity=1,
+                           service_time=4,
+                           service_time_model="constant")
         c1 = client.Client(id_="Client1",
-                           serverList=[s1, s2],
+                           server_list=[s1, s2],
                            replicaSelectionStrategy="primary",
                            accessPattern="uniform",
                            replicationFactor=2,

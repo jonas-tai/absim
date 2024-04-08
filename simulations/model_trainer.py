@@ -14,7 +14,7 @@ from simulations.state import State
 StateAction = namedtuple('StateAction', ('state', 'action'))
 
 
-class Trainer():
+class Trainer:
     def __init__(self, n_actions, batch_size=128, gamma=0.99, eps_start=0.9, eps_end=0.05,
                  eps_decay=1000, tau=0.005, lr=1e-4):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
