@@ -45,14 +45,15 @@ class Client:
 
         # Book-keeping and metrics to be recorded follow...
 
+        # CANNOT USE DEFAULTDICT BECAUSE OF DICT.GET USAGE LATER
         # Number of outstanding requests at the client
-        self.pendingRequestsMap = defaultdict(int)
+        self.pendingRequestsMap = {node: 0 for node in server_list}
 
         # Number of outstanding requests times oracle-service time of replica
-        self.pendingXserviceMap = defaultdict(int)
+        self.pendingXserviceMap = {node: 0 for node in server_list}
 
         # Last-received response time of server
-        self.responseTimesMap = defaultdict(int)
+        self.responseTimesMap = {node: 0 for node in server_list}
 
         # Used to track response time from the perspective of the client
         self.taskSentTimeTracker = {}
@@ -93,7 +94,7 @@ class Client:
                                 for node in server_list}
             self.dsScores = {node: 0 for node in server_list}
             for node, rateLimiter in self.rateLimiters.items():
-                ds = DynamicSnitch(self, 100)
+                ds = DynamicSnitch(self, 100, simulation)
                 self.simulation.process(ds.run())
 
     def clock(self):

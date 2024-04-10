@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 
@@ -24,4 +25,6 @@ class ExperimentPlot:
             self.df = pd.concat((self.df, df), axis=0)
 
     def plot(self):
-        sns.lineplot(self.df, x="Epoch", y="Latency", hue="Policy")
+        fig, axes = plt.subplots(figsize=(16, 8), dpi=200, nrows=1, ncols=1, sharex='all')
+        sns.lineplot(self.df, x="Epoch", y="Latency", hue="Policy", ax=axes)
+        return fig,axes

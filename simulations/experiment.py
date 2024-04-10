@@ -13,6 +13,7 @@ from simulation_args import SimulationArgs, TimeVaryingArgs, SlowServerArgs
 from pathlib import Path
 from model_trainer import Trainer
 from simulations.plotting import ExperimentPlot
+import matplotlib.pyplot as plt
 
 
 def printMonitorTimeSeriesToFile(fileDesc, prefix, monitor):
@@ -25,10 +26,20 @@ def rlExperimentWrapper(simulation_args: SimulationArgs):
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
     trainer = Trainer(simulation_args.args.num_servers)
     NUM_EPSIODES = 10
+    plotter = ExperimentPlot()
+    to_print = False
 
-    for i_episode in range(NUM_EPSIODES):
-        simulation_args.set_seed(i_episode)
-        latencies = runExperiment(simulation_args.args, trainer)
+    simulation_args.set_print(to_print)
+
+    for policy in ['expDelay', 'response_time', 'weighted_response_time', 'random']:
+        simulation_args.set_policy(policy)
+        for i_episode in range(NUM_EPSIODES):
+            simulation_args.set_seed(i_episode)
+            latencies = runExperiment(simulation_args.args, trainer)
+            plotter.add_data(latencies, simulation_args.args.selection_strategy, i_episode)
+
+    fig, ax = plotter.plot()
+    plt.show()
 
 
 def runExperiment(args, trainer: Trainer = None):
@@ -285,6 +296,7 @@ def runExperiment(args, trainer: Trainer = None):
         assert args.numRequests == len(latencyMonitor)
 
     return latencyMonitor
+
 
 if __name__ == '__main__':
     args = SimulationArgs()
