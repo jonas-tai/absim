@@ -1,15 +1,15 @@
-from global_sim import Simulation
 import numpy as np
 
 
 class Monitor():
-    def __init__(self, name=""):
+    def __init__(self, simulation, name=""):
+        self.simulation = simulation
         self.name = name
         self.data = []
 
     def observe(self, y, t=None):
         if t is None:
-            self.data.append((y, Simulation.now))
+            self.data.append((y, self.simulation.now))
         else:
             self.data.append((y, t))
 

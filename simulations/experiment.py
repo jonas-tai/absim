@@ -1,6 +1,6 @@
-from global_sim import Simulation
 import server
 import client
+from simulator import Simulation
 import workload
 import argparse
 import random
@@ -20,20 +20,21 @@ def printMonitorTimeSeriesToFile(fileDesc, prefix, monitor):
         fileDesc.write("%s %s %s\n" % (prefix, entry[0], entry[1]))
 
 
-def rlExperimentWrapper(args):
+def rlExperimentWrapper(simulation_args: SimulationArgs):
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
-    trainer = Trainer(args.num_servers)
+    trainer = Trainer(simulation_args.args.num_servers)
     NUM_EPSIODES = 10
 
     for i_episode in range(NUM_EPSIODES):
-        latencies = runExperiment(args, trainer)
-    
+        simulation_args.set_seed(i_episode)
+        latencies = runExperiment(simulation_args.args, trainer)
 
-def runExperiment(args, trainer : Trainer = None):
+
+def runExperiment(args, trainer: Trainer = None):
     # Set the random seed
-    Simulation.reset()
-    Simulation.set_seed(args.seed)
+    simulation = Simulation()
+    simulation.set_seed(args.seed)
 
     servers = []
     clients = []
@@ -42,26 +43,28 @@ def runExperiment(args, trainer : Trainer = None):
     constants.NW_LATENCY_BASE = args.nwLatencyBase
     constants.NW_LATENCY_MU = args.nwLatencyMu
     constants.NW_LATENCY_SIGMA = args.nwLatencySigma
-    constants.NUMBER_OF_CLIENTS = args.numClients
+    constants.NUMBER_OF_CLIENTS = args.num_clients
 
     assert args.expScenario != ""
 
     serviceRatePerServer = []
     if (args.expScenario == "base"):
         # Start the servers
-        for i in range(args.numServers):
+        for i in range(args.num_servers):
             serv = server.Server(i,
-                                 resource_capacity=args.serverConcurrency,
+                                 resource_capacity=args.server_concurrency,
                                  service_time=(args.service_time),
-                                 service_time_model=args.service_time_model)
+                                 service_time_model=args.service_time_model,
+                                 simulation=simulation)
             servers.append(serv)
     elif (args.expScenario == "multipleServiceTimeServers"):
         # Start the servers
-        for i in range(args.numServers):
+        for i in range(args.num_servers):
             serv = server.Server(i,
-                                 resource_capacity=args.serverConcurrency,
+                                 resource_capacity=args.server_concurrency,
                                  service_time=((i + 1) * args.service_time),
-                                 service_time_model=args.service_time_model)
+                                 service_time_model=args.service_time_model,
+                                 simulation=simulation)
             servers.append(serv)
     elif (args.expScenario == "heterogenousStaticServiceTimeScenario"):
         baseServiceTime = args.service_time
@@ -74,52 +77,56 @@ def runExperiment(args, trainer : Trainer = None):
                     and args.slowServerFraction == 0)
 
         if (args.slowServerFraction > 0.0):
-            slowServerRate = (args.serverConcurrency *
+            slowServerRate = (args.server_concurrency *
                               1 / float(baseServiceTime)) * \
                              args.slowServerSlowness
-            numSlowServers = int(args.slowServerFraction * args.numServers)
+            numSlowServers = int(args.slowServerFraction * args.num_servers)
             slowServerRates = [slowServerRate] * numSlowServers
 
-            numFastServers = args.numServers - numSlowServers
-            totalRate = (args.serverConcurrency *
-                         1 / float(args.service_time) * args.numServers)
+            numFastServers = args.num_servers - numSlowServers
+            totalRate = (args.server_concurrency *
+                         1 / float(args.service_time) * args.num_servers)
             fastServerRate = (totalRate - sum(slowServerRates)) \
                              / float(numFastServers)
             fastServerRates = [fastServerRate] * numFastServers
             serviceRatePerServer = slowServerRates + fastServerRates
         else:
-            serviceRatePerServer = [args.serverConcurrency *
-                                    1 / float(args.service_time)] * args.numServers
+            serviceRatePerServer = [args.server_concurrency *
+                                    1 / float(args.service_time)] * args.num_servers
 
-        Simulation.random.shuffle(serviceRatePerServer)
-        # print(sum(serviceRatePerServer), (1/float(baseServiceTime)) * args.numServers)
+        simulation.random.shuffle(serviceRatePerServer)
+        # print(sum(serviceRatePerServer), (1/float(baseServiceTime)) * args.num_servers)
         assert sum(serviceRatePerServer) > 0.99 * \
-               (1 / float(baseServiceTime)) * args.numServers
+               (1 / float(baseServiceTime)) * args.num_servers
         assert sum(serviceRatePerServer) <= \
-               (1 / float(baseServiceTime)) * args.numServers
+               (1 / float(baseServiceTime)) * args.num_servers
 
         # Start the servers
-        for i in range(args.numServers):
+        for i in range(args.num_servers):
             st = 1 / float(serviceRatePerServer[i])
             serv = server.Server(i,
-                                 resource_capacity=args.serverConcurrency,
+                                 resource_capacity=args.server_concurrency,
                                  service_time=st,
-                                 service_time_model=args.service_time_model)
+                                 service_time_model=args.service_time_model,
+                                 simulation=simulation)
             servers.append(serv)
     elif (args.expScenario == "timeVaryingServiceTimeServers"):
         assert args.intervalParam != 0.0
         assert args.timeVaryingDrift != 0.0
 
         # Start the servers
-        for i in range(args.numServers):
+        for i in range(args.num_servers):
             serv = server.Server(i,
-                                 resource_capacity=args.serverConcurrency,
+                                 resource_capacity=args.server_concurrency,
                                  service_time=(args.service_time),
-                                 service_time_model=args.service_time_model)
-            mup = muUpdater.MuUpdater(serv, args.intervalParam,
+                                 service_time_model=args.service_time_model,
+                                 simulation=simulation)
+            mup = muUpdater.MuUpdater(serv,
+                                      args.intervalParam,
                                       args.service_time,
-                                      args.timeVaryingDrift)
-            Simulation.process(mup.run())
+                                      args.timeVaryingDrift,
+                                      simulation)
+            simulation.process(mup.run())
             servers.append(serv)
     else:
         print("Unknown experiment scenario")
@@ -135,27 +142,27 @@ def runExperiment(args, trainer : Trainer = None):
     if (args.highDemandFraction > 0.0 and args.demandSkew >= 0):
         heavyClientWeight = baseDemandWeight * \
                             args.demandSkew / args.highDemandFraction
-        numHeavyClients = int(args.highDemandFraction * args.numClients)
+        numHeavyClients = int(args.highDemandFraction * args.num_clients)
         heavyClientWeights = [heavyClientWeight] * numHeavyClients
 
         lightClientWeight = baseDemandWeight * \
                             (1 - args.demandSkew) / (1 - args.highDemandFraction)
-        numLightClients = args.numClients - numHeavyClients
+        numLightClients = args.num_clients - numHeavyClients
         lightClientWeights = [lightClientWeight] * numLightClients
         clientWeights = heavyClientWeights + lightClientWeights
     else:
-        clientWeights = [baseDemandWeight] * args.numClients
+        clientWeights = [baseDemandWeight] * args.num_clients
 
-    assert sum(clientWeights) > 0.99 * args.numClients
-    assert sum(clientWeights) <= args.numClients
+    assert sum(clientWeights) > 0.99 * args.num_clients
+    assert sum(clientWeights) <= args.num_clients
 
     # Start the clients
-    for i in range(args.numClients):
+    for i in range(args.num_clients):
         c = client.Client(id_="Client%s" % (i),
                           server_list=servers,
-                          replicaSelectionStrategy=args.selectionStrategy,
+                          replicaSelectionStrategy=args.selection_strategy,
                           accessPattern=args.accessPattern,
-                          replicationFactor=args.replicationFactor,
+                          replication_factor=args.replication_factor,
                           backpressure=args.backpressure,
                           shadowReadRatio=args.shadowReadRatio,
                           rateInterval=args.rateInterval,
@@ -165,11 +172,12 @@ def runExperiment(args, trainer : Trainer = None):
                           hysterisisFactor=args.hysterisisFactor,
                           demandWeight=clientWeights[i],
                           rate_intervals=args.rate_intervals,
-                          trainer=trainer)
+                          trainer=trainer,
+                          simulation=simulation)
         clients.append(c)
 
     # Start workload generators (analogous to YCSB)
-    latencyMonitor = Monitor(name="Latency")
+    latencyMonitor = Monitor(name="Latency", simulation=simulation)
 
     # This is where we set the inter-arrival times based on
     # the required utilization level and the service time
@@ -181,22 +189,23 @@ def runExperiment(args, trainer : Trainer = None):
         arrivalRate = (args.utilization * sum(serviceRatePerServer))
         interArrivalTime = 1 / float(arrivalRate)
     else:
-        arrivalRate = args.numServers * \
-                      (args.utilization * args.serverConcurrency *
+        arrivalRate = args.num_servers * \
+                      (args.utilization * args.server_concurrency *
                        1 / float(args.service_time))
         interArrivalTime = 1 / float(arrivalRate)
 
-    for i in range(args.numWorkload):
+    for i in range(args.num_workload):
         w = workload.Workload(i, latencyMonitor,
                               clients,
-                              args.workloadModel,
-                              interArrivalTime * args.numWorkload,
-                              args.numRequests / args.numWorkload)
-        Simulation.process(w.run())
+                              args.workload_model,
+                              interArrivalTime * args.num_workload,
+                              args.numRequests / args.num_workload,
+                              simulation)
+        simulation.process(w.run())
         workloadGens.append(w)
 
     # Begin simulation
-    Simulation.run(until=args.simulationDuration)
+    simulation.run(until=args.simulationDuration)
 
     #
     # print(a bunch of timeseries)
@@ -271,43 +280,16 @@ def runExperiment(args, trainer : Trainer = None):
         for p in [50, 95, 99]:
             print(f"p{p} Latency: {latencyMonitor.percentile(p)}")
 
-
         printMonitorTimeSeriesToFile(latencyFD, "0",
                                      latencyMonitor)
         assert args.numRequests == len(latencyMonitor)
 
     return latencyMonitor
 
-
-# class WorkloadUpdater(Simulation.Process):
-#     def __init__(self, workload, value, clients, servers):
-#         self.workload = workload
-#         self.value = value
-#         self.clients = clients
-#         self.servers = servers
-#         Simulation.Process.__init__(self, name='WorkloadUpdater')
-
-#     def run(self):
-#         # while(1):
-#             yield Simulation.hold, self,
-#             # self.workload.model_param = random.uniform(self.value,
-#                                                        # self.value * 40)
-#             # old = self.workload.model_param
-#             # self.workload.model_param = self.value
-#             # self.workload.clientList = self.clients
-#             # self.workload.total = \
-#             #     sum(client.demandWeight for client in self.clients)
-#             # yield Simulation.hold, self, 1000
-#             # self.workload.model_param = old
-#             self.servers[0].serviceTime = 1000
-
 if __name__ == '__main__':
-
     args = SimulationArgs()
     # args = TimeVaryingArgs(0.1,5)
     # args = SlowServerArgs(0.5,0.5)
     args.set_policy('expDelay')
 
-
-
-    runExperiment(args.args)
+    rlExperimentWrapper(args)

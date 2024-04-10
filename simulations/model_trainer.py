@@ -34,8 +34,11 @@ class Trainer:
 
         # num servers
         self.n_actions = n_actions
+
+        # todo: fix
         state = 0
-        n_observations = len(state)
+        # n_observations = len(state)
+        n_observations = 10
 
         self.policy_net = DQN(n_observations, n_actions).to(self.device)
         self.target_net = DQN(n_observations, n_actions).to(self.device)

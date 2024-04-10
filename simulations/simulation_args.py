@@ -4,26 +4,26 @@ import argparse
 class SimulationArgs:
     def __init__(self):
         parser = argparse.ArgumentParser(description='Absinthe sim.')
-        parser.add_argument('--numClients', nargs='?',
+        parser.add_argument('--num_clients', nargs='?',
                             type=int, default=1, help='Number of clients')
-        parser.add_argument('--numServers', nargs='?',
+        parser.add_argument('--num_servers', nargs='?',
                             type=int, default=5, help='Number of servers')
-        parser.add_argument('--numWorkload', nargs='?',
+        parser.add_argument('--num_workload', nargs='?',
                             type=int, default=4, help='Number of workload generators. Seems to distribute the '
                                                       'tasks out to different clients.')
-        parser.add_argument('--serverConcurrency', nargs='?',
+        parser.add_argument('--server_concurrency', nargs='?',
                             type=int, default=1, help='Amount of resources per server.')
         parser.add_argument('--service_time', nargs='?',
                             type=float, default=2, help='Mean? service time per server')
-        parser.add_argument('--workloadModel', nargs='?',
+        parser.add_argument('--workload_model', nargs='?',
                             type=str, default="poisson", help='Arrival model of requests from client')
         parser.add_argument('--utilization', nargs='?',
                             type=float, default=1.0, help='Arrival rate of requests')
         parser.add_argument('--service_time_model', nargs='?',
                             type=str, default="random.expovariate", help='Distribution of service time on server')
-        parser.add_argument('--replicationFactor', nargs='?',
+        parser.add_argument('--replication_factor', nargs='?',
                             type=int, default=5, help='Replication factor (# of choices)')
-        parser.add_argument('--selectionStrategy', nargs='?',
+        parser.add_argument('--selection_strategy', nargs='?',
                             type=str, default="expDelay", help='Policy to use for replica selection')
         parser.add_argument('--shadowReadRatio', nargs='?',
                             type=float, default=0.0, help='Controls the probability of sending a shadow read '
@@ -97,14 +97,17 @@ class SimulationArgs:
         self.parser = parser
         self.args = parser.parse_args()
 
-        assert self.args.replicationFactor == self.args.numServers, ('Replication factor is not equal to number of'
+        assert self.args.replication_factor == self.args.num_servers, ('Replication factor is not equal to number of'
                                                                      ' servers, i.e., #actions != #servers')
 
     def set_policy(self, policy):
-        self.args.selectionStrategy = policy
+        self.args.selection_strategy = policy
 
     def set_print(self, to_print):
         self.args.print = to_print
+
+    def set_seed(self, seed):
+        self.args.seed = seed
 
 
 class TimeVaryingArgs(SimulationArgs):
