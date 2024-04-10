@@ -30,7 +30,7 @@ class Server:
 
     def get_service_time(self):
         if self.service_time_model == "random.expovariate":
-            service_time = random.expovariate(1.0 / self.service_time)
+            service_time = Simulation.random.expovariate(1.0 / self.service_time)
         elif self.service_time_model == "constant":
             service_time = self.service_time
         elif self.service_time_model == "math.sin":

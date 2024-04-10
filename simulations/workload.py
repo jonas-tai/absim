@@ -36,7 +36,7 @@ class Workload:
 
             # Simulate client delay
             if self.model == "poisson":
-                yield Simulation.timeout(numpy.random.poisson(self.model_param))
+                yield Simulation.timeout(Simulation.np_random.poisson(self.model_param))
 
             # If model is gaussian, add gaussian delay
             # If model is constant, add fixed delay
@@ -46,7 +46,7 @@ class Workload:
             self.numRequests -= 1
 
     def weighted_choice(self):
-        r = random.uniform(0, self.total)
+        r = Simulation.random.uniform(0, self.total)
         upto = 0
         for client in self.clientList:
             if upto + client.demandWeight > r:

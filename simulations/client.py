@@ -109,9 +109,9 @@ class Client:
 
         # Pick a random node and it's next RF - 1 number of neighbours
         if self.accessPattern == "uniform":
-            first_replica_index = random.randint(0, len(self.server_list) - 1)
+            first_replica_index = Simulation.random.randint(0, len(self.server_list) - 1)
         elif self.accessPattern == "zipfian":
-            first_replica_index = numpy.random.zipf(1.5) % len(self.server_list)
+            first_replica_index = Simulation.np_random.zipf(1.5) % len(self.server_list)
 
         if replica_set is None:
             replica_set = [self.server_list[i % len(self.server_list)]
@@ -135,7 +135,7 @@ class Client:
 
     def send_request(self, task: Task, replica_to_serve: Server):
         delay = constants.NW_LATENCY_BASE + \
-                random.normalvariate(constants.NW_LATENCY_MU,
+                Simulation.random.normalvariate(constants.NW_LATENCY_MU,
                                      constants.NW_LATENCY_SIGMA)
 
         # Immediately send out request
@@ -166,7 +166,7 @@ class Client:
             # Pick a random node for the request.
             # Represents SimpleSnitch + uniform request access.
             # Ignore scores and everything else.
-            random.shuffle(replica_set)
+            Simulation.random.shuffle(replica_set)
 
         elif self.REPLICA_SELECTION_STRATEGY == "pending":
             # Sort by number of pending requests
@@ -184,7 +184,7 @@ class Client:
                     m[each] = self.expected_delay_map[each]["serviceTime"]
             replica_set.sort(key=m.get)
             total = sum(map(lambda x: self.responseTimesMap[x], replica_set))
-            selection = random.uniform(0, total)
+            selection = Simulation.random.uniform(0, total)
             cumSum = 0
             nodeToSelect = None
             i = 0
@@ -285,7 +285,7 @@ class Client:
         return total
 
     def maybe_send_shadow_reads(self, replicaToServe, replicaSet):
-        if random.uniform(0, 1.0) < self.shadowReadRatio:
+        if Simulation.random.uniform(0, 1.0) < self.shadowReadRatio:
             for replica in replicaSet:
                 if replica is not replicaToServe:
                     shadow_read_task = Task("ShadowRead", None)
@@ -379,7 +379,7 @@ class ResponseHandler:
         yield Simulation.timeout(0)
         yield task.completion_event
 
-        delay = constants.NW_LATENCY_BASE + random.normalvariate(constants.NW_LATENCY_MU, constants.NW_LATENCY_SIGMA)
+        delay = constants.NW_LATENCY_BASE + Simulation.random.normalvariate(constants.NW_LATENCY_MU, constants.NW_LATENCY_SIGMA)
         yield Simulation.timeout(delay)
 
         # OMG request completed. Time for some book-keeping

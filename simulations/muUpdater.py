@@ -15,7 +15,7 @@ class MuUpdater:
         while (1):
             yield Simulation.timeout(0)
 
-            if (random.uniform(0, 1.0) >= 0.5):
+            if (Simulation.random.uniform(0, 1.0) >= 0.5):
                 rate = 1 / float(self.serviceTime)
                 self.server.service_time = 1 / float(rate)
             else:

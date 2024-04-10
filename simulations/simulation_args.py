@@ -13,13 +13,13 @@ class SimulationArgs:
                                                       'tasks out to different clients.')
         parser.add_argument('--serverConcurrency', nargs='?',
                             type=int, default=1, help='Amount of resources per server.')
-        parser.add_argument('--serviceTime', nargs='?',
+        parser.add_argument('--service_time', nargs='?',
                             type=float, default=2, help='Mean? service time per server')
         parser.add_argument('--workloadModel', nargs='?',
                             type=str, default="poisson", help='Arrival model of requests from client')
         parser.add_argument('--utilization', nargs='?',
                             type=float, default=1.0, help='Arrival rate of requests')
-        parser.add_argument('--serviceTimeModel', nargs='?',
+        parser.add_argument('--service_time_model', nargs='?',
                             type=str, default="random.expovariate", help='Distribution of service time on server')
         parser.add_argument('--replicationFactor', nargs='?',
                             type=int, default=5, help='Replication factor (# of choices)')

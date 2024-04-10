@@ -32,8 +32,8 @@ def rlExperimentWrapper(args):
 
 def runExperiment(args, trainer : Trainer = None):
     # Set the random seed
-    random.seed(args.seed)
-    np.random.seed(args.seed)
+    Simulation.reset()
+    Simulation.set_seed(args.seed)
 
     servers = []
     clients = []
@@ -91,7 +91,7 @@ def runExperiment(args, trainer : Trainer = None):
             serviceRatePerServer = [args.serverConcurrency *
                                     1 / float(args.service_time)] * args.numServers
 
-        random.shuffle(serviceRatePerServer)
+        Simulation.random.shuffle(serviceRatePerServer)
         # print(sum(serviceRatePerServer), (1/float(baseServiceTime)) * args.numServers)
         assert sum(serviceRatePerServer) > 0.99 * \
                (1 / float(baseServiceTime)) * args.numServers
@@ -275,10 +275,6 @@ def runExperiment(args, trainer : Trainer = None):
         printMonitorTimeSeriesToFile(latencyFD, "0",
                                      latencyMonitor)
         assert args.numRequests == len(latencyMonitor)
-
-    plotter = ExperimentPlot()
-
-    plotter.add_data(latencyMonitor)
 
     return latencyMonitor
 
