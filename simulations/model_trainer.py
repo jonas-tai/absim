@@ -11,13 +11,14 @@ from replay_memory import ReplayMemory, Transition
 from model import DQN, SummaryStats
 from simulations.state import State
 from collections import defaultdict
+import numpy as np
 
 StateAction = namedtuple('StateAction', ('state', 'action'))
 
 
 class Trainer:
-    def __init__(self, n_actions, batch_size=128, gamma=0.99, eps_start=0.9, eps_end=0.05,
-                 eps_decay=1000, tau=0.005, lr=1e-4):
+    def __init__(self, n_actions, batch_size=512, gamma=0.9, eps_start=0.9, eps_end=0.2,
+                 eps_decay=10000, tau=0.01, lr=1e-2, tau_decay=10):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.task_to_state_action: Dict[str, StateAction] = {}
@@ -30,6 +31,7 @@ class Trainer:
         self.EPS_START = eps_start
         self.EPS_END = eps_end
         self.EPS_DECAY = eps_decay
+        self.TAU_DECAY = tau_decay
         self.TAU = tau
         self.LR = lr
 
@@ -42,10 +44,14 @@ class Trainer:
         self.target_net = DQN(n_observations, n_actions).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
-        self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
-        self.memory = ReplayMemory(10000, self.policy_net.summary)
+        self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True, weight_decay=1e-2)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.99)
+        # self.scheduler = optim.lr_scheduler.ConstantLR(self.optimizer)
+
+        self.memory = ReplayMemory(8192, self.policy_net.summary)
 
         self.steps_done = 0
+
         self.actions_chosen = defaultdict(int)
 
         self.reward_stats = SummaryStats(1)
@@ -63,7 +69,7 @@ class Trainer:
         self.last_task_id = task_id
 
     def execute_step_if_state_present(self, task_id: str, latency: int) -> None:
-        self.task_to_reward[task_id] = torch.tensor([[- latency]], device=self.device, dtype=torch.float32)
+        self.task_to_reward[task_id] = torch.tensor([[- np.sqrt(latency)]], device=self.device, dtype=torch.float32)
         if task_id not in self.task_to_next_state:
             # Next state not present because request finished before next request arrived
             return
@@ -91,12 +97,14 @@ class Trainer:
 
         # Soft update of the target network's weights
         # θ′ ← τ θ + (1 −τ )θ′
+        tau = self.TAU + (1 - self.TAU) * math.exp(-1. * self.steps_done / self.TAU_DECAY)
+
         target_net_state_dict = self.target_net.state_dict()
         policy_net_state_dict = self.policy_net.state_dict()
         for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key] * self.TAU + target_net_state_dict[key] * (
-                    1 - self.TAU)
-        self.target_net.load_state_dict(target_net_state_dict)
+            target_net_state_dict[key] = policy_net_state_dict[key] * tau + target_net_state_dict[key] * (
+                    1 - tau)
+        self.target_net.load_state_dict(policy_net_state_dict)
         self.clean_up_after_step(task_id=task_id)
 
     def select_action(self, state: State):
@@ -164,6 +172,15 @@ class Trainer:
         # Optimize the model
         self.optimizer.zero_grad()
         loss.backward()
+
+        # grads = [
+        #     param.grad.detach().flatten()
+        #     for param in self.policy_net.parameters()
+        #     if param.grad is not None
+        # ]
+        # norm = torch.cat(grads).norm()
+        # print(loss, norm)
         # In-place gradient clipping
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 1)
+        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 0.1)
         self.optimizer.step()
+        self.scheduler.step()

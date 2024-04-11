@@ -17,6 +17,7 @@ class ReplayMemory(object):
         self.index = 0
         self.size = 0
         self.summary = summary
+        self.latest_transition = None
         # self.memory = deque([], maxlen=capacity)
 
     def push(self, state: torch.Tensor, action: torch.Tensor, next_state: torch.Tensor, latency: torch.Tensor) -> None:
@@ -24,11 +25,15 @@ class ReplayMemory(object):
         self.memory[self.index] = transition
         self.size = min(self.size + 1, self.max_size)
         self.index = (self.index + 1) % self.max_size
+        self.latest_transition = transition
+
         self.summary.add(state)
 
     def sample(self, batch_size):
-        indices = random.sample(range(self.size), batch_size)
-        return [self.memory[index] for index in indices]
+        # https://arxiv.org/abs/1712.01275
+        # use batch and latest transition
+        indices = random.sample(range(self.size), batch_size - 1)
+        return [self.memory[index] for index in indices] + [self.latest_transition]
 
     def __len__(self):
         return self.size

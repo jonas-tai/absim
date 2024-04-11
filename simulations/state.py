@@ -18,12 +18,11 @@ class NodeState:
 
     def to_tensor(self) -> torch.Tensor:
         return torch.tensor(
-            [[self.queue_size, self.service_time, self.wait_time, self.response_time, self.outstanding_requests,
-              self.twice_network_latency]], dtype=torch.float32)
+            [[self.queue_size, self.service_time, self.response_time, self.outstanding_requests, self.wait_time]], dtype=torch.float32)
 
     @staticmethod
     def get_node_state_size() -> int:
-        return 6
+        return 5
         #attributes = inspect.getmembers(NodeState, lambda a: not (inspect.isroutine(a)))
         #return len([a for a in attributes if not (a[0].startswith('__') and a[0].endswith('__'))])
 
@@ -37,12 +36,13 @@ class State:
 
     def to_tensor(self) -> torch.Tensor:
         node_state_tensor = torch.cat([node_state.to_tensor() for node_state in self.node_states], 1)
-        general_state = self.request_trend + [self.time_since_last_req]
-        general_state_tensor = torch.tensor([general_state], dtype=torch.float32)
-        return torch.cat((general_state_tensor, node_state_tensor), 1)
+        # general_state = self.request_trend + [self.time_since_last_req]
+        # general_state_tensor = torch.tensor([general_state], dtype=torch.float32)
+        # return torch.cat((general_state_tensor, node_state_tensor), 1)
+        return node_state_tensor
 
     @staticmethod
     def get_state_size(num_servers: int, num_request_rates: int = 3):
         num_other_features = 1
-        state_size = num_servers * NodeState.get_node_state_size() + num_request_rates + num_other_features
+        state_size = num_servers * NodeState.get_node_state_size()
         return state_size

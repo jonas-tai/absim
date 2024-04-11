@@ -7,21 +7,27 @@ import torch
 
 class DQN(nn.Module):
 
-    def __init__(self, n_observations, n_actions):
+    def __init__(self, n_observations, n_actions, hidden_dims=64):
         super(DQN, self).__init__()
-        self.layer1 = nn.Linear(n_observations, 128)
-        self.layer2 = nn.Linear(128, 128)
-        self.layer3 = nn.Linear(128, n_actions)
+        activations = nn.LeakyReLU
+
+        self.layers = nn.Sequential(
+            nn.Linear(n_observations, hidden_dims),
+            activations(),
+            nn.Linear(hidden_dims, hidden_dims),
+            activations(),
+            nn.Linear(hidden_dims, hidden_dims),
+            activations(),
+            nn.Linear(hidden_dims, n_actions)
+        )
+
         self.summary = SummaryStats(n_observations)
 
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
     def forward(self, x):
         x = (x - self.summary.means) * self.summary.inv_sqrt_sd()
-
-        x = F.relu(self.layer1(x))
-        x = F.relu(self.layer2(x))
-        return self.layer3(x)
+        return self.layers(x)
 
 
 class SummaryStats():

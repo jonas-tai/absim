@@ -18,6 +18,7 @@ from pathlib import Path
 from model_trainer import Trainer
 from simulations.plotting import ExperimentPlot
 import matplotlib.pyplot as plt
+from tqdm import trange
 
 
 def print_monitor_time_series_to_file(file_desc, prefix, monitor):
@@ -32,7 +33,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
     trainer = Trainer(simulation_args.args.num_servers)
-    NUM_EPSIODES = 10
+    NUM_EPSIODES = 5
     plotter = ExperimentPlot()
     to_print = False
 
@@ -42,7 +43,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     simulation_args.set_print(to_print)
 
     policies_to_run = [
-        # 'expDelay',
+        'expDelay',
         # 'response_time',
         # 'weighted_response_time',
         'random',
@@ -52,11 +53,13 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     print('Starting experiments')
     for policy in policies_to_run:
         simulation_args.set_policy(policy)
-        for i_episode in range(NUM_EPSIODES):
+        ep_iter = range(NUM_EPSIODES) if to_print else trange(NUM_EPSIODES)
+        for i_episode in ep_iter:
             simulation_args.set_seed(i_episode)
             latencies = run_experiment(simulation_args.args, trainer)
             plotter.add_data(latencies, simulation_args.args.selection_strategy, i_episode)
 
+    print(trainer.actions_chosen)
     fig, ax = plotter.plot()
     print('Finished')
     plt.savefig(plot_path / 'output.jpg')
