@@ -236,6 +236,8 @@ class Client:
             self.trainer.record_state_and_action(task_id=task.id, state=state, action=action)
             # Map action back to server id
             replica = next(server for server in replica_set if server.get_server_id() == action)
+            # TODO: Delete this and print statements
+            # replica = [server for server in replica_set if server.get_server_id() == action][0]
 
             # set the first replica to be the "action"
             replica_set[0] = replica

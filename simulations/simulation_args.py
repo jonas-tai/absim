@@ -9,7 +9,7 @@ class SimulationArgs:
         parser.add_argument('--num_servers', nargs='?',
                             type=int, default=5, help='Number of servers')
         parser.add_argument('--num_workload', nargs='?',
-                            type=int, default=4, help='Number of workload generators. Seems to distribute the '
+                            type=int, default=1, help='Number of workload generators. Seems to distribute the '
                                                       'tasks out to different clients.')
         parser.add_argument('--server_concurrency', nargs='?',
                             type=int, default=1, help='Amount of resources per server.')

@@ -35,9 +35,6 @@ class Trainer:
         # num servers
         self.n_actions = n_actions
 
-        # todo: fix
-        state = 0
-        # n_observations = len(state)
         n_observations = State.get_state_size(num_servers=n_actions)
 
         self.policy_net = DQN(n_observations, n_actions).to(self.device)
@@ -50,7 +47,7 @@ class Trainer:
         self.steps_done = 0
 
     def record_state_and_action(self, task_id: str, state: State, action: int) -> None:
-        action = torch.tensor([action], device=self.device)
+        action = torch.tensor([[action]], device=self.device)
         state = state.to_tensor()
         self.task_to_state_action[task_id] = StateAction(state, action)
 
@@ -58,20 +55,20 @@ class Trainer:
             self.task_to_next_state[self.last_task_id] = state
             if self.last_task_id in self.task_to_reward:
                 # Reward (latency) of last task already present and not pushed to memory yet
-                self.training_step(task_id=task_id)
+                self.training_step(task_id=self.last_task_id)
         self.last_task_id = task_id
 
     def execute_step_if_state_present(self, task_id: str, latency: int) -> None:
-        self.task_to_reward[task_id] = torch.tensor([latency], device=self.device)
+        self.task_to_reward[task_id] = torch.tensor([[latency]], device=self.device, dtype=torch.float32)
         if task_id not in self.task_to_next_state:
             # Next state not present because request finished before next request arrived
             return
-        self.training_step(self.last_task_id)
+        self.training_step(task_id)
 
     def push_to_memory(self, task_id: str) -> None:
         state_action = self.task_to_state_action[task_id]
         next_state = self.task_to_next_state[task_id]
-        reward = self.task_to_reward[self.last_task_id]
+        reward = self.task_to_reward[task_id]
         self.memory.push(state_action.state, state_action.action, next_state, reward)
 
     def clean_up_after_step(self, task_id: str) -> None:
@@ -97,19 +94,18 @@ class Trainer:
         self.target_net.load_state_dict(target_net_state_dict)
         self.clean_up_after_step(task_id=task_id)
 
-    def select_action(self, state):
-        global steps_done
+    def select_action(self, state: State):
         sample = random.random()
-        eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(-1. * steps_done / self.EPS_DECAY)
-        steps_done += 1
+        eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(-1. * self.steps_done / self.EPS_DECAY)
+        self.steps_done += 1
         if sample > eps_threshold:
             with torch.no_grad():
                 # t.max(1) will return the largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
-                return self.policy_net(state).max(1).indices.view(1, 1)
+                return self.policy_net(state.to_tensor()).max(1).indices.view(1, 1)
         else:
-            return torch.tensor([[self.env.action_space.sample()]], device=self.device, dtype=torch.long)
+            return torch.tensor([[random.randint(0, self.n_actions - 1)]], device=self.device, dtype=torch.long)
 
     def optimize_model(self):
         if len(self.memory) < self.BATCH_SIZE:

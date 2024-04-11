@@ -32,6 +32,7 @@ class Workload:
             # Push out a task...
             client_node = self.weighted_choice()
 
+            # print(f'Scheduling Task {task_to_schedule.id}')
             client_node.schedule(task_to_schedule)
 
             # Simulate client delay
