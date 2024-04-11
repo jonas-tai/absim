@@ -8,8 +8,9 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from replay_memory import ReplayMemory, Transition
-from model import DQN
+from model import DQN, SummaryStats
 from simulations.state import State
+from collections import defaultdict
 
 StateAction = namedtuple('StateAction', ('state', 'action'))
 
@@ -42,9 +43,12 @@ class Trainer:
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
-        self.memory = ReplayMemory(10000)
+        self.memory = ReplayMemory(10000, self.policy_net.summary)
 
         self.steps_done = 0
+        self.actions_chosen = defaultdict(int)
+
+        self.reward_stats = SummaryStats(1)
 
     def record_state_and_action(self, task_id: str, state: State, action: int) -> None:
         action = torch.tensor([[action]], device=self.device)
@@ -69,6 +73,7 @@ class Trainer:
         state_action = self.task_to_state_action[task_id]
         next_state = self.task_to_next_state[task_id]
         reward = self.task_to_reward[task_id]
+        self.reward_stats.add(reward)
         self.memory.push(state_action.state, state_action.action, next_state, reward)
 
     def clean_up_after_step(self, task_id: str) -> None:
@@ -95,17 +100,23 @@ class Trainer:
         self.clean_up_after_step(task_id=task_id)
 
     def select_action(self, state: State):
+        action_chosen = None
         sample = random.random()
-        eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(-1. * self.steps_done / self.EPS_DECAY)
+        eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(
+            -1. * self.steps_done / self.EPS_DECAY)
         self.steps_done += 1
         if sample > eps_threshold:
             with torch.no_grad():
                 # t.max(1) will return the largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
-                return self.policy_net(state.to_tensor()).max(1).indices.view(1, 1)
+                action_chosen = self.policy_net(state.to_tensor()).max(1).indices.view(1, 1)
         else:
-            return torch.tensor([[random.randint(0, self.n_actions - 1)]], device=self.device, dtype=torch.long)
+            action_chosen = torch.tensor([[random.randint(0, self.n_actions - 1)]], device=self.device,
+                                         dtype=torch.long)
+
+        self.actions_chosen[action_chosen.item()] += 1
+        return action_chosen
 
     def optimize_model(self):
         if len(self.memory) < self.BATCH_SIZE:
@@ -124,6 +135,8 @@ class Trainer:
         state_batch = torch.cat(batch.state)
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
+
+        reward_batch = (reward_batch - self.reward_stats.means) * self.reward_stats.inv_sqrt_sd()
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
@@ -152,5 +165,5 @@ class Trainer:
         self.optimizer.zero_grad()
         loss.backward()
         # In-place gradient clipping
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
+        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 1)
         self.optimizer.step()
