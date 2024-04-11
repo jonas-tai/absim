@@ -37,7 +37,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     simulation_args.set_print(to_print)
 
     print('Starting experiments')
-    for policy in ['expDelay', 'response_time', 'weighted_response_time', 'random', 'dqn']:  # 'expDelay', 'response_time', 'weighted_response_time', 'random', 'dqn'
+    for policy in ['random', 'dqn']:  # 'expDelay', 'response_time', 'weighted_response_time', 'random', 'dqn'
         simulation_args.set_policy(policy)
         for i_episode in range(NUM_EPSIODES):
             simulation_args.set_seed(i_episode)
