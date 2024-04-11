@@ -1,5 +1,7 @@
 simpy==3.0.13
-yunomi
-numpy
-torch
-seaborn
+yunomi~=0.3.0
+numpy~=1.26.4
+torch~=2.2.2
+seaborn~=0.13.2
+matplotlib~=3.8.3
+pandas~=2.2.1

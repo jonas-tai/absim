@@ -27,4 +27,12 @@ class ExperimentPlot:
     def plot(self):
         fig, axes = plt.subplots(figsize=(16, 8), dpi=200, nrows=1, ncols=1, sharex='all')
         sns.lineplot(self.df, x="Epoch", y="Latency", hue="Policy", ax=axes)
-        return fig,axes
+        return fig, axes
+
+    def plot_quantile(self, quantile: float):
+        fig, axes = plt.subplots(figsize=(16, 8), dpi=200, nrows=1, ncols=1, sharex='all')
+        quantiles = self.df.groupby(['Policy', 'Epoch'])['Latency'].quantile(quantile).reset_index()
+
+        sns.lineplot(data=quantiles, x="Epoch", y=f'Latency', hue="Policy", ax=axes)
+        plt.title(f'{quantile}th quantile')
+        return fig, axes
