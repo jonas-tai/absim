@@ -63,8 +63,9 @@ class SimulationArgs:
                                                          'it will error')
         parser.add_argument('--num_requests', nargs='?',
                             type=int, default=400, help='Number of requests')
-        parser.add_argument('--log_folder', nargs='?',
-                            type=str, default="logs")
+        parser.add_argument('--log_folder', nargs='?', type=str, default="logs")
+        parser.add_argument('--plot_folder', nargs='?', type=str, default="plots")
+
         parser.add_argument('--exp_scenario', nargs='?',
                             type=str, default="base", help='Defines some scenarios for experiments such as \n'
                                                            '[base] - default setting\n'
