@@ -1,5 +1,7 @@
 import os
 
+import torch
+
 import server
 import client
 from simulator import Simulation
@@ -24,20 +26,31 @@ def print_monitor_time_series_to_file(file_desc, prefix, monitor):
 
 
 def rl_experiment_wrapper(simulation_args: SimulationArgs):
+    random.seed(1)
+    np.random.seed(1)
+    torch.manual_seed(1)
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
     trainer = Trainer(simulation_args.args.num_servers)
     NUM_EPSIODES = 10
     plotter = ExperimentPlot()
-    to_print = True
+    to_print = False
 
     plot_path = Path('..', simulation_args.args.plot_folder, simulation_args.args.exp_prefix)
     os.makedirs(plot_path, exist_ok=True)
 
     simulation_args.set_print(to_print)
 
+    policies_to_run = [
+        # 'expDelay',
+        # 'response_time',
+        # 'weighted_response_time',
+        'random',
+        'dqn'
+    ]
+
     print('Starting experiments')
-    for policy in ['expDelay', 'response_time', 'weighted_response_time', 'random', 'dqn']:  # 'expDelay', 'response_time', 'weighted_response_time', 'random', 'dqn'
+    for policy in policies_to_run:
         simulation_args.set_policy(policy)
         for i_episode in range(NUM_EPSIODES):
             simulation_args.set_seed(i_episode)
@@ -84,7 +97,7 @@ def run_experiment(args, trainer: Trainer = None):
                                  service_time_model=args.service_time_model,
                                  simulation=simulation)
             servers.append(serv)
-    elif args.exp_scenario == "heterogenousStaticServiceTimeScenario":
+    elif args.exp_scenario == "heterogenous_static_service_time_scenario":
         base_service_time = args.service_time
 
         assert 0 <= args.slow_server_fraction < 1.0
@@ -126,7 +139,7 @@ def run_experiment(args, trainer: Trainer = None):
                                  service_time_model=args.service_time_model,
                                  simulation=simulation)
             servers.append(serv)
-    elif (args.exp_scenario == "timeVaryingServiceTimeServers"):
+    elif (args.exp_scenario == "time_varying_service_time_servers"):
         assert args.interval_param != 0.0
         assert args.time_varying_drift != 0.0
 
