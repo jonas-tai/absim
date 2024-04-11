@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 # From https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
 
 class DQN(nn.Module):

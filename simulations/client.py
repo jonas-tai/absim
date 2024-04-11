@@ -16,18 +16,18 @@ from collections import defaultdict
 
 
 class Client:
-    def __init__(self, id_, server_list: List[Server], replicaSelectionStrategy,
-                 accessPattern, replication_factor, backpressure,
-                 shadowReadRatio, rateInterval,
-                 cubicC, cubicSmax, cubicBeta, hysterisisFactor,
-                 demandWeight, simulation, rate_intervals=None, trainer: Trainer = None):
+    def __init__(self, id_, server_list: List[Server], replica_selection_strategy,
+                 access_pattern, replication_factor, backpressure,
+                 shadow_read_ratio, rate_interval,
+                 cubic_c, cubic_smax, cubic_beta, hysterisis_factor,
+                 demand_weight, simulation, rate_intervals=None, trainer: Trainer = None):
         if rate_intervals is None:
             rate_intervals = [1000, 500, 100]
         self.id = id_
         self.server_list = server_list
-        self.accessPattern = accessPattern
+        self.accessPattern = access_pattern
         self.replication_factor = replication_factor
-        self.REPLICA_SELECTION_STRATEGY = replicaSelectionStrategy
+        self.REPLICA_SELECTION_STRATEGY = replica_selection_strategy
         self.pendingRequestsMonitor = Monitor(name="PendingRequests", simulation=simulation)
         self.latencyTrackerMonitor = Monitor(name="ResponseHandler", simulation=simulation)
         self.rateMonitor = Monitor(name="AlphaMonitor", simulation=simulation)
@@ -35,8 +35,8 @@ class Client:
         self.tokenMonitor = Monitor(name="TokenMonitor", simulation=simulation)
         self.edScoreMonitor = Monitor(name="edScoreMonitor", simulation=simulation)
         self.backpressure = backpressure  # True / False
-        self.shadowReadRatio = shadowReadRatio
-        self.demandWeight = demandWeight
+        self.shadowReadRatio = shadow_read_ratio
+        self.demandWeight = demand_weight
         self.simulation = simulation
         self.last_req_start_time = self.simulation.now
         self.time_since_last_req = 0
@@ -65,20 +65,20 @@ class Client:
 
         # Rate limiters per replica
         self.rateLimiters = {node: RateLimiter("RL-%s" % node.id,
-                                               self, 50, rateInterval, simulation)
+                                               self, 50, rate_interval, simulation)
                              for node in server_list}
         self.lastRateDecrease = defaultdict(int)
         self.valueOfLastDecrease = defaultdict(lambda: 10)
-        self.receiveRate = {node: ReceiveRate("RL-%s" % node.id, rateInterval, simulation)
+        self.receiveRate = {node: ReceiveRate("RL-%s" % node.id, rate_interval, simulation)
                             for node in server_list}
         self.lastRateIncrease = defaultdict(int)
-        self.rateInterval = rateInterval
+        self.rateInterval = rate_interval
 
         # Parameters for congestion control
-        self.cubicC = cubicC
-        self.cubicSmax = cubicSmax
-        self.cubicBeta = cubicBeta
-        self.hysterisisFactor = hysterisisFactor
+        self.cubicC = cubic_c
+        self.cubicSmax = cubic_smax
+        self.cubicBeta = cubic_beta
+        self.hysterisis_factor = hysterisis_factor
 
         # Backpressure related initialization
         if backpressure:
@@ -89,7 +89,7 @@ class Client:
                 self.simulation.process(self.backpressureSchedulers[node].run())
 
         # ds-metrics
-        if replicaSelectionStrategy == "ds":
+        if replica_selection_strategy == "ds":
             self.latencyEdma = {node: ExponentiallyDecayingSample(100, 0.75, self.clock)
                                 for node in server_list}
             self.dsScores = {node: 0 for node in server_list}
@@ -140,8 +140,8 @@ class Client:
                                                      constants.NW_LATENCY_SIGMA)
 
         # Immediately send out request
-        messageDeliveryProcess = DeliverMessageWithDelay(simulation=self.simulation)
-        self.simulation.process(messageDeliveryProcess.run(task,
+        message_delivery_process = DeliverMessageWithDelay(simulation=self.simulation)
+        self.simulation.process(message_delivery_process.run(task,
                                                            delay,
                                                            replica_to_serve))
         if self.REPLICA_SELECTION_STRATEGY == "dqn":
@@ -186,17 +186,17 @@ class Client:
             replica_set.sort(key=m.get)
             total = sum(map(lambda x: self.responseTimesMap[x], replica_set))
             selection = self.simulation.random.uniform(0, total)
-            cumSum = 0
-            nodeToSelect = None
+            cum_sum = 0
+            node_to_select = None
             i = 0
-            if (total != 0):
+            if total != 0:
                 for entry in replica_set:
-                    cumSum += self.responseTimesMap[entry]
-                    if (selection < cumSum):
-                        nodeToSelect = entry
+                    cum_sum += self.responseTimesMap[entry]
+                    if selection < cum_sum:
+                        node_to_select = entry
                         break
                     i += 1
-                assert nodeToSelect is not None
+                assert node_to_select is not None
 
                 replica_set[0], replica_set[i] = replica_set[i], replica_set[0]
         elif self.REPLICA_SELECTION_STRATEGY == "primary":
@@ -206,25 +206,25 @@ class Client:
             replica_set.sort(key=self.pendingXserviceMap.get)
         elif self.REPLICA_SELECTION_STRATEGY == "clairvoyant":
             # Sort by response times * pending-requests
-            oracleMap = {replica: (1 + len(replica.queueResource.queue))
+            oracle_map = {replica: (1 + len(replica.queueResource.queue))
                                   * replica.serviceTime
                          for replica in original_replica_set}
-            replica_set.sort(key=oracleMap.get)
+            replica_set.sort(key=oracle_map.get)
         elif self.REPLICA_SELECTION_STRATEGY == "expDelay":
-            sortMap = {}
+            sort_map = {}
             for replica in original_replica_set:
-                sortMap[replica] = self.compute_expected_delay(replica)
-            replica_set.sort(key=sortMap.get)
+                sort_map[replica] = self.compute_expected_delay(replica)
+            replica_set.sort(key=sort_map.get)
         elif self.REPLICA_SELECTION_STRATEGY == "ds":
-            firstNode = replica_set[0]
-            firstNodeScore = self.dsScores[firstNode]
-            badnessThreshold = 0.0
+            first_node = replica_set[0]
+            first_node_score = self.dsScores[first_node]
+            badness_threshold = 0.0
 
-            if (firstNodeScore != 0.0):
+            if first_node_score != 0.0:
                 for node in replica_set[1:]:
-                    newNodeScore = self.dsScores[node]
-                    if ((firstNodeScore - newNodeScore) / firstNodeScore
-                            > badnessThreshold):
+                    new_node_score = self.dsScores[node]
+                    if ((first_node_score - new_node_score) / first_node_score
+                            > badness_threshold):
                         replica_set.sort(key=self.dsScores.get)
         elif self.REPLICA_SELECTION_STRATEGY == "dqn":
             node_states = [self.get_node_state(replica) for replica in replica_set]
@@ -315,7 +315,7 @@ class Client:
         beta = self.cubicBeta
         C = self.cubicC
         Smax = self.cubicSmax
-        hysterisisFactor = self.hysterisisFactor
+        hysterisisFactor = self.hysterisis_factor
         currentSendingRate = self.rateLimiters[replica].rate
         currentReceiveRate = self.receiveRate[replica].getRate()
 

@@ -38,7 +38,7 @@ class Trainer:
         # todo: fix
         state = 0
         # n_observations = len(state)
-        n_observations = 10
+        n_observations = State.get_state_size(num_servers=n_actions)
 
         self.policy_net = DQN(n_observations, n_actions).to(self.device)
         self.target_net = DQN(n_observations, n_actions).to(self.device)
@@ -100,8 +100,7 @@ class Trainer:
     def select_action(self, state):
         global steps_done
         sample = random.random()
-        eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * \
-                        math.exp(-1. * steps_done / self.EPS_DECAY)
+        eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(-1. * steps_done / self.EPS_DECAY)
         steps_done += 1
         if sample > eps_threshold:
             with torch.no_grad():
@@ -125,8 +124,7 @@ class Trainer:
         # (a final state would've been the one after which simulation ended)
         non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
                                                 batch.next_state)), device=self.device, dtype=torch.bool)
-        non_final_next_states = torch.cat([s for s in batch.next_state
-                                           if s is not None])
+        non_final_next_states = torch.cat([s for s in batch.next_state if s is not None])
         state_batch = torch.cat(batch.state)
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)

@@ -16,50 +16,52 @@ from simulations.plotting import ExperimentPlot
 import matplotlib.pyplot as plt
 
 
-def printMonitorTimeSeriesToFile(fileDesc, prefix, monitor):
+def print_monitor_time_series_to_file(file_desc, prefix, monitor):
     for entry in monitor:
-        fileDesc.write("%s %s %s\n" % (prefix, entry[0], entry[1]))
+        file_desc.write("%s %s %s\n" % (prefix, entry[0], entry[1]))
 
 
-def rlExperimentWrapper(simulation_args: SimulationArgs):
+def rl_experiment_wrapper(simulation_args: SimulationArgs):
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
     trainer = Trainer(simulation_args.args.num_servers)
     NUM_EPSIODES = 10
     plotter = ExperimentPlot()
-    to_print = False
+    to_print = True
 
     simulation_args.set_print(to_print)
 
-    for policy in ['expDelay', 'response_time', 'weighted_response_time', 'random']:
+    print('Starting experiments')
+    for policy in ['expDelay']:  # 'expDelay', 'response_time', 'weighted_response_time', 'random', 'dqn'
         simulation_args.set_policy(policy)
         for i_episode in range(NUM_EPSIODES):
             simulation_args.set_seed(i_episode)
-            latencies = runExperiment(simulation_args.args, trainer)
+            latencies = run_experiment(simulation_args.args, trainer)
             plotter.add_data(latencies, simulation_args.args.selection_strategy, i_episode)
 
     fig, ax = plotter.plot()
+    print('Finished')
     plt.show()
 
 
-def runExperiment(args, trainer: Trainer = None):
+def run_experiment(args, trainer: Trainer = None):
     # Set the random seed
     simulation = Simulation()
     simulation.set_seed(args.seed)
 
     servers = []
     clients = []
-    workloadGens = []
+    workload_gens = []
 
-    constants.NW_LATENCY_BASE = args.nwLatencyBase
-    constants.NW_LATENCY_MU = args.nwLatencyMu
-    constants.NW_LATENCY_SIGMA = args.nwLatencySigma
+    constants.NW_LATENCY_BASE = args.nw_latency_base
+    constants.NW_LATENCY_MU = args.nw_latency_mu
+    constants.NW_LATENCY_SIGMA = args.nw_latency_sigma
     constants.NUMBER_OF_CLIENTS = args.num_clients
 
-    assert args.expScenario != ""
+    assert args.exp_scenario != ""
 
-    serviceRatePerServer = []
-    if (args.expScenario == "base"):
+    service_rate_per_server = []
+    if args.exp_scenario == "base":
         # Start the servers
         for i in range(args.num_servers):
             serv = server.Server(i,
@@ -68,7 +70,7 @@ def runExperiment(args, trainer: Trainer = None):
                                  service_time_model=args.service_time_model,
                                  simulation=simulation)
             servers.append(serv)
-    elif (args.expScenario == "multipleServiceTimeServers"):
+    elif args.exp_scenario == "multipleServiceTimeServers":
         # Start the servers
         for i in range(args.num_servers):
             serv = server.Server(i,
@@ -77,53 +79,51 @@ def runExperiment(args, trainer: Trainer = None):
                                  service_time_model=args.service_time_model,
                                  simulation=simulation)
             servers.append(serv)
-    elif (args.expScenario == "heterogenousStaticServiceTimeScenario"):
-        baseServiceTime = args.service_time
+    elif args.exp_scenario == "heterogenousStaticServiceTimeScenario":
+        base_service_time = args.service_time
 
-        assert args.slowServerFraction >= 0 and args.slowServerFraction < 1.0
-        assert args.slowServerSlowness >= 0 and args.slowServerSlowness < 1.0
-        assert not (args.slowServerSlowness == 0
-                    and args.slowServerFraction != 0)
-        assert not (args.slowServerSlowness != 0
-                    and args.slowServerFraction == 0)
+        assert 0 <= args.slow_server_fraction < 1.0
+        assert 0 <= args.slow_server_slowness < 1.0
+        assert not (args.slow_server_slowness == 0 and args.slow_server_fraction != 0)
+        assert not (args.slow_server_slowness != 0 and args.slow_server_fraction == 0)
 
-        if (args.slowServerFraction > 0.0):
-            slowServerRate = (args.server_concurrency *
-                              1 / float(baseServiceTime)) * \
-                             args.slowServerSlowness
-            numSlowServers = int(args.slowServerFraction * args.num_servers)
-            slowServerRates = [slowServerRate] * numSlowServers
+        if args.slow_server_fraction > 0.0:
+            slow_server_rate = (args.server_concurrency *
+                                1 / float(base_service_time)) * \
+                               args.slow_server_slowness
+            num_slow_servers = int(args.slow_server_fraction * args.num_servers)
+            slow_server_rates = [slow_server_rate] * num_slow_servers
 
-            numFastServers = args.num_servers - numSlowServers
-            totalRate = (args.server_concurrency *
-                         1 / float(args.service_time) * args.num_servers)
-            fastServerRate = (totalRate - sum(slowServerRates)) \
-                             / float(numFastServers)
-            fastServerRates = [fastServerRate] * numFastServers
-            serviceRatePerServer = slowServerRates + fastServerRates
+            num_fast_servers = args.num_servers - num_slow_servers
+            total_rate = (args.server_concurrency *
+                          1 / float(args.service_time) * args.num_servers)
+            fast_server_rate = (total_rate - sum(slow_server_rates)) \
+                               / float(num_fast_servers)
+            fast_server_rates = [fast_server_rate] * num_fast_servers
+            service_rate_per_server = slow_server_rates + fast_server_rates
         else:
-            serviceRatePerServer = [args.server_concurrency *
-                                    1 / float(args.service_time)] * args.num_servers
+            service_rate_per_server = [args.server_concurrency *
+                                       1 / float(args.service_time)] * args.num_servers
 
-        simulation.random.shuffle(serviceRatePerServer)
+        simulation.random.shuffle(service_rate_per_server)
         # print(sum(serviceRatePerServer), (1/float(baseServiceTime)) * args.num_servers)
-        assert sum(serviceRatePerServer) > 0.99 * \
-               (1 / float(baseServiceTime)) * args.num_servers
-        assert sum(serviceRatePerServer) <= \
-               (1 / float(baseServiceTime)) * args.num_servers
+        assert sum(service_rate_per_server) > 0.99 * \
+               (1 / float(base_service_time)) * args.num_servers
+        assert sum(service_rate_per_server) <= \
+               (1 / float(base_service_time)) * args.num_servers
 
         # Start the servers
         for i in range(args.num_servers):
-            st = 1 / float(serviceRatePerServer[i])
+            st = 1 / float(service_rate_per_server[i])
             serv = server.Server(i,
                                  resource_capacity=args.server_concurrency,
                                  service_time=st,
                                  service_time_model=args.service_time_model,
                                  simulation=simulation)
             servers.append(serv)
-    elif (args.expScenario == "timeVaryingServiceTimeServers"):
-        assert args.intervalParam != 0.0
-        assert args.timeVaryingDrift != 0.0
+    elif (args.exp_scenario == "timeVaryingServiceTimeServers"):
+        assert args.interval_param != 0.0
+        assert args.time_varying_drift != 0.0
 
         # Start the servers
         for i in range(args.num_servers):
@@ -133,9 +133,9 @@ def runExperiment(args, trainer: Trainer = None):
                                  service_time_model=args.service_time_model,
                                  simulation=simulation)
             mup = muUpdater.MuUpdater(serv,
-                                      args.intervalParam,
+                                      args.interval_param,
                                       args.service_time,
-                                      args.timeVaryingDrift,
+                                      args.time_varying_drift,
                                       simulation)
             simulation.process(mup.run())
             servers.append(serv)
@@ -143,45 +143,45 @@ def runExperiment(args, trainer: Trainer = None):
         print("Unknown experiment scenario")
         sys.exit(-1)
 
-    baseDemandWeight = 1.0
-    clientWeights = []
-    assert args.highDemandFraction >= 0 and args.highDemandFraction < 1.0
-    assert args.demandSkew >= 0 and args.demandSkew < 1.0
-    assert not (args.demandSkew == 0 and args.highDemandFraction != 0)
-    assert not (args.demandSkew != 0 and args.highDemandFraction == 0)
+    base_demand_weight = 1.0
+    client_weights = []
+    assert 0 <= args.high_demand_fraction < 1.0
+    assert 0 <= args.demand_skew < 1.0
+    assert not (args.demand_skew == 0 and args.high_demand_fraction != 0)
+    assert not (args.demand_skew != 0 and args.high_demand_fraction == 0)
 
-    if (args.highDemandFraction > 0.0 and args.demandSkew >= 0):
-        heavyClientWeight = baseDemandWeight * \
-                            args.demandSkew / args.highDemandFraction
-        numHeavyClients = int(args.highDemandFraction * args.num_clients)
-        heavyClientWeights = [heavyClientWeight] * numHeavyClients
+    if args.high_demand_fraction > 0.0 and args.demand_skew >= 0:
+        heavy_client_weight = base_demand_weight * \
+                              args.demand_skew / args.high_demand_fraction
+        num_heavy_clients = int(args.high_demand_fraction * args.num_clients)
+        heavy_client_weights = [heavy_client_weight] * num_heavy_clients
 
-        lightClientWeight = baseDemandWeight * \
-                            (1 - args.demandSkew) / (1 - args.highDemandFraction)
-        numLightClients = args.num_clients - numHeavyClients
-        lightClientWeights = [lightClientWeight] * numLightClients
-        clientWeights = heavyClientWeights + lightClientWeights
+        light_client_weight = base_demand_weight * \
+                              (1 - args.demand_skew) / (1 - args.high_demand_fraction)
+        num_light_clients = args.num_clients - num_heavy_clients
+        light_client_weights = [light_client_weight] * num_light_clients
+        client_weights = heavy_client_weights + light_client_weights
     else:
-        clientWeights = [baseDemandWeight] * args.num_clients
+        client_weights = [base_demand_weight] * args.num_clients
 
-    assert sum(clientWeights) > 0.99 * args.num_clients
-    assert sum(clientWeights) <= args.num_clients
+    assert sum(client_weights) > 0.99 * args.num_clients
+    assert sum(client_weights) <= args.num_clients
 
     # Start the clients
     for i in range(args.num_clients):
         c = client.Client(id_="Client%s" % (i),
                           server_list=servers,
-                          replicaSelectionStrategy=args.selection_strategy,
-                          accessPattern=args.accessPattern,
+                          replica_selection_strategy=args.selection_strategy,
+                          access_pattern=args.access_pattern,
                           replication_factor=args.replication_factor,
                           backpressure=args.backpressure,
-                          shadowReadRatio=args.shadowReadRatio,
-                          rateInterval=args.rateInterval,
-                          cubicC=args.cubicC,
-                          cubicSmax=args.cubicSmax,
-                          cubicBeta=args.cubicBeta,
-                          hysterisisFactor=args.hysterisisFactor,
-                          demandWeight=clientWeights[i],
+                          shadow_read_ratio=args.shadow_read_ratio,
+                          rate_interval=args.rate_interval,
+                          cubic_c=args.cubic_c,
+                          cubic_smax=args.cubic_smax,
+                          cubic_beta=args.cubic_beta,
+                          hysterisis_factor=args.hysterisis_factor,
+                          demand_weight=client_weights[i],
                           rate_intervals=args.rate_intervals,
                           trainer=trainer,
                           simulation=simulation)
@@ -195,9 +195,9 @@ def runExperiment(args, trainer: Trainer = None):
     # of the overall server pool.
     arrivalRate = 0
     interArrivalTime = 0
-    if (len(serviceRatePerServer) > 0):
-        print(serviceRatePerServer)
-        arrivalRate = (args.utilization * sum(serviceRatePerServer))
+    if (len(service_rate_per_server) > 0):
+        print(service_rate_per_server)
+        arrivalRate = (args.utilization * sum(service_rate_per_server))
         interArrivalTime = 1 / float(arrivalRate)
     else:
         arrivalRate = args.num_servers * \
@@ -210,76 +210,76 @@ def runExperiment(args, trainer: Trainer = None):
                               clients,
                               args.workload_model,
                               interArrivalTime * args.num_workload,
-                              args.numRequests / args.num_workload,
+                              args.num_requests / args.num_workload,
                               simulation)
         simulation.process(w.run())
-        workloadGens.append(w)
+        workload_gens.append(w)
 
     # Begin simulation
-    simulation.run(until=args.simulationDuration)
+    simulation.run(until=args.simulation_duration)
 
     #
     # print(a bunch of timeseries)
     #
 
-    exp_path = Path('..', args.logFolder, args.expPrefix)
+    exp_path = Path('..', args.log_folder, args.exp_prefix)
 
     if not exp_path.exists():
         exp_path.mkdir(parents=True, exist_ok=True)
 
-    pendingRequestsFD = open("../%s/%s_PendingRequests" %
-                             (args.logFolder,
-                              args.expPrefix), 'w')
-    waitMonFD = open("../%s/%s_WaitMon" % (args.logFolder,
-                                           args.expPrefix), 'w')
-    actMonFD = open("../%s/%s_ActMon" % (args.logFolder,
-                                         args.expPrefix), 'w')
-    latencyFD = open("../%s/%s_Latency" % (args.logFolder,
-                                           args.expPrefix), 'w')
-    latencyTrackerFD = open("../%s/%s_LatencyTracker" %
-                            (args.logFolder, args.expPrefix), 'w')
-    rateFD = open("../%s/%s_Rate" % (args.logFolder,
-                                     args.expPrefix), 'w')
-    tokenFD = open("../%s/%s_Tokens" % (args.logFolder,
-                                        args.expPrefix), 'w')
-    receiveRateFD = open("../%s/%s_ReceiveRate" % (args.logFolder,
-                                                   args.expPrefix), 'w')
-    edScoreFD = open("../%s/%s_EdScore" % (args.logFolder,
-                                           args.expPrefix), 'w')
-    serverRRFD = open("../%s/%s_serverRR" % (args.logFolder,
-                                             args.expPrefix), 'w')
+    pending_requests_fd = open("../%s/%s_PendingRequests" %
+                               (args.log_folder,
+                                args.exp_prefix), 'w')
+    wait_mon_fd = open("../%s/%s_WaitMon" % (args.log_folder,
+                                             args.exp_prefix), 'w')
+    act_mon_fd = open("../%s/%s_ActMon" % (args.log_folder,
+                                           args.exp_prefix), 'w')
+    latency_fd = open("../%s/%s_Latency" % (args.log_folder,
+                                            args.exp_prefix), 'w')
+    latency_tracker_fd = open("../%s/%s_LatencyTracker" %
+                              (args.log_folder, args.exp_prefix), 'w')
+    rate_fd = open("../%s/%s_Rate" % (args.log_folder,
+                                      args.exp_prefix), 'w')
+    token_fd = open("../%s/%s_Tokens" % (args.log_folder,
+                                         args.exp_prefix), 'w')
+    receive_rate_fd = open("../%s/%s_ReceiveRate" % (args.log_folder,
+                                                     args.exp_prefix), 'w')
+    ed_score_fd = open("../%s/%s_EdScore" % (args.log_folder,
+                                             args.exp_prefix), 'w')
+    server_rrfd = open("../%s/%s_serverRR" % (args.log_folder,
+                                              args.exp_prefix), 'w')
 
     for clientNode in clients:
-        printMonitorTimeSeriesToFile(pendingRequestsFD,
-                                     clientNode.id,
-                                     clientNode.pendingRequestsMonitor)
-        printMonitorTimeSeriesToFile(latencyTrackerFD,
-                                     clientNode.id,
-                                     clientNode.latencyTrackerMonitor)
-        printMonitorTimeSeriesToFile(rateFD,
-                                     clientNode.id,
-                                     clientNode.rateMonitor)
-        printMonitorTimeSeriesToFile(tokenFD,
-                                     clientNode.id,
-                                     clientNode.tokenMonitor)
-        printMonitorTimeSeriesToFile(receiveRateFD,
-                                     clientNode.id,
-                                     clientNode.receiveRateMonitor)
-        printMonitorTimeSeriesToFile(edScoreFD,
-                                     clientNode.id,
-                                     clientNode.edScoreMonitor)
+        print_monitor_time_series_to_file(pending_requests_fd,
+                                          clientNode.id,
+                                          clientNode.pendingRequestsMonitor)
+        print_monitor_time_series_to_file(latency_tracker_fd,
+                                          clientNode.id,
+                                          clientNode.latencyTrackerMonitor)
+        print_monitor_time_series_to_file(rate_fd,
+                                          clientNode.id,
+                                          clientNode.rateMonitor)
+        print_monitor_time_series_to_file(token_fd,
+                                          clientNode.id,
+                                          clientNode.tokenMonitor)
+        print_monitor_time_series_to_file(receive_rate_fd,
+                                          clientNode.id,
+                                          clientNode.receiveRateMonitor)
+        print_monitor_time_series_to_file(ed_score_fd,
+                                          clientNode.id,
+                                          clientNode.edScoreMonitor)
 
     if args.print:
         for serv in servers:
-            printMonitorTimeSeriesToFile(waitMonFD,
-                                         serv.id,
-                                         serv.wait_monitor)
-            printMonitorTimeSeriesToFile(actMonFD,
-                                         serv.id,
-                                         serv.act_monitor)
-            printMonitorTimeSeriesToFile(serverRRFD,
-                                         serv.id,
-                                         serv.server_RR_monitor)
+            print_monitor_time_series_to_file(wait_mon_fd,
+                                              serv.id,
+                                              serv.wait_monitor)
+            print_monitor_time_series_to_file(act_mon_fd,
+                                              serv.id,
+                                              serv.act_monitor)
+            print_monitor_time_series_to_file(server_rrfd,
+                                              serv.id,
+                                              serv.server_RR_monitor)
             print("------- Server:%s %s ------" % (serv.id, "WaitMon"))
             print("Mean:", serv.wait_monitor.mean())
 
@@ -291,9 +291,9 @@ def runExperiment(args, trainer: Trainer = None):
         for p in [50, 95, 99]:
             print(f"p{p} Latency: {latencyMonitor.percentile(p)}")
 
-        printMonitorTimeSeriesToFile(latencyFD, "0",
-                                     latencyMonitor)
-        assert args.numRequests == len(latencyMonitor)
+        print_monitor_time_series_to_file(latency_fd, "0",
+                                          latencyMonitor)
+        assert args.num_requests == len(latencyMonitor)
 
     return latencyMonitor
 
@@ -303,5 +303,4 @@ if __name__ == '__main__':
     # args = TimeVaryingArgs(0.1,5)
     # args = SlowServerArgs(0.5,0.5)
     args.set_policy('expDelay')
-
-    rlExperimentWrapper(args)
+    rl_experiment_wrapper(args)

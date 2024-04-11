@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 import torch
+import inspect
 
 
 @dataclass
@@ -18,7 +19,12 @@ class NodeState:
     def to_tensor(self) -> torch.Tensor:
         return torch.tensor(
             [[self.queue_size, self.service_time, self.wait_time, self.response_time, self.outstanding_requests,
-             self.twice_network_latency]])
+              self.twice_network_latency]])
+
+    @staticmethod
+    def get_node_state_size() -> int:
+        attributes = inspect.getmembers(NodeState, lambda a: not (inspect.isroutine(a)))
+        return len([a for a in attributes if not (a[0].startswith('__') and a[0].endswith('__'))])
 
 
 @dataclass
@@ -33,3 +39,9 @@ class State:
         general_state = self.request_trend + [self.time_since_last_req]
         general_state_tensor = torch.tensor([general_state])
         return torch.cat((general_state_tensor, node_state_tensor), 1)
+
+    @staticmethod
+    def get_state_size(num_servers: int, num_request_rates: int = 3):
+        num_other_features = 1
+        state_size = num_servers * NodeState.get_node_state_size() + num_request_rates + num_other_features
+        return state_size
