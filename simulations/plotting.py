@@ -25,6 +25,6 @@ class ExperimentPlot:
             self.df = pd.concat((self.df, df), axis=0)
 
     def plot(self):
-        fig, axes = plt.subplots(figsize=(16, 8), dpi=200, nrows=1, ncols=1, sharex='all')
+        fig, axes = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         sns.lineplot(self.df, x="Epoch", y="Latency", hue="Policy", ax=axes)
         return fig,axes

@@ -11,11 +11,12 @@ Transition = namedtuple('Transition',
 
 
 class ReplayMemory(object):
-    def __init__(self, max_size) -> None:
+    def __init__(self, max_size, summary) -> None:
         self.memory = [None] * max_size
         self.max_size = max_size
         self.index = 0
         self.size = 0
+        self.summary = summary
         # self.memory = deque([], maxlen=capacity)
 
     def push(self, state: torch.Tensor, action: torch.Tensor, next_state: torch.Tensor, latency: torch.Tensor) -> None:
@@ -23,6 +24,7 @@ class ReplayMemory(object):
         self.memory[self.index] = transition
         self.size = min(self.size + 1, self.max_size)
         self.index = (self.index + 1) % self.max_size
+        self.summary.add(state)
 
     def sample(self, batch_size):
         indices = random.sample(range(self.size), batch_size)
