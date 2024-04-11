@@ -59,7 +59,7 @@ class Trainer:
         self.last_task_id = task_id
 
     def execute_step_if_state_present(self, task_id: str, latency: int) -> None:
-        self.task_to_reward[task_id] = torch.tensor([[latency]], device=self.device, dtype=torch.float32)
+        self.task_to_reward[task_id] = torch.tensor([[- latency]], device=self.device, dtype=torch.float32)
         if task_id not in self.task_to_next_state:
             # Next state not present because request finished before next request arrived
             return
@@ -139,11 +139,14 @@ class Trainer:
         with torch.no_grad():
             next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1).values
         # Compute the expected Q values
+        next_state_values = next_state_values.unsqueeze(1)
+
         expected_state_action_values = (next_state_values * self.GAMMA) + reward_batch
 
         # Compute Huber loss
         criterion = nn.SmoothL1Loss()
-        loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
+
+        loss = criterion(state_action_values, expected_state_action_values)
 
         # Optimize the model
         self.optimizer.zero_grad()
