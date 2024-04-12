@@ -33,7 +33,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
     trainer = Trainer(simulation_args.args.num_servers)
-    NUM_EPSIODES = 3
+    NUM_EPSIODES = 10
     plotter = ExperimentPlot()
     to_print = False
 
@@ -226,7 +226,7 @@ def run_experiment(args, trainer: Trainer = None):
     arrivalRate = 0
     interArrivalTime = 0
     if (len(service_rate_per_server) > 0):
-        print(service_rate_per_server)
+        # print(service_rate_per_server)
         arrivalRate = (args.utilization * sum(service_rate_per_server))
         interArrivalTime = 1 / float(arrivalRate)
     else:
@@ -329,8 +329,8 @@ def run_experiment(args, trainer: Trainer = None):
 
 
 if __name__ == '__main__':
-    args = SimulationArgs()
-    # args = TimeVaryingArgs(0.1,5)
-    # args = SlowServerArgs(0.5,0.5)
-    args.set_policy('expDelay')
+    # args = SimulationArgs()
+    # args = TimeVaryingArgs(10,0.1)
+    args = SlowServerArgs(0.5,0.5)
+    # args.set_policy('expDelay')
     rl_experiment_wrapper(args)
