@@ -33,7 +33,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
     trainer = Trainer(simulation_args.args.num_servers)
-    NUM_EPSIODES = 5
+    NUM_EPSIODES = 3
     plotter = ExperimentPlot()
     to_print = False
 
@@ -61,9 +61,18 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
 
     print(trainer.actions_chosen)
     fig, ax = plotter.plot()
+
     print('Finished')
     plt.savefig(plot_path / 'output.jpg')
 
+    fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
+    plt.clf()
+    plt.plot(range(len(trainer.losses)), trainer.losses)
+    plt.savefig(plot_path / 'losses.jpg')
+    plt.clf()
+    fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
+    plt.plot(range(len(trainer.grads)), trainer.grads)
+    plt.savefig(plot_path / 'grads.jpg')
 
 def run_experiment(args, trainer: Trainer = None):
     # Set the random seed

@@ -17,8 +17,9 @@ StateAction = namedtuple('StateAction', ('state', 'action'))
 
 
 class Trainer:
-    def __init__(self, n_actions, batch_size=512, gamma=0.9, eps_start=0.9, eps_end=0.2,
-                 eps_decay=10000, tau=0.01, lr=1e-2, tau_decay=10):
+    def __init__(self, n_actions, batch_size=128, gamma=0.1, eps_start=0.9, eps_end=0.1,
+                 eps_decay=10000, tau=0.001, lr=1e-2, tau_decay=10):
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.task_to_state_action: Dict[str, StateAction] = {}
@@ -34,7 +35,8 @@ class Trainer:
         self.TAU_DECAY = tau_decay
         self.TAU = tau
         self.LR = lr
-
+        self.losses = []
+        self.grads = []
         # num servers
         self.n_actions = n_actions
 
@@ -45,7 +47,8 @@ class Trainer:
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True, weight_decay=1e-2)
-        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.99)
+        # self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.99)
+        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=10000, eta_min=lr / 10)
         # self.scheduler = optim.lr_scheduler.ConstantLR(self.optimizer)
 
         self.memory = ReplayMemory(8192, self.policy_net.summary)
@@ -69,7 +72,7 @@ class Trainer:
         self.last_task_id = task_id
 
     def execute_step_if_state_present(self, task_id: str, latency: int) -> None:
-        self.task_to_reward[task_id] = torch.tensor([[- np.sqrt(latency)]], device=self.device, dtype=torch.float32)
+        self.task_to_reward[task_id] = torch.tensor([[- latency]], device=self.device, dtype=torch.float32)
         if task_id not in self.task_to_next_state:
             # Next state not present because request finished before next request arrived
             return
@@ -97,14 +100,14 @@ class Trainer:
 
         # Soft update of the target network's weights
         # θ′ ← τ θ + (1 −τ )θ′
-        tau = self.TAU + (1 - self.TAU) * math.exp(-1. * self.steps_done / self.TAU_DECAY)
+        tau = self.TAU + (0.1 - self.TAU) * math.exp(-1. * self.steps_done / self.TAU_DECAY)
 
         target_net_state_dict = self.target_net.state_dict()
         policy_net_state_dict = self.policy_net.state_dict()
         for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key] * tau + target_net_state_dict[key] * (
-                    1 - tau)
-        self.target_net.load_state_dict(policy_net_state_dict)
+            target_net_state_dict[key] = \
+                policy_net_state_dict[key] * tau + target_net_state_dict[key] * (1 - tau)
+        self.target_net.load_state_dict(target_net_state_dict)
         self.clean_up_after_step(task_id=task_id)
 
     def select_action(self, state: State):
@@ -173,14 +176,17 @@ class Trainer:
         self.optimizer.zero_grad()
         loss.backward()
 
-        # grads = [
-        #     param.grad.detach().flatten()
-        #     for param in self.policy_net.parameters()
-        #     if param.grad is not None
-        # ]
-        # norm = torch.cat(grads).norm()
+        grads = [
+            param.grad.detach().flatten()
+            for param in self.policy_net.parameters()
+            if param.grad is not None
+        ]
+        norm = torch.cat(grads).norm()
+
+        self.losses.append(loss.item())
+        self.grads.append(norm.item())
         # print(loss, norm)
         # In-place gradient clipping
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 0.1)
+        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 1)
         self.optimizer.step()
         self.scheduler.step()
