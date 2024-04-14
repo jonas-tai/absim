@@ -24,8 +24,6 @@ class NodeState:
     @staticmethod
     def get_node_state_size() -> int:
         return 6
-        #attributes = inspect.getmembers(NodeState, lambda a: not (inspect.isroutine(a)))
-        #return len([a for a in attributes if not (a[0].startswith('__') and a[0].endswith('__'))])
 
 
 @dataclass

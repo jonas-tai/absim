@@ -32,11 +32,19 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
     trainer = Trainer(simulation_args.args.num_servers)
-    NUM_EPSIODES = 30
+    NUM_EPSIODES = 50
     train_plotter = ExperimentPlot()
+    test_plotter = ExperimentPlot()
     to_print = False
 
-    plot_path = Path('..', simulation_args.args.plot_folder, simulation_args.args.exp_prefix)
+    experiment_num = 0
+    plot_path = Path('..', simulation_args.args.plot_folder, str(experiment_num))
+
+    while os.path.isdir(plot_path):
+        experiment_num += 1
+        plot_path = Path('..', simulation_args.args.plot_folder, str(experiment_num))
+
+    simulation_args.args.exp_prefix = str(experiment_num)
     os.makedirs(plot_path, exist_ok=True)
 
     simulation_args.set_print(to_print)
@@ -53,25 +61,43 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     for policy in policies_to_run:
         simulation_args.set_policy(policy)
         for i_episode in range(NUM_EPSIODES):
+            print(i_episode)
             simulation_args.set_seed(i_episode)
             latencies = run_experiment(simulation_args.args, trainer)
             train_plotter.add_data(latencies, simulation_args.args.selection_strategy, i_episode)
+            if policy == 'dqn':
+                trainer.eval_mode = True
+                test_latencies = run_experiment(simulation_args.args, trainer, eval_mode=trainer.eval_mode)
+                test_plotter.add_data(test_latencies, simulation_args.args.selection_strategy, i_episode)
+                trainer.eval_mode = False
+            else:
+                # Note that this uses the same seed at the moment
+                test_plotter.add_data(latencies, simulation_args.args.selection_strategy, i_episode)
 
-    fig, ax = train_plotter.plot()
     print('Finished')
-    plt.savefig(plot_path / 'output.jpg')
 
     trainer.plot_grads_and_losses(plot_path=plot_path)
 
+    fig, ax = train_plotter.plot()
+    plt.savefig(plot_path / 'output_train.jpg')
     fig, ax = train_plotter.plot_quantile(0.90)
-    plt.savefig(plot_path / 'output_p_90.jpg')
+    plt.savefig(plot_path / 'output_train_p_90.jpg')
     fig, ax = train_plotter.plot_quantile(0.95)
-    plt.savefig(plot_path / 'output_p_95.jpg')
+    plt.savefig(plot_path / 'output_train_p_95.jpg')
     fig, ax = train_plotter.plot_quantile(0.99)
+    plt.savefig(plot_path / 'output_train_p_99.jpg')
+
+    fig, ax = test_plotter.plot()
+    plt.savefig(plot_path / 'output.jpg')
+    fig, ax = test_plotter.plot_quantile(0.90)
+    plt.savefig(plot_path / 'output_p_90.jpg')
+    fig, ax = test_plotter.plot_quantile(0.95)
+    plt.savefig(plot_path / 'output_p_95.jpg')
+    fig, ax = test_plotter.plot_quantile(0.99)
     plt.savefig(plot_path / 'output_p_99.jpg')
 
 
-def run_experiment(args, trainer: Trainer = None):
+def run_experiment(args, trainer: Trainer = None, eval_mode=False):
     # Set the random seed
     simulation = Simulation()
     simulation.set_seed(args.seed)
@@ -249,32 +275,33 @@ def run_experiment(args, trainer: Trainer = None):
     # print(a bunch of timeseries)
     #
 
-    exp_path = Path('..', args.log_folder, args.exp_prefix)
+    exp_prefix = f'{args.exp_prefix}_test' if eval_mode else args.exp_prefix
+    exp_path = Path('..', args.log_folder, exp_prefix)
 
     if not exp_path.exists():
         exp_path.mkdir(parents=True, exist_ok=True)
 
     pending_requests_fd = open("../%s/%s_PendingRequests" %
                                (args.log_folder,
-                                args.exp_prefix), 'w')
+                                exp_prefix), 'w')
     wait_mon_fd = open("../%s/%s_WaitMon" % (args.log_folder,
-                                             args.exp_prefix), 'w')
+                                             exp_prefix), 'w')
     act_mon_fd = open("../%s/%s_ActMon" % (args.log_folder,
-                                           args.exp_prefix), 'w')
+                                           exp_prefix), 'w')
     latency_fd = open("../%s/%s_Latency" % (args.log_folder,
-                                            args.exp_prefix), 'w')
+                                            exp_prefix), 'w')
     latency_tracker_fd = open("../%s/%s_LatencyTracker" %
-                              (args.log_folder, args.exp_prefix), 'w')
+                              (args.log_folder, exp_prefix), 'w')
     rate_fd = open("../%s/%s_Rate" % (args.log_folder,
-                                      args.exp_prefix), 'w')
+                                      exp_prefix), 'w')
     token_fd = open("../%s/%s_Tokens" % (args.log_folder,
-                                         args.exp_prefix), 'w')
+                                         exp_prefix), 'w')
     receive_rate_fd = open("../%s/%s_ReceiveRate" % (args.log_folder,
-                                                     args.exp_prefix), 'w')
+                                                     exp_prefix), 'w')
     ed_score_fd = open("../%s/%s_EdScore" % (args.log_folder,
-                                             args.exp_prefix), 'w')
+                                             exp_prefix), 'w')
     server_rrfd = open("../%s/%s_serverRR" % (args.log_folder,
-                                              args.exp_prefix), 'w')
+                                              exp_prefix), 'w')
 
     for clientNode in clients:
         print_monitor_time_series_to_file(pending_requests_fd,

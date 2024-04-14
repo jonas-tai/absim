@@ -45,6 +45,7 @@ class Trainer:
 
         n_observations = State.get_state_size(num_servers=n_actions)
 
+        self.eval_mode = False
         self.policy_net = DQN(n_observations, n_actions).to(self.device)
         self.target_net = DQN(n_observations, n_actions).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
@@ -59,6 +60,8 @@ class Trainer:
         self.reward_stats = SummaryStats(1)
 
     def record_state_and_action(self, task_id: str, state: State, action: int) -> None:
+        if self.eval_mode:
+            return
         action = torch.tensor([[action]], device=self.device)
         state = state.to_tensor()
         self.task_to_state_action[task_id] = StateAction(state, action)
@@ -71,6 +74,8 @@ class Trainer:
         self.last_task_id = task_id
 
     def execute_step_if_state_present(self, task_id: str, latency: int) -> None:
+        if self.eval_mode:
+            return
         self.task_to_reward[task_id] = torch.tensor([[- latency]], device=self.device, dtype=torch.float32)
         if task_id not in self.task_to_next_state:
             # Next state not present because request finished before next request arrived
@@ -110,12 +115,11 @@ class Trainer:
         self.clean_up_after_step(task_id=task_id)
 
     def select_action(self, state: State):
-        action_chosen = None
         sample = random.random()
         eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(
             -1. * self.steps_done / self.EPS_DECAY)
-        self.steps_done += 1
-        if sample > eps_threshold:
+
+        if self.eval_mode or sample > eps_threshold:
             with torch.no_grad():
                 # t.max(1) will return the largest column value of each row.
                 # second column on max result is index of where max element was
@@ -125,7 +129,9 @@ class Trainer:
             action_chosen = torch.tensor([[random.randint(0, self.n_actions - 1)]], device=self.device,
                                          dtype=torch.long)
 
-        self.actions_chosen[action_chosen.item()] += 1
+        if not self.eval_mode:
+            self.steps_done += 1
+            self.actions_chosen[action_chosen.item()] += 1
         return action_chosen
 
     def optimize_model(self):
@@ -199,4 +205,3 @@ class Trainer:
         fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         plt.plot(range(len(self.grads)), self.grads)
         plt.savefig(plot_path / 'grads.jpg')
-
