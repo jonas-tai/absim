@@ -67,12 +67,22 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
 
     fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
     plt.clf()
-    plt.plot(range(len(trainer.losses)), trainer.losses)
+    plt.plot(range(len(trainer.losses1)), trainer.losses1, label='Model1')
+    plt.plot(range(len(trainer.losses2)), trainer.losses2, label='Model2')
     plt.savefig(plot_path / 'losses.jpg')
     plt.clf()
     fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
-    plt.plot(range(len(trainer.grads)), trainer.grads)
+    plt.plot(range(len(trainer.grads1)), trainer.grads1, label='Model1')
+    plt.plot(range(len(trainer.grads2)), trainer.grads2, label='Model2')
     plt.savefig(plot_path / 'grads.jpg')
+    fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
+    plt.plot(range(len(trainer.mean_value_1)), trainer.mean_value_1, label='Model1')
+    plt.plot(range(len(trainer.mean_value_2)), trainer.mean_value_2, label='Model2')
+    plt.savefig(plot_path / 'values.jpg')
+    fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
+    plt.plot(range(len(trainer.reward_logs)), trainer.reward_logs, label='Reward')
+    plt.savefig(plot_path / 'rewards.jpg')
+
 
 def run_experiment(args, trainer: Trainer = None):
     # Set the random seed
@@ -329,8 +339,8 @@ def run_experiment(args, trainer: Trainer = None):
 
 
 if __name__ == '__main__':
-    # args = SimulationArgs()
+    args = SimulationArgs()
     # args = TimeVaryingArgs(10,0.1)
-    args = SlowServerArgs(0.5,0.5)
+    # args = SlowServerArgs(0.2,0.8)
     # args.set_policy('expDelay')
     rl_experiment_wrapper(args)

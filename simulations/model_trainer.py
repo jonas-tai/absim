@@ -17,8 +17,8 @@ StateAction = namedtuple('StateAction', ('state', 'action'))
 
 
 class Trainer:
-    def __init__(self, n_actions, batch_size=128, gamma=0.1, eps_start=0.9, eps_end=0.1,
-                 eps_decay=10000, tau=0.001, lr=1e-2, tau_decay=10):
+    def __init__(self, n_actions, batch_size=1024, gamma=0.99, eps_start=0.9, eps_end=0.1,
+                 eps_decay=10000, tau=0.001, lr=1e-4, tau_decay=10):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -35,20 +35,31 @@ class Trainer:
         self.TAU_DECAY = tau_decay
         self.TAU = tau
         self.LR = lr
-        self.losses = []
-        self.grads = []
+        self.losses1 = []
+        self.losses2 = []
+        self.grads1 = []
+        self.grads2 = []
+        self.mean_value_1 = []
+        self.mean_value_2 = []
+        self.reward_logs = []
         # num servers
         self.n_actions = n_actions
 
         n_observations = State.get_state_size(num_servers=n_actions)
 
-        self.policy_net = DQN(n_observations, n_actions).to(self.device)
-        self.target_net = DQN(n_observations, n_actions).to(self.device)
-        self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.model1 = DQN(n_observations, n_actions).to(self.device)
+        self.model2 = DQN(n_observations, n_actions).to(self.device)
 
-        self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True, weight_decay=1e-2)
+        self.model2.summary = self.model1.summary
+
+        self.policy_net = self.model1
+
+        # self.target_net.load_state_dict(self.policy_net.state_dict())
+
+        self.model1_optimizer = optim.Adam(self.model1.parameters(), lr=self.LR, weight_decay=1e-2)
+        self.model2_optimizer = optim.Adam(self.model2.parameters(), lr=self.LR, weight_decay=1e-2)
         # self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.99)
-        self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=10000, eta_min=lr / 10)
+        # self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=10000, eta_min=lr / 100)
         # self.scheduler = optim.lr_scheduler.ConstantLR(self.optimizer)
 
         self.memory = ReplayMemory(8192, self.policy_net.summary)
@@ -100,14 +111,14 @@ class Trainer:
 
         # Soft update of the target network's weights
         # θ′ ← τ θ + (1 −τ )θ′
-        tau = self.TAU + (0.1 - self.TAU) * math.exp(-1. * self.steps_done / self.TAU_DECAY)
-
-        target_net_state_dict = self.target_net.state_dict()
-        policy_net_state_dict = self.policy_net.state_dict()
-        for key in policy_net_state_dict:
-            target_net_state_dict[key] = \
-                policy_net_state_dict[key] * tau + target_net_state_dict[key] * (1 - tau)
-        self.target_net.load_state_dict(target_net_state_dict)
+        # tau = self.TAU + (0.1 - self.TAU) * math.exp(-1. * self.steps_done / self.TAU_DECAY)
+        #
+        # target_net_state_dict = self.target_net.state_dict()
+        # policy_net_state_dict = self.policy_net.state_dict()
+        # for key in policy_net_state_dict:
+        #     target_net_state_dict[key] = \
+        #         policy_net_state_dict[key] * tau + target_net_state_dict[key] * (1 - tau)
+        # self.target_net.load_state_dict(target_net_state_dict)
         self.clean_up_after_step(task_id=task_id)
 
     def select_action(self, state: State):
@@ -128,6 +139,15 @@ class Trainer:
 
         self.actions_chosen[action_chosen.item()] += 1
         return action_chosen
+
+    def grad_norm(self, model):
+        grads = [
+            param.grad.detach().flatten()
+            for param in model.parameters()
+            if param.grad is not None
+        ]
+        norm = torch.cat(grads).norm()
+        return norm
 
     def optimize_model(self):
         if len(self.memory) < self.BATCH_SIZE:
@@ -152,41 +172,46 @@ class Trainer:
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
         # for each batch state according to policy_net
-        state_action_values = self.policy_net(state_batch).gather(1, action_batch)
+        curr_Q1 = self.model1.forward(state_batch).gather(1, action_batch)
+        curr_Q2 = self.model2.forward(state_batch).gather(1, action_batch)
 
         # Compute V(s_{t+1}) for all next states.
         # Expected values of actions for non_final_next_states are computed based
         # on the "older" target_net; selecting their best reward with max(1).values
         # This is merged based on the mask, such that we'll have either the expected
         # state value or 0 in case the state was final.
-        next_state_values = torch.zeros(self.BATCH_SIZE, device=self.device)
+        next_state_values1 = torch.zeros(self.BATCH_SIZE, device=self.device)
+        next_state_values2 = torch.zeros(self.BATCH_SIZE, device=self.device)
+
         with torch.no_grad():
-            next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1).values
+            next_state_values1[non_final_mask] = self.model1.forward(non_final_next_states).max(1).values
+            next_state_values2[non_final_mask] = self.model2.forward(non_final_next_states).max(1).values
+
         # Compute the expected Q values
-        next_state_values = next_state_values.unsqueeze(1)
+        next_state_values = torch.min(next_state_values1, next_state_values2).unsqueeze(1)
 
         expected_state_action_values = (next_state_values * self.GAMMA) + reward_batch
+
+        self.reward_logs.append(reward_batch.mean().item())
+        self.mean_value_1.append(next_state_values1.mean().item())
+        self.mean_value_2.append(next_state_values2.mean().item())
 
         # Compute Huber loss
         criterion = nn.SmoothL1Loss()
 
-        loss = criterion(state_action_values, expected_state_action_values)
+        loss1 = criterion(curr_Q1, expected_state_action_values)
+        loss2 = criterion(curr_Q2, expected_state_action_values)
 
-        # Optimize the model
-        self.optimizer.zero_grad()
-        loss.backward()
+        self.model1_optimizer.zero_grad()
+        loss1.backward()
+        self.losses1.append(loss1.item())
+        self.grads1.append(self.grad_norm(self.model1).item())
+        torch.nn.utils.clip_grad_value_(self.model1.parameters(), 1)
+        self.model1_optimizer.step()
 
-        grads = [
-            param.grad.detach().flatten()
-            for param in self.policy_net.parameters()
-            if param.grad is not None
-        ]
-        norm = torch.cat(grads).norm()
-
-        self.losses.append(loss.item())
-        self.grads.append(norm.item())
-        # print(loss, norm)
-        # In-place gradient clipping
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 1)
-        self.optimizer.step()
-        self.scheduler.step()
+        self.model2_optimizer.zero_grad()
+        loss2.backward()
+        self.losses2.append(loss2.item())
+        self.grads2.append(self.grad_norm(self.model2).item())
+        torch.nn.utils.clip_grad_value_(self.model2.parameters(), 1)
+        self.model2_optimizer.step()
