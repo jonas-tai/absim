@@ -58,11 +58,11 @@ class SimulationArgs:
         parser.add_argument('--seed', nargs='?',
                             type=int, default=25072014)
         parser.add_argument('--simulation_duration', nargs='?',
-                            type=int, default=10000, help='Time that experiment takes, '
+                            type=int, default=100000, help='Time that experiment takes, '
                                                          'note that if this is too low and numRequests is too high, '
                                                          'it will error')
         parser.add_argument('--num_requests', nargs='?',
-                            type=int, default=400, help='Number of requests')
+                            type=int, default=2000, help='Number of requests')
         parser.add_argument('--log_folder', nargs='?', type=str, default="logs")
         parser.add_argument('--plot_folder', nargs='?', type=str, default="plots")
 

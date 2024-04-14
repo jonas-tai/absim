@@ -1,12 +1,15 @@
 import random
 import math
 from collections import namedtuple
+from pathlib import Path
 from typing import Dict
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from matplotlib import pyplot as plt
+
 from replay_memory import ReplayMemory, Transition
 from model import DQN, SummaryStats
 from simulations.state import State
@@ -17,7 +20,7 @@ StateAction = namedtuple('StateAction', ('state', 'action'))
 
 class Trainer:
     def __init__(self, n_actions, batch_size=128, gamma=0.99, eps_start=0.9, eps_end=0.05,
-                 eps_decay=1000, tau=0.005, lr=1e-4):
+                 eps_decay=1000, tau=0.005, lr=1e-4, tau_decay=10):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.task_to_state_action: Dict[str, StateAction] = {}
@@ -31,7 +34,11 @@ class Trainer:
         self.EPS_END = eps_end
         self.EPS_DECAY = eps_decay
         self.TAU = tau
+        self.TAU_DECAY = tau_decay
         self.LR = lr
+
+        self.losses = []
+        self.grads = []
 
         # num servers
         self.n_actions = n_actions
@@ -43,6 +50,7 @@ class Trainer:
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.99)
         self.memory = ReplayMemory(10000, self.policy_net.summary)
 
         self.steps_done = 0
@@ -91,11 +99,13 @@ class Trainer:
 
         # Soft update of the target network's weights
         # θ′ ← τ θ + (1 −τ )θ′
+        tau = self.TAU + (1 - self.TAU) * math.exp(-1. * self.steps_done / self.TAU_DECAY)
+
         target_net_state_dict = self.target_net.state_dict()
         policy_net_state_dict = self.policy_net.state_dict()
         for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key] * self.TAU + target_net_state_dict[key] * (
-                    1 - self.TAU)
+            target_net_state_dict[key] = policy_net_state_dict[key] * tau + target_net_state_dict[key] * (
+                    1 - tau)
         self.target_net.load_state_dict(target_net_state_dict)
         self.clean_up_after_step(task_id=task_id)
 
@@ -164,6 +174,29 @@ class Trainer:
         # Optimize the model
         self.optimizer.zero_grad()
         loss.backward()
+
+        grads = [
+            param.grad.detach().flatten()
+            for param in self.policy_net.parameters()
+            if param.grad is not None
+        ]
+        norm = torch.cat(grads).norm()
+
+        self.losses.append(loss.item())
+        self.grads.append(norm.item())
+
         # In-place gradient clipping
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 1)
         self.optimizer.step()
+        self.scheduler.step()
+
+    def plot_grads_and_losses(self, plot_path: Path):
+        fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
+        plt.clf()
+        plt.plot(range(len(self.losses)), self.losses)
+        plt.savefig(plot_path / 'losses.jpg')
+        plt.clf()
+        fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
+        plt.plot(range(len(self.grads)), self.grads)
+        plt.savefig(plot_path / 'grads.jpg')
+

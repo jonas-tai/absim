@@ -32,8 +32,8 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
     trainer = Trainer(simulation_args.args.num_servers)
-    NUM_EPSIODES = 20
-    plotter = ExperimentPlot()
+    NUM_EPSIODES = 30
+    train_plotter = ExperimentPlot()
     to_print = False
 
     plot_path = Path('..', simulation_args.args.plot_folder, simulation_args.args.exp_prefix)
@@ -55,16 +55,19 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
         for i_episode in range(NUM_EPSIODES):
             simulation_args.set_seed(i_episode)
             latencies = run_experiment(simulation_args.args, trainer)
-            plotter.add_data(latencies, simulation_args.args.selection_strategy, i_episode)
+            train_plotter.add_data(latencies, simulation_args.args.selection_strategy, i_episode)
 
-    fig, ax = plotter.plot()
+    fig, ax = train_plotter.plot()
     print('Finished')
     plt.savefig(plot_path / 'output.jpg')
-    fig, ax = plotter.plot_quantile(0.90)
+
+    trainer.plot_grads_and_losses(plot_path=plot_path)
+
+    fig, ax = train_plotter.plot_quantile(0.90)
     plt.savefig(plot_path / 'output_p_90.jpg')
-    fig, ax = plotter.plot_quantile(0.95)
+    fig, ax = train_plotter.plot_quantile(0.95)
     plt.savefig(plot_path / 'output_p_95.jpg')
-    fig, ax = plotter.plot_quantile(0.99)
+    fig, ax = train_plotter.plot_quantile(0.99)
     plt.savefig(plot_path / 'output_p_99.jpg')
 
 
