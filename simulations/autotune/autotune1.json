@@ -1,0 +1,6 @@
+[{"key": "exp_prefix", "value": "baseline", "key_type": "const"},
+{"key": "log_folder", "value": "logs/baseline", "key_type": "const"},
+{"key": "plot_folder", "value": "plots/baseline", "key_type": "const"},
+{"key": "num_episodes", "value": [7, 500], "key_type": "tune", "value_type": "int"},
+{"key": "batch_size", "value": [64, 512], "key_type": "tune", "value_type": "int"},
+{"key": "lr", "value": [1e-5, 1e-2], "key_type": "tune", "value_type": "log"}]

@@ -4,14 +4,14 @@ from monitor import Monitor
 import random
 import numpy
 import constants
-from simulations.model_trainer import Trainer
+from model_trainer import Trainer
 from task import Task
 import math
 
 from yunomi.stats.exp_decay_sample import ExponentiallyDecayingSample
 
-from simulations.server import Server
-from simulations.state import NodeState, State
+from server import Server
+from state import NodeState, State
 from collections import defaultdict
 
 

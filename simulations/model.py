@@ -17,11 +17,16 @@ class DQN(nn.Module):
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
     def forward(self, x):
+
         x = (x - self.summary.means) * self.summary.inv_sqrt_sd()
 
         x = F.relu(self.layer1(x))
         x = F.relu(self.layer2(x))
         return self.layer3(x)
+    
+    def to(self, device):
+        self.summary = self.summary.to(device)
+        return super(DQN, self).to(device)
 
 
 class SummaryStats():
@@ -31,12 +36,18 @@ class SummaryStats():
         self.S = torch.ones(size)
         self.n = 0
 
+    def to(self, device):
+        self.means = self.means.to(device)
+        self.S = self.S.to(device)
+        return self
+
     def add(self, x):
         # stop adding new stats after 10000
         if self.n >= 10000:
             return
 
         x = x.flatten()
+        x = x.to(self.means.device)
         prev_mean = self.means
         self.n += 1
         self.means += (x - self.means) / self.n

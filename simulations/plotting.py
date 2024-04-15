@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 
-from simulations.monitor import Monitor
+from monitor import Monitor
 
 
 class ExperimentPlot:
@@ -27,6 +27,11 @@ class ExperimentPlot:
     def plot(self):
         fig, axes = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         sns.lineplot(self.df, x="Epoch", y="Latency", hue="Policy", ax=axes)
+        return fig, axes
+
+    def plot_box(self):
+        fig, axes = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
+        sns.boxplot(self.df, y="Latency", x="Policy")
         return fig, axes
 
     def plot_quantile(self, quantile: float):

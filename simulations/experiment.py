@@ -12,11 +12,11 @@ import constants
 import numpy as np
 import sys
 import muUpdater
-from simulations.monitor import Monitor
+from monitor import Monitor
 from simulation_args import SimulationArgs, TimeVaryingArgs, SlowServerArgs
 from pathlib import Path
 from model_trainer import Trainer
-from simulations.plotting import ExperimentPlot
+from plotting import ExperimentPlot
 import matplotlib.pyplot as plt
 
 
@@ -26,13 +26,15 @@ def print_monitor_time_series_to_file(file_desc, prefix, monitor):
 
 
 def rl_experiment_wrapper(simulation_args: SimulationArgs):
-    random.seed(1)
-    np.random.seed(1)
-    torch.manual_seed(1)
+    random.seed(simulation_args.args.seed)
+    np.random.seed(simulation_args.args.seed)
+    torch.manual_seed(simulation_args.args.seed)
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
-    trainer = Trainer(simulation_args.args.num_servers)
-    NUM_EPSIODES = 20
+    trainer = Trainer(simulation_args.args.num_servers, batch_size=simulation_args.args.batch_size, gamma=simulation_args.args.gamma, 
+                      eps_start=simulation_args.args.eps_start, eps_end=simulation_args.args.eps_end, eps_decay=simulation_args.args.eps_decay, 
+                      tau=simulation_args.args.tau, lr=simulation_args.args.lr, lr_scheduler_step_size=simulation_args.args.lr_scheduler_step_size,
+                      lr_scheduler_gamma=simulation_args.args.lr_scheduler_gamma)
     plotter = ExperimentPlot()
     to_print = False
 
@@ -42,7 +44,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     simulation_args.set_print(to_print)
 
     policies_to_run = [
-        # 'expDelay',
+        'expDelay',
         # 'response_time',
         # 'weighted_response_time',
         'random',
@@ -52,20 +54,53 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     print('Starting experiments')
     for policy in policies_to_run:
         simulation_args.set_policy(policy)
-        for i_episode in range(NUM_EPSIODES):
+        for i_episode in range(simulation_args.args.num_episodes):
+            if (i_episode+1)%10 == 0:
+                print(f"Episode {i_episode+1} of {policy}")
             simulation_args.set_seed(i_episode)
             latencies = run_experiment(simulation_args.args, trainer)
             plotter.add_data(latencies, simulation_args.args.selection_strategy, i_episode)
+            # TODO: TEMP
+            if policy == 'dqn': # TODO: update LR
+                trainer.scheduler.step()
 
     fig, ax = plotter.plot()
     print('Finished')
-    plt.savefig(plot_path / 'output.jpg')
+    plt.savefig(plot_path / 'train_output.jpg')
     fig, ax = plotter.plot_quantile(0.90)
-    plt.savefig(plot_path / 'output_p_90.jpg')
+    plt.savefig(plot_path / 'train_output_p_90.jpg')
     fig, ax = plotter.plot_quantile(0.95)
-    plt.savefig(plot_path / 'output_p_95.jpg')
+    plt.savefig(plot_path / 'train_output_p_95.jpg')
     fig, ax = plotter.plot_quantile(0.99)
-    plt.savefig(plot_path / 'output_p_99.jpg')
+    plt.savefig(plot_path / 'train_output_p_99.jpg')
+
+    print('Running tests')
+    # This is the thing we return to the autotuner for optimizing hyperparamters
+    autotune_objective = 0
+    # Reset plotter
+    plotter = ExperimentPlot()
+    # Put into test mode
+    trainer.test_mode = True
+    for policy in policies_to_run:
+        simulation_args.set_policy(policy)
+        # Run 1 episode
+        for i_episode in range(1):
+            simulation_args.set_seed(simulation_args.args.num_episodes+i_episode)
+            latencies = run_experiment(simulation_args.args, trainer)
+            plotter.add_data(latencies, simulation_args.args.selection_strategy, i_episode)
+            if policy == 'dqn':
+                autotune_objective = get_autotuner_objective(latencies)
+    # Close test mode
+    trainer.test_mode = False
+    fig, ax = plotter.plot_box()
+    print('Finished')
+    plt.savefig(plot_path / 'test_boxplot.jpg')
+    return autotune_objective
+
+def get_autotuner_objective(monitor: Monitor):
+    latencies = monitor.get_data()
+    # it optimizes by trying to maximize
+    return -np.mean(np.array(latencies))
 
 
 def run_experiment(args, trainer: Trainer = None):
@@ -251,27 +286,18 @@ def run_experiment(args, trainer: Trainer = None):
     if not exp_path.exists():
         exp_path.mkdir(parents=True, exist_ok=True)
 
-    pending_requests_fd = open("../%s/%s_PendingRequests" %
-                               (args.log_folder,
-                                args.exp_prefix), 'w')
-    wait_mon_fd = open("../%s/%s_WaitMon" % (args.log_folder,
-                                             args.exp_prefix), 'w')
-    act_mon_fd = open("../%s/%s_ActMon" % (args.log_folder,
-                                           args.exp_prefix), 'w')
-    latency_fd = open("../%s/%s_Latency" % (args.log_folder,
-                                            args.exp_prefix), 'w')
-    latency_tracker_fd = open("../%s/%s_LatencyTracker" %
-                              (args.log_folder, args.exp_prefix), 'w')
-    rate_fd = open("../%s/%s_Rate" % (args.log_folder,
-                                      args.exp_prefix), 'w')
-    token_fd = open("../%s/%s_Tokens" % (args.log_folder,
-                                         args.exp_prefix), 'w')
-    receive_rate_fd = open("../%s/%s_ReceiveRate" % (args.log_folder,
-                                                     args.exp_prefix), 'w')
-    ed_score_fd = open("../%s/%s_EdScore" % (args.log_folder,
-                                             args.exp_prefix), 'w')
-    server_rrfd = open("../%s/%s_serverRR" % (args.log_folder,
-                                              args.exp_prefix), 'w')
+    pending_requests_fd = open("%s/PendingRequests" %
+                               (exp_path), 'w')
+    wait_mon_fd = open("%s/WaitMon" % (exp_path), 'w')
+    act_mon_fd = open("%s/ActMon" % (exp_path), 'w')
+    latency_fd = open("%s/Latency" % (exp_path), 'w')
+    latency_tracker_fd = open("%s/LatencyTracker" %
+                              (exp_path), 'w')
+    rate_fd = open("%s/Rate" % (exp_path), 'w')
+    token_fd = open("%s/Tokens" % (exp_path), 'w')
+    receive_rate_fd = open("%s/ReceiveRate" % (exp_path), 'w')
+    ed_score_fd = open("%s/EdScore" % (exp_path), 'w')
+    server_rrfd = open("%s/serverRR" % (exp_path), 'w')
 
     for clientNode in clients:
         print_monitor_time_series_to_file(pending_requests_fd,
@@ -321,10 +347,12 @@ def run_experiment(args, trainer: Trainer = None):
 
     return latencyMonitor
 
-
-if __name__ == '__main__':
-    args = SimulationArgs()
+def main(input_args=None):
+    args = SimulationArgs(input_args=input_args)
     # args = TimeVaryingArgs(0.1,5)
     # args = SlowServerArgs(0.5,0.5)
     args.set_policy('expDelay')
-    rl_experiment_wrapper(args)
+    return rl_experiment_wrapper(args)
+
+if __name__ == '__main__':
+    main()

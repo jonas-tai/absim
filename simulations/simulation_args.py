@@ -2,7 +2,7 @@ import argparse
 
 
 class SimulationArgs:
-    def __init__(self):
+    def __init__(self, input_args=None):
         parser = argparse.ArgumentParser(description='Absinthe sim.')
         parser.add_argument('--num_clients', nargs='?',
                             type=int, default=1, help='Number of clients')
@@ -94,9 +94,21 @@ class SimulationArgs:
         parser.add_argument('--rate_intervals', nargs='+', default=[1000, 500, 100])
         parser.add_argument('--print', action='store_true',
                             default=True, help='Prints latency at the end of the experiment')
+        
+        # DQN hyper parameters
+        parser.add_argument('--lr_scheduler_step_size', nargs='?', default=50, type=int, help="Step size of decay rate of learning rate")
+        parser.add_argument('--lr_scheduler_gamma', nargs='?', default=0.5, type=float, help="Gamma decay rate of learning rate")
+        parser.add_argument('--num_episodes', nargs='?', default=7, type=int, help="Number of episodes of running")
+        parser.add_argument('--batch_size', nargs='?', default=128, type=int, help="Batch size for training step")
+        parser.add_argument('--gamma', nargs='?', default=0.99, type=float, help="How much to value future rewards (decay)")
+        parser.add_argument('--eps_start', nargs='?', default=0.9, type=float, help="Starting random exploration probability")
+        parser.add_argument('--eps_end', nargs='?', default=0.05, type=float, help="Final random exploration probability")
+        parser.add_argument('--eps_decay', nargs='?', default=1000, type=int, help="Steps between exponential decay")
+        parser.add_argument('--tau', nargs='?', default=0.005, type=float, help="How quickly target is updated")
+        parser.add_argument('--lr', nargs='?', default=1e-4, type=float, help="Optimization learning rate")
 
         self.parser = parser
-        self.args = parser.parse_args()
+        self.args = parser.parse_args(args=input_args)
 
         assert self.args.replication_factor == self.args.num_servers, ('Replication factor is not equal to number of'
                                                                      ' servers, i.e., #actions != #servers')

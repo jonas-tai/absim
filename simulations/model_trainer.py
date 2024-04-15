@@ -9,7 +9,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from replay_memory import ReplayMemory, Transition
 from model import DQN, SummaryStats
-from simulations.state import State
+from state import State
 from collections import defaultdict
 
 StateAction = namedtuple('StateAction', ('state', 'action'))
@@ -17,7 +17,7 @@ StateAction = namedtuple('StateAction', ('state', 'action'))
 
 class Trainer:
     def __init__(self, n_actions, batch_size=128, gamma=0.99, eps_start=0.9, eps_end=0.05,
-                 eps_decay=1000, tau=0.005, lr=1e-4):
+                 eps_decay=1000, tau=0.005, lr=1e-4, lr_scheduler_step_size=50, lr_scheduler_gamma=0.5):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.task_to_state_action: Dict[str, StateAction] = {}
@@ -33,6 +33,9 @@ class Trainer:
         self.TAU = tau
         self.LR = lr
 
+        # test mode
+        self.test_mode = False
+
         # num servers
         self.n_actions = n_actions
 
@@ -43,14 +46,18 @@ class Trainer:
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=lr_scheduler_step_size, \
+                                                   gamma=lr_scheduler_gamma) # TODO: currently updated in experiment
         self.memory = ReplayMemory(10000, self.policy_net.summary)
 
         self.steps_done = 0
         self.actions_chosen = defaultdict(int)
 
-        self.reward_stats = SummaryStats(1)
+        self.reward_stats = SummaryStats(1).to(self.device)
 
     def record_state_and_action(self, task_id: str, state: State, action: int) -> None:
+        if self.test_mode: # Don't do anything in test mode
+            return
         action = torch.tensor([[action]], device=self.device)
         state = state.to_tensor()
         self.task_to_state_action[task_id] = StateAction(state, action)
@@ -63,6 +70,8 @@ class Trainer:
         self.last_task_id = task_id
 
     def execute_step_if_state_present(self, task_id: str, latency: int) -> None:
+        if self.test_mode: # Don't do anything in test mode
+            return
         self.task_to_reward[task_id] = torch.tensor([[- latency]], device=self.device, dtype=torch.float32)
         if task_id not in self.task_to_next_state:
             # Next state not present because request finished before next request arrived
@@ -105,12 +114,12 @@ class Trainer:
         eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(
             -1. * self.steps_done / self.EPS_DECAY)
         self.steps_done += 1
-        if sample > eps_threshold:
+        if self.test_mode or sample > eps_threshold:
             with torch.no_grad():
                 # t.max(1) will return the largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
-                action_chosen = self.policy_net(state.to_tensor()).max(1).indices.view(1, 1)
+                action_chosen = self.policy_net(state.to_tensor().to(self.device)).max(1).indices.view(1, 1)
         else:
             action_chosen = torch.tensor([[random.randint(0, self.n_actions - 1)]], device=self.device,
                                          dtype=torch.long)
@@ -131,10 +140,10 @@ class Trainer:
         # (a final state would've been the one after which simulation ended)
         non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
                                                 batch.next_state)), device=self.device, dtype=torch.bool)
-        non_final_next_states = torch.cat([s for s in batch.next_state if s is not None])
-        state_batch = torch.cat(batch.state)
+        non_final_next_states = torch.cat([s for s in batch.next_state if s is not None]).to(self.device)
+        state_batch = torch.cat(batch.state).to(self.device)
         action_batch = torch.cat(batch.action)
-        reward_batch = torch.cat(batch.reward)
+        reward_batch = torch.cat(batch.reward).to(self.device)
 
         reward_batch = (reward_batch - self.reward_stats.means) * self.reward_stats.inv_sqrt_sd()
 
