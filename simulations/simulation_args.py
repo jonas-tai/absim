@@ -16,9 +16,10 @@ class SimulationArgs:
         parser.add_argument('--service_time', nargs='?',
                             type=float, default=2, help='Mean? service time per server')
         parser.add_argument('--workload_model', nargs='?',
-                            type=str, default="poisson", help='Arrival model of requests from client')
+                            type=str, default="poisson",
+                            help='Arrival model of requests from client (constant | poisson)')
         parser.add_argument('--utilization', nargs='?',
-                            type=float, default=1.0, help='Arrival rate of requests')
+                            type=float, default=0.5, help='Arrival rate of requests')
         parser.add_argument('--service_time_model', nargs='?',
                             type=str, default="random.expovariate", help='Distribution of service time on server')
         parser.add_argument('--replication_factor', nargs='?',
@@ -47,27 +48,21 @@ class SimulationArgs:
                             type=str, default="uniform",
                             help='Key access pattern of requests, e.g., zipfian will cause '
                                  'requests to desire a subset of replica sets')
-        parser.add_argument('--nw_latency_base', nargs='?',
-                            type=float, default=0.0, help='Seems to be the time it takes to deliver requests?')
-        parser.add_argument('--nw_latency_mu', nargs='?',
-                            type=float, default=0.0, help='Seems to be the time it takes to deliver requests?')
-        parser.add_argument('--nw_latency_sigma', nargs='?',
-                            type=float, default=0.0, help='Seems to be the time it takes to deliver requests?')
+
         parser.add_argument('--exp_prefix', nargs='?',
                             type=str, default="7")
         parser.add_argument('--seed', nargs='?',
                             type=int, default=25072014)
         parser.add_argument('--simulation_duration', nargs='?',
                             type=int, default=100000, help='Time that experiment takes, '
-                                                         'note that if this is too low and numRequests is too high, '
-                                                         'it will error')
-        parser.add_argument('--num_requests', nargs='?',
-                            type=int, default=1000, help='Number of requests')
+                                                           'note that if this is too low and numRequests is too high, '
+                                                           'it will error')
+
         parser.add_argument('--log_folder', nargs='?', type=str, default="logs")
         parser.add_argument('--plot_folder', nargs='?', type=str, default="plots")
 
         parser.add_argument('--exp_scenario', nargs='?',
-                            type=str, default="base", help='Defines some scenarios for experiments such as \n'
+                            type=str, default="heterogenous_static_nw_delay", help='Defines some scenarios for experiments such as \n'
                                                            '[base] - default setting\n'
                                                            '[multipleServiceTimeServers] - increasing mean service time '
                                                            'based on server index\n'
@@ -91,15 +86,33 @@ class SimulationArgs:
         parser.add_argument('--time_varying_drift', nargs='?',
                             type=float, default=0.0, help='How much service times change '
                                                           '(expScenario=timeVaryingServiceTimeServers)')
-        parser.add_argument('--rate_intervals', nargs='+', default=[1000, 500, 100])
+        parser.add_argument('--rate_intervals', nargs='+', default=[100, 50, 10])
         parser.add_argument('--print', action='store_true',
                             default=True, help='Prints latency at the end of the experiment')
+
+        # Slow network setting parameters
+        parser.add_argument('--nw_latency_base', nargs='?',
+                            type=float, default=2.0, help='Seems to be the time it takes to deliver requests?')
+        parser.add_argument('--nw_latency_mu', nargs='?',
+                            type=float, default=0.3, help='Seems to be the time it takes to deliver requests?')
+        parser.add_argument('--nw_latency_sigma', nargs='?',
+                            type=float, default=0.1, help='Seems to be the time it takes to deliver requests?')
+        parser.add_argument('--slow_nw_server_fraction', nargs='?',
+                            type=float, default=0.4, help='Fraction of servers with slow network'
+                                                          '(expScenario=heterogenous_static_nw_delay)')
+        parser.add_argument('--slow_nw_server_slowness', nargs='?',
+                            type=float, default=10,
+                            help='How many times slower than normal the networks of slowed servers are '
+                                 '(expScenario=heterogenous_static_nw_delay)')
+
+        parser.add_argument('--num_requests', nargs='?',
+                            type=int, default=400, help='Number of requests')
 
         self.parser = parser
         self.args = parser.parse_args()
 
         assert self.args.replication_factor == self.args.num_servers, ('Replication factor is not equal to number of'
-                                                                     ' servers, i.e., #actions != #servers')
+                                                                       ' servers, i.e., #actions != #servers')
 
     def set_policy(self, policy):
         self.args.selection_strategy = policy

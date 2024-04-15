@@ -32,7 +32,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
     trainer = Trainer(simulation_args.args.num_servers)
-    NUM_EPSIODES = 50
+    NUM_EPSIODES = 100
     train_plotter = ExperimentPlot()
     test_plotter = ExperimentPlot()
     to_print = False
@@ -50,7 +50,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     simulation_args.set_print(to_print)
 
     policies_to_run = [
-        # 'expDelay',
+        'expDelay',
         # 'response_time',
         # 'weighted_response_time',
         'random',
@@ -66,6 +66,11 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
             latencies = run_experiment(simulation_args.args, trainer)
             train_plotter.add_data(latencies, simulation_args.args.selection_strategy, i_episode)
             if policy == 'dqn':
+                # Update LR
+                trainer.scheduler.step()
+
+                # trainer.print_weights()
+
                 trainer.eval_mode = True
                 test_latencies = run_experiment(simulation_args.args, trainer, eval_mode=trainer.eval_mode)
                 test_plotter.add_data(test_latencies, simulation_args.args.selection_strategy, i_episode)
@@ -86,6 +91,11 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     plt.savefig(plot_path / 'output_train_p_95.jpg')
     fig, ax = train_plotter.plot_quantile(0.99)
     plt.savefig(plot_path / 'output_train_p_99.jpg')
+
+    plt_episode = NUM_EPSIODES - 1
+    fig, ax = train_plotter.plot_episode(epoch=plt_episode)
+    plt.savefig(plot_path / f'output_train_{plt_episode}_epoch.jpg')
+
 
     fig, ax = test_plotter.plot()
     plt.savefig(plot_path / 'output.jpg')
@@ -174,7 +184,7 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
                                  service_time_model=args.service_time_model,
                                  simulation=simulation)
             servers.append(serv)
-    elif (args.exp_scenario == "time_varying_service_time_servers"):
+    elif args.exp_scenario == "time_varying_service_time_servers":
         assert args.interval_param != 0.0
         assert args.time_varying_drift != 0.0
 
@@ -182,7 +192,7 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
         for i in range(args.num_servers):
             serv = server.Server(i,
                                  resource_capacity=args.server_concurrency,
-                                 service_time=(args.service_time),
+                                 service_time=args.service_time,
                                  service_time_model=args.service_time_model,
                                  simulation=simulation)
             mup = muUpdater.MuUpdater(serv,
@@ -191,6 +201,29 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
                                       args.time_varying_drift,
                                       simulation)
             simulation.process(mup.run())
+            servers.append(serv)
+    elif args.exp_scenario == "heterogenous_static_nw_delay":
+        # print('heterogenous_static_nw_delay scenario')
+        assert 0 < args.slow_nw_server_fraction < 1.0
+        assert not (args.slow_nw_server_slowness == 0 and args.slow_nw_server_fraction != 0)
+        assert not (args.slow_nw_server_slowness != 0 and args.slow_nw_server_fraction == 0)
+
+        slow_nw_latency_base = constants.NW_LATENCY_BASE * args.slow_nw_server_slowness
+        num_slow_nw_servers = int(args.slow_nw_server_fraction * args.num_servers)
+        slow_nw_server_latency_bases = [slow_nw_latency_base] * num_slow_nw_servers
+
+        num_fast_nw_servers = args.num_servers - num_slow_nw_servers
+        fast_server_nw_rates = [constants.NW_LATENCY_BASE] * num_fast_nw_servers
+        nw_latency_bases = slow_nw_server_latency_bases + fast_server_nw_rates
+
+        # Start the servers
+        for i in range(args.num_servers):
+            serv = server.Server(i,
+                                 resource_capacity=args.server_concurrency,
+                                 service_time=args.service_time,
+                                 service_time_model=args.service_time_model,
+                                 simulation=simulation,
+                                 nw_latency_base=nw_latency_bases[i])
             servers.append(serv)
     else:
         print("Unknown experiment scenario")

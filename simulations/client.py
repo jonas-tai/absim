@@ -135,15 +135,13 @@ class Client:
             self.backpressureSchedulers[replica_set[0]].enqueue(task, replica_set)
 
     def send_request(self, task: Task, replica_to_serve: Server):
-        delay = constants.NW_LATENCY_BASE + \
-                self.simulation.random.normalvariate(constants.NW_LATENCY_MU,
-                                                     constants.NW_LATENCY_SIGMA)
+        delay = replica_to_serve.get_server_nw_latency()
 
         # Immediately send out request
         message_delivery_process = DeliverMessageWithDelay(simulation=self.simulation)
         self.simulation.process(message_delivery_process.run(task,
-                                                           delay,
-                                                           replica_to_serve))
+                                                             delay,
+                                                             replica_to_serve))
         if self.REPLICA_SELECTION_STRATEGY == "dqn":
             response_handler = ResponseHandler(self.simulation, self.trainer)
         else:
@@ -207,8 +205,8 @@ class Client:
         elif self.REPLICA_SELECTION_STRATEGY == "clairvoyant":
             # Sort by response times * pending-requests
             oracle_map = {replica: (1 + len(replica.queueResource.queue))
-                                  * replica.serviceTime
-                         for replica in original_replica_set}
+                                   * replica.serviceTime
+                          for replica in original_replica_set}
             replica_set.sort(key=oracle_map.get)
         elif self.REPLICA_SELECTION_STRATEGY == "expDelay":
             sort_map = {}
@@ -257,6 +255,9 @@ class Client:
             service_time = metric_map["serviceTime"]
             wait_time = metric_map["waitingTime"]
             queue_size = metric_map["queueSizeAfter"]
+            # print(
+            #     f'NodeState: twice_network_latency: {twice_network_latency}, service_time: {service_time}, '
+            #     f'wait_time: {wait_time}, queue_size: {queue_size}, outstanding_requests: {outstanding_requests}')
             return NodeState(queue_size=queue_size, service_time=service_time, wait_time=wait_time,
                              outstanding_requests=outstanding_requests, response_time=response_time,
                              twice_network_latency=twice_network_latency)
@@ -383,9 +384,9 @@ class ResponseHandler:
         yield self.simulation.timeout(0)
         yield task.completion_event
 
-        delay = constants.NW_LATENCY_BASE + self.simulation.random.normalvariate(constants.NW_LATENCY_MU,
-                                                                                 constants.NW_LATENCY_SIGMA)
-        yield self.simulation.timeout(delay)
+        nw_delay = replica_that_served.get_server_nw_latency()
+
+        yield self.simulation.timeout(nw_delay)
 
         # OMG request completed. Time for some book-keeping
         client.pendingRequestsMap[replica_that_served] -= 1
@@ -428,7 +429,11 @@ class ResponseHandler:
             # Task completed, we call the trainer to see if we can do a step
             if self.trainer is not None:
                 self.trainer.execute_step_if_state_present(task_id=task.id, latency=latency)
+
+            replica_id = replica_that_served.id
             task.latency_monitor.observe(latency)
+
+
 
 
 class RequestRateMonitor:

@@ -3,21 +3,30 @@ import math
 import random
 import sys
 from monitor import Monitor
+from simulations import constants
 
 
 class Server:
     """A representation of a physical server that holds resources"""
 
     def __init__(self, id_, resource_capacity,
-                 service_time, service_time_model, simulation):
+                 service_time, service_time_model, simulation, nw_latency_base: float = constants.NW_LATENCY_MU,
+                 nw_latency_mu: float = constants.NW_LATENCY_MU,
+                 nw_latency_sigma: float = constants.NW_LATENCY_SIGMA):
         self.id = id_
         self.service_time = service_time
         self.service_time_model = service_time_model
         self.queue_resource = simpy.Resource(capacity=resource_capacity, env=simulation)
         self.simulation = simulation
+        self.NW_LATENCY_BASE = nw_latency_base
+        self.NW_LATENCY_MU = nw_latency_mu
+        self.NW_LATENCY_SIGMA = nw_latency_sigma
         self.server_RR_monitor = Monitor(simulation)
         self.wait_monitor = Monitor(simulation)
         self.act_monitor = Monitor(simulation)
+
+    def get_server_nw_latency(self):
+        return self.NW_LATENCY_BASE + self.simulation.random.normalvariate(self.NW_LATENCY_MU, self.NW_LATENCY_SIGMA)
 
     def get_server_id(self):
         return self.id

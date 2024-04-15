@@ -7,11 +7,13 @@ import torch
 
 class DQN(nn.Module):
 
-    def __init__(self, n_observations, n_actions):
+    def __init__(self, n_observations, n_actions, n_hidden=128):
         super(DQN, self).__init__()
-        self.layer1 = nn.Linear(n_observations, 128)
-        self.layer2 = nn.Linear(128, 128)
-        self.layer3 = nn.Linear(128, n_actions)
+
+        self.layer1 = nn.Linear(n_observations, n_hidden)
+        self.layer2 = nn.Linear(n_hidden, n_hidden)
+        self.layer3 = nn.Linear(n_hidden, n_actions)
+        # self.layer3 = nn.Linear(n_observations, n_actions)
         self.summary = SummaryStats(n_observations)
 
     # Called with either one element to determine next action, or a batch
@@ -22,6 +24,14 @@ class DQN(nn.Module):
         x = F.relu(self.layer1(x))
         x = F.relu(self.layer2(x))
         return self.layer3(x)
+
+    def print_weights(self):
+        layer3_weights = self.layer3.weight.data
+        layer3_bias = self.layer3.bias.data
+
+        # Print or inspect the weights and bias
+        print(f"Layer 3 Weights: {layer3_weights}")
+        print(f"\nLayer 3 Bias: {layer3_bias}")
 
 
 class SummaryStats():

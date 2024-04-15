@@ -51,7 +51,7 @@ class Trainer:
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
-        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.99)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=50, gamma=0.5)
         self.memory = ReplayMemory(10000, self.policy_net.summary)
 
         self.steps_done = 0
@@ -194,7 +194,6 @@ class Trainer:
         # In-place gradient clipping
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 1)
         self.optimizer.step()
-        self.scheduler.step()
 
     def plot_grads_and_losses(self, plot_path: Path):
         fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
@@ -205,3 +204,6 @@ class Trainer:
         fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         plt.plot(range(len(self.grads)), self.grads)
         plt.savefig(plot_path / 'grads.jpg')
+
+    def print_weights(self):
+        self.policy_net.print_weights()

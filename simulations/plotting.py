@@ -9,12 +9,13 @@ class ExperimentPlot:
         self.df = None
 
     def add_data(self, monitor: Monitor, policy: str, epoch_num: int):
-        latencies = monitor.get_data()
+        latency_time_tuples = monitor.get_data()
         df_entries = [{
-            "Latency": l,
+            "Time": time,
+            "Latency": latency,
             "Epoch": epoch_num,
             "Policy": policy
-        } for l in latencies]
+        } for (latency, time) in latency_time_tuples]
 
         df = pd.DataFrame(df_entries)
 
@@ -26,6 +27,11 @@ class ExperimentPlot:
     def plot(self):
         fig, axes = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         sns.lineplot(self.df, x="Epoch", y="Latency", hue="Policy", ax=axes)
+        return fig, axes
+
+    def plot_episode(self, epoch: int):
+        fig, axes = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
+        sns.scatterplot(self.df[self.df['Epoch'] == epoch], x="Time", y="Latency", hue="Policy", ax=axes)
         return fig, axes
 
     def plot_quantile(self, quantile: float):

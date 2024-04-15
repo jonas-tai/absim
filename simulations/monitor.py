@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class Monitor():
+class Monitor:
     def __init__(self, simulation, name=""):
         self.simulation = simulation
         self.name = name
@@ -14,13 +14,16 @@ class Monitor():
             self.data.append((y, t))
 
     def get_data(self):
+        return self.data
+
+    def get_primary_data(self):
         return [x[0] for x in self.data]
 
     def mean(self):
-        return np.mean(self.get_data())
+        return np.mean(self.get_primary_data())
 
     def percentile(self, p):
-        return np.percentile(self.get_data(), p)
+        return np.percentile(self.get_primary_data(), p)
 
     def __iter__(self):
         return iter(self.data)
