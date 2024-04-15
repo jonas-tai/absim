@@ -33,7 +33,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
     trainer = Trainer(simulation_args.args.num_servers)
-    NUM_EPSIODES = 10
+    NUM_EPSIODES = 100
     plotter = ExperimentPlot()
     to_print = False
 
@@ -145,7 +145,7 @@ def run_experiment(args, trainer: Trainer = None):
             service_rate_per_server = [args.server_concurrency *
                                        1 / float(args.service_time)] * args.num_servers
 
-        simulation.random.shuffle(service_rate_per_server)
+        # simulation.random.shuffle(service_rate_per_server)
         # print(sum(serviceRatePerServer), (1/float(baseServiceTime)) * args.num_servers)
         assert sum(service_rate_per_server) > 0.99 * \
                (1 / float(base_service_time)) * args.num_servers
@@ -339,8 +339,8 @@ def run_experiment(args, trainer: Trainer = None):
 
 
 if __name__ == '__main__':
-    args = SimulationArgs()
+    # args = SimulationArgs()
     # args = TimeVaryingArgs(10,0.1)
-    # args = SlowServerArgs(0.2,0.8)
+    args = SlowServerArgs(0.5,0.1)
     # args.set_policy('expDelay')
     rl_experiment_wrapper(args)

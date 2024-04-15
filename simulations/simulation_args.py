@@ -62,7 +62,7 @@ class SimulationArgs:
                                                          'note that if this is too low and numRequests is too high, '
                                                          'it will error')
         parser.add_argument('--num_requests', nargs='?',
-                            type=int, default=5000, help='Number of requests')
+                            type=int, default=500, help='Number of requests')
         parser.add_argument('--log_folder', nargs='?', type=str, default="logs")
         parser.add_argument('--plot_folder', nargs='?', type=str, default="plots")
 

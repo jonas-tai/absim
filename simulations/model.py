@@ -7,7 +7,7 @@ import torch
 
 class DQN(nn.Module):
 
-    def __init__(self, n_observations, n_actions, hidden_dims=128):
+    def __init__(self, n_observations, n_actions, hidden_dims=64):
         super(DQN, self).__init__()
         activations = nn.LeakyReLU
 

@@ -17,8 +17,8 @@ StateAction = namedtuple('StateAction', ('state', 'action'))
 
 
 class Trainer:
-    def __init__(self, n_actions, batch_size=1024, gamma=0.99, eps_start=0.9, eps_end=0.1,
-                 eps_decay=10000, tau=0.001, lr=1e-4, tau_decay=10):
+    def __init__(self, n_actions, batch_size=1024, gamma=0.99, eps_start=0.9, eps_end=0.0,
+                 eps_decay=10000, tau=0.001, lr=1e-5, tau_decay=10):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -206,12 +206,12 @@ class Trainer:
         loss1.backward()
         self.losses1.append(loss1.item())
         self.grads1.append(self.grad_norm(self.model1).item())
-        torch.nn.utils.clip_grad_value_(self.model1.parameters(), 1)
+        # torch.nn.utils.clip_grad_value_(self.model1.parameters(), 1)
         self.model1_optimizer.step()
 
         self.model2_optimizer.zero_grad()
         loss2.backward()
         self.losses2.append(loss2.item())
         self.grads2.append(self.grad_norm(self.model2).item())
-        torch.nn.utils.clip_grad_value_(self.model2.parameters(), 1)
+        # torch.nn.utils.clip_grad_value_(self.model2.parameters(), 1)
         self.model2_optimizer.step()
