@@ -18,8 +18,6 @@ class SimulationArgs:
         parser.add_argument('--workload_model', nargs='?',
                             type=str, default="poisson",
                             help='Arrival model of requests from client (constant | poisson)')
-        parser.add_argument('--utilization', nargs='?',
-                            type=float, default=0.5, help='Arrival rate of requests')
         parser.add_argument('--service_time_model', nargs='?',
                             type=str, default="random.expovariate", help='Distribution of service time on server')
         parser.add_argument('--replication_factor', nargs='?',
@@ -61,14 +59,6 @@ class SimulationArgs:
         parser.add_argument('--log_folder', nargs='?', type=str, default="logs")
         parser.add_argument('--plot_folder', nargs='?', type=str, default="plots")
 
-        parser.add_argument('--exp_scenario', nargs='?',
-                            type=str, default="heterogenous_static_nw_delay", help='Defines some scenarios for experiments such as \n'
-                                                           '[base] - default setting\n'
-                                                           '[multipleServiceTimeServers] - increasing mean service time '
-                                                           'based on server index\n'
-                                                           '[heterogenousStaticServiceTimeScenario] - '
-                                                           'fraction of servers are slower\n'
-                                                           '[timeVaryingServiceTimeServers] - servers change service times')
         parser.add_argument('--demand_skew', nargs='?',
                             type=float, default=0, help='Skews clients such that some clients send many'
                                                         ' more requests than others')
@@ -105,8 +95,20 @@ class SimulationArgs:
                             help='How many times slower than normal the networks of slowed servers are '
                                  '(expScenario=heterogenous_static_nw_delay)')
 
+        parser.add_argument('--utilization', nargs='?',
+                            type=float, default=0.5, help='Arrival rate of requests')
         parser.add_argument('--num_requests', nargs='?',
                             type=int, default=400, help='Number of requests')
+        parser.add_argument('--exp_scenario', nargs='?',
+                            type=str, default="heterogenous_static_nw_delay",
+                            help='Defines some scenarios for experiments such as \n'
+                                 '[base] - default setting\n'
+                                 '[heterogenous_static_nw_delay] - fraction of servers have slow nw\n'
+                                 '[multipleServiceTimeServers] - increasing mean service time '
+                                 'based on server index\n'
+                                 '[heterogenousStaticServiceTimeScenario] - '
+                                 'fraction of servers are slower\n'
+                                 '[timeVaryingServiceTimeServers] - servers change service times')
 
         self.parser = parser
         self.args = parser.parse_args()

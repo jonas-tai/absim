@@ -1,3 +1,4 @@
+import json
 import os
 
 import torch
@@ -25,6 +26,14 @@ def print_monitor_time_series_to_file(file_desc, prefix, monitor):
         file_desc.write("%s %s %s\n" % (prefix, entry[0], entry[1]))
 
 
+def log_arguments(out_folder: Path):
+    args_dict = vars(args.args)
+
+    json_file_path = out_folder / 'arguments.json'
+    with open(json_file_path, 'w') as json_file:
+        json.dump(args_dict, json_file, indent=4)
+
+
 def rl_experiment_wrapper(simulation_args: SimulationArgs):
     random.seed(1)
     np.random.seed(1)
@@ -48,6 +57,8 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     os.makedirs(plot_path, exist_ok=True)
 
     simulation_args.set_print(to_print)
+
+    log_arguments(plot_path)
 
     policies_to_run = [
         'expDelay',
