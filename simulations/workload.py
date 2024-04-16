@@ -6,7 +6,7 @@ import numpy
 class Workload:
 
     def __init__(self, id_, latencyMonitor, clientList,
-                 model, model_param, numRequests, simulation):
+                 model, model_param, numRequests, simulation, long_tasks_fraction: float = 0):
         self.latencyMonitor = latencyMonitor
         self.clientList = clientList
         self.model = model
@@ -14,19 +14,23 @@ class Workload:
         self.numRequests = numRequests
         self.simulation = simulation
         self.total = sum(client.demandWeight for client in self.clientList)
+        self.long_tasks_fraction = long_tasks_fraction
         # self.proc = self.simulation.process(self.run(), 'Workload' + str(id_))
 
     # TODO: also need non-uniform client access
     # Need to pin workload to a client
     def run(self):
+        # print(self.model_param)
 
         task_counter = 0
 
         while self.numRequests != 0:
             yield self.simulation.timeout(0)
 
-            task_to_schedule = task.Task("Task" + str(task_counter),
-                                         self.latencyMonitor, self.simulation)
+            is_long_task = False if self.simulation.random.random() >= self.long_tasks_fraction else True
+
+            task_to_schedule = task.Task("Task" + str(task_counter), self.latencyMonitor, self.simulation,
+                                         is_long_task=is_long_task)
             task_counter += 1
 
             # Push out a task...
@@ -34,7 +38,6 @@ class Workload:
 
             # print(f'Scheduling Task {task_to_schedule.id}')
             client_node.schedule(task_to_schedule)
-
             # Simulate client delay
             if self.model == "poisson":
                 yield self.simulation.timeout(self.simulation.np_random.poisson(self.model_param))

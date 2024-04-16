@@ -95,12 +95,20 @@ class SimulationArgs:
                             help='How many times slower than normal the networks of slowed servers are '
                                  '(expScenario=heterogenous_static_nw_delay)')
 
+        # Heterogeneous Tasks workload
+        parser.add_argument('--long_tasks_fraction', nargs='?',
+                            type=float, default=0.3, help='Fraction of tasks that are long tasks'
+                                                          '(expScenario=heterogenous_static_nw_delay)')
+        parser.add_argument('--long_task_added_service_time', nargs='?',
+                            type=float, default=50,
+                            help='How many times slower than short tasks the long tasks take ')
+
         parser.add_argument('--utilization', nargs='?',
-                            type=float, default=0.5, help='Arrival rate of requests')
+                            type=float, default=0.4, help='Arrival rate of requests')
         parser.add_argument('--num_requests', nargs='?',
                             type=int, default=400, help='Number of requests')
         parser.add_argument('--exp_scenario', nargs='?',
-                            type=str, default="heterogenous_static_nw_delay",
+                            type=str, default="base",
                             help='Defines some scenarios for experiments such as \n'
                                  '[base] - default setting\n'
                                  '[heterogenous_static_nw_delay] - fraction of servers have slow nw\n'

@@ -7,14 +7,13 @@ import server
 import client
 from simulator import Simulation
 import workload
-import argparse
 import random
 import constants
 import numpy as np
 import sys
 import muUpdater
 from simulations.monitor import Monitor
-from simulation_args import SimulationArgs, TimeVaryingArgs, SlowServerArgs
+from simulation_args import SimulationArgs
 from pathlib import Path
 from model_trainer import Trainer
 from simulations.plotting import ExperimentPlot
@@ -40,8 +39,8 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     torch.manual_seed(1)
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
-    trainer = Trainer(simulation_args.args.num_servers)
-    NUM_EPSIODES = 100
+    trainer = Trainer(simulation_args.args.num_servers, long_requests_ratio=args.args.long_tasks_fraction)
+    NUM_EPSIODES = 70
     train_plotter = ExperimentPlot()
     test_plotter = ExperimentPlot()
     to_print = False
@@ -107,7 +106,6 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     fig, ax = train_plotter.plot_episode(epoch=plt_episode)
     plt.savefig(plot_path / f'output_train_{plt_episode}_epoch.jpg')
 
-
     fig, ax = test_plotter.plot()
     plt.savefig(plot_path / 'output.jpg')
     fig, ax = test_plotter.plot_quantile(0.90)
@@ -142,7 +140,8 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
                                  resource_capacity=args.server_concurrency,
                                  service_time=(args.service_time),
                                  service_time_model=args.service_time_model,
-                                 simulation=simulation)
+                                 simulation=simulation,
+                                 long_task_added_service_time=args.long_task_added_service_time)
             servers.append(serv)
     elif args.exp_scenario == "multipleServiceTimeServers":
         # Start the servers
@@ -151,7 +150,8 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
                                  resource_capacity=args.server_concurrency,
                                  service_time=((i + 1) * args.service_time),
                                  service_time_model=args.service_time_model,
-                                 simulation=simulation)
+                                 simulation=simulation,
+                                 long_task_added_service_time=args.long_task_added_service_time)
             servers.append(serv)
     elif args.exp_scenario == "heterogenous_static_service_time_scenario":
         base_service_time = args.service_time
@@ -160,6 +160,7 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
         assert 0 <= args.slow_server_slowness < 1.0
         assert not (args.slow_server_slowness == 0 and args.slow_server_fraction != 0)
         assert not (args.slow_server_slowness != 0 and args.slow_server_fraction == 0)
+        assert args.long_tasks_fraction == 0
 
         if args.slow_server_fraction > 0.0:
             slow_server_rate = (args.server_concurrency *
@@ -193,7 +194,8 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
                                  resource_capacity=args.server_concurrency,
                                  service_time=st,
                                  service_time_model=args.service_time_model,
-                                 simulation=simulation)
+                                 simulation=simulation,
+                                 long_task_added_service_time=args.long_task_added_service_time)
             servers.append(serv)
     elif args.exp_scenario == "time_varying_service_time_servers":
         assert args.interval_param != 0.0
@@ -205,7 +207,8 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
                                  resource_capacity=args.server_concurrency,
                                  service_time=args.service_time,
                                  service_time_model=args.service_time_model,
-                                 simulation=simulation)
+                                 simulation=simulation,
+                                 long_task_added_service_time=args.long_task_added_service_time)
             mup = muUpdater.MuUpdater(serv,
                                       args.interval_param,
                                       args.service_time,
@@ -234,7 +237,8 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
                                  service_time=args.service_time,
                                  service_time_model=args.service_time_model,
                                  simulation=simulation,
-                                 nw_latency_base=nw_latency_bases[i])
+                                 nw_latency_base=nw_latency_bases[i],
+                                 long_task_added_service_time=args.long_task_added_service_time)
             servers.append(serv)
     else:
         print("Unknown experiment scenario")
@@ -285,30 +289,31 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
         clients.append(c)
 
     # Start workload generators (analogous to YCSB)
-    latencyMonitor = Monitor(name="Latency", simulation=simulation)
+    latency_monitor = Monitor(name="Latency", simulation=simulation)
 
     # This is where we set the inter-arrival times based on
     # the required utilization level and the service time
     # of the overall server pool.
-    arrivalRate = 0
-    interArrivalTime = 0
-    if (len(service_rate_per_server) > 0):
+    if len(service_rate_per_server) > 0:
         print(service_rate_per_server)
-        arrivalRate = (args.utilization * sum(service_rate_per_server))
-        interArrivalTime = 1 / float(arrivalRate)
+        arrival_rate = (args.utilization * sum(service_rate_per_server))
+        inter_arrival_time = 1 / float(arrival_rate)
     else:
-        arrivalRate = args.num_servers * \
-                      (args.utilization * args.server_concurrency *
-                       1 / float(args.service_time))
-        interArrivalTime = 1 / float(arrivalRate)
+        average_service_time = args.service_time * (1 - args.long_tasks_fraction) + args.long_tasks_fraction * (
+                    args.service_time + args.long_task_added_service_time)
+        arrival_rate = args.num_servers * \
+                       (args.utilization * args.server_concurrency *
+                        1 / float(average_service_time))
+        inter_arrival_time = 1 / float(arrival_rate)
 
     for i in range(args.num_workload):
-        w = workload.Workload(i, latencyMonitor,
+        w = workload.Workload(i, latency_monitor,
                               clients,
                               args.workload_model,
-                              interArrivalTime * args.num_workload,
+                              inter_arrival_time * args.num_workload,
                               args.num_requests / args.num_workload,
-                              simulation)
+                              simulation,
+                              long_tasks_fraction=args.long_tasks_fraction)
         simulation.process(w.run())
         workload_gens.append(w)
 
@@ -385,15 +390,15 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
             print("Mean:", serv.act_monitor.mean())
 
         print("------- Latency ------")
-        print("Mean Latency:", latencyMonitor.mean())
+        print("Mean Latency:", latency_monitor.mean())
         for p in [50, 95, 99]:
-            print(f"p{p} Latency: {latencyMonitor.percentile(p)}")
+            print(f"p{p} Latency: {latency_monitor.percentile(p)}")
 
         print_monitor_time_series_to_file(latency_fd, "0",
-                                          latencyMonitor)
-        assert args.num_requests == len(latencyMonitor)
+                                          latency_monitor)
+        assert args.num_requests == len(latency_monitor)
 
-    return latencyMonitor
+    return latency_monitor
 
 
 if __name__ == '__main__':

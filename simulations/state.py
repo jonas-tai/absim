@@ -15,32 +15,44 @@ class NodeState:
     # Probably unnecessary since we want to keep this constant for now, might be interesting to experiment
     # with varying network delays
     twice_network_latency: int = 0
+    outstanding_long_requests: int = 0
+    outstanding_short_requests: int = 0
 
-    def to_tensor(self) -> torch.Tensor:
+    def to_tensor(self, long_requests_ratio: float) -> torch.Tensor:
+        if long_requests_ratio > 0:
+            return torch.tensor(
+                [[self.queue_size, self.service_time, self.wait_time, self.response_time, self.outstanding_requests,
+                  self.twice_network_latency, self.outstanding_long_requests, self.outstanding_short_requests]],
+                dtype=torch.float32)
         return torch.tensor(
             [[self.queue_size, self.service_time, self.wait_time, self.response_time, self.outstanding_requests,
               self.twice_network_latency]], dtype=torch.float32)
 
     @staticmethod
-    def get_node_state_size() -> int:
+    def get_node_state_size(long_requests_ratio: float) -> int:
+        if long_requests_ratio > 0:
+            return 8
         return 6
 
 
 @dataclass
 class State:
     time_since_last_req: int
+    is_long_request: bool
     # Track the number of requests in the last 1s, 0.5s, 0.1s,...
     request_trend: List[int]
     node_states: List[NodeState]
 
-    def to_tensor(self) -> torch.Tensor:
-        node_state_tensor = torch.cat([node_state.to_tensor() for node_state in self.node_states], 1)
-        general_state = self.request_trend + [self.time_since_last_req]
+    def to_tensor(self, long_requests_ratio: float) -> torch.Tensor:
+        node_state_tensor = torch.cat(
+            [node_state.to_tensor(long_requests_ratio=long_requests_ratio) for node_state in self.node_states], 1)
+        general_state = self.request_trend + [self.time_since_last_req, int(self.is_long_request)]
         general_state_tensor = torch.tensor([general_state], dtype=torch.float32)
         return torch.cat((general_state_tensor, node_state_tensor), 1)
 
     @staticmethod
-    def get_state_size(num_servers: int, num_request_rates: int = 3):
-        num_other_features = 1
-        state_size = num_servers * NodeState.get_node_state_size() + num_request_rates + num_other_features
+    def get_state_size(num_servers: int, long_requests_ratio: float, num_request_rates: int = 3):
+        num_other_features = 2
+        state_size = num_servers * NodeState.get_node_state_size(
+            long_requests_ratio=long_requests_ratio) + num_request_rates + num_other_features
         return state_size

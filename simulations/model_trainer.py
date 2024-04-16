@@ -19,9 +19,11 @@ StateAction = namedtuple('StateAction', ('state', 'action'))
 
 
 class Trainer:
-    def __init__(self, n_actions, batch_size=128, gamma=0.99, eps_start=0.9, eps_end=0.05,
+    def __init__(self, n_actions, long_requests_ratio: float, batch_size=128, gamma=0.99, eps_start=0.9, eps_end=0.05,
                  eps_decay=1000, tau=0.005, lr=1e-4, tau_decay=10):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.long_requests_ratio = long_requests_ratio
 
         self.task_to_state_action: Dict[str, StateAction] = {}
         self.task_to_next_state: Dict[str, torch.Tensor] = {}
@@ -43,7 +45,7 @@ class Trainer:
         # num servers
         self.n_actions = n_actions
 
-        n_observations = State.get_state_size(num_servers=n_actions)
+        n_observations = State.get_state_size(num_servers=n_actions, long_requests_ratio=long_requests_ratio)
 
         self.eval_mode = False
         self.policy_net = DQN(n_observations, n_actions).to(self.device)
@@ -63,7 +65,7 @@ class Trainer:
         if self.eval_mode:
             return
         action = torch.tensor([[action]], device=self.device)
-        state = state.to_tensor()
+        state = state.to_tensor(long_requests_ratio=self.long_requests_ratio)
         self.task_to_state_action[task_id] = StateAction(state, action)
 
         if self.last_task_id is not None:
@@ -124,7 +126,8 @@ class Trainer:
                 # t.max(1) will return the largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
-                action_chosen = self.policy_net(state.to_tensor()).max(1).indices.view(1, 1)
+                action_chosen = self.policy_net(state.to_tensor(long_requests_ratio=self.long_requests_ratio)).max(
+                    1).indices.view(1, 1)
         else:
             action_chosen = torch.tensor([[random.randint(0, self.n_actions - 1)]], device=self.device,
                                          dtype=torch.long)

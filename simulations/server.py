@@ -12,7 +12,8 @@ class Server:
     def __init__(self, id_, resource_capacity,
                  service_time, service_time_model, simulation, nw_latency_base: float = constants.NW_LATENCY_MU,
                  nw_latency_mu: float = constants.NW_LATENCY_MU,
-                 nw_latency_sigma: float = constants.NW_LATENCY_SIGMA):
+                 nw_latency_sigma: float = constants.NW_LATENCY_SIGMA,
+                 long_task_added_service_time: float = 0):
         self.id = id_
         self.service_time = service_time
         self.service_time_model = service_time_model
@@ -21,6 +22,7 @@ class Server:
         self.NW_LATENCY_BASE = nw_latency_base
         self.NW_LATENCY_MU = nw_latency_mu
         self.NW_LATENCY_SIGMA = nw_latency_sigma
+        self.long_task_added_service_time = long_task_added_service_time
         self.server_RR_monitor = Monitor(simulation)
         self.wait_monitor = Monitor(simulation)
         self.act_monitor = Monitor(simulation)
@@ -37,7 +39,7 @@ class Server:
         self.simulation.process(executor.run())
         # self.simulation.activate(executor, executor.run(), self.simulation.now)
 
-    def get_service_time(self):
+    def get_service_time(self, is_long_task=False):
         if self.service_time_model == "random.expovariate":
             service_time = self.simulation.random.expovariate(1.0 / self.service_time)
         elif self.service_time_model == "constant":
@@ -47,7 +49,9 @@ class Server:
         else:
             print("Unknown service time model")
             sys.exit(-1)
-
+        # Add service time if long task
+        if is_long_task:
+            service_time += self.long_task_added_service_time
         return service_time
 
 
@@ -66,7 +70,8 @@ class Executor:
         request = self.server.queue_resource.request()
         yield request
         wait_time = self.simulation.now - start  # W_i
-        service_time = self.server.get_service_time()  # Mu_i
+        service_time = self.server.get_service_time(is_long_task=self.task.is_long_task())  # Mu_i
+
         yield self.simulation.timeout(service_time)
         self.server.queue_resource.release(request)
 

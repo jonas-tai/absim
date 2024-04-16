@@ -48,6 +48,8 @@ class Client:
         # CANNOT USE DEFAULTDICT BECAUSE OF DICT.GET USAGE LATER
         # Number of outstanding requests at the client
         self.pendingRequestsMap = {node: 0 for node in server_list}
+        self.pending_long_requests = {node: 0 for node in server_list}
+        self.pending_short_requests = {node: 0 for node in server_list}
 
         # Number of outstanding requests times oracle-service time of replica
         self.pendingXserviceMap = {node: 0 for node in server_list}
@@ -150,6 +152,11 @@ class Client:
 
         # Book-keeping for metrics
         self.pendingRequestsMap[replica_to_serve] += 1
+        if task.is_long_task():
+            self.pending_long_requests[replica_to_serve] += 1
+        else:
+            self.pending_short_requests[replica_to_serve] += 1
+
         self.pendingXserviceMap[replica_to_serve] = \
             (1 + self.pendingRequestsMap[replica_to_serve]) \
             * replica_to_serve.service_time
@@ -229,7 +236,7 @@ class Client:
 
             request_rates = self.request_rate_monitor.get_rates()
             state = State(time_since_last_req=self.time_since_last_req, request_trend=request_rates,
-                          node_states=node_states)
+                          node_states=node_states, is_long_request=task.is_long_task())
             action = self.trainer.select_action(state)
             self.trainer.record_state_and_action(task_id=task.id, state=state, action=action)
             # Map action back to server id
@@ -248,6 +255,8 @@ class Client:
     def get_node_state(self, replica: str) -> NodeState:
         outstanding_requests = self.pendingRequestsMap[replica]
         response_time = self.responseTimesMap[replica]
+        long_requests = self.pending_long_requests[replica]
+        short_requests = self.pending_short_requests[replica]
 
         if len(self.expected_delay_map[replica]) != 0:
             metric_map = self.expected_delay_map[replica]
@@ -260,7 +269,8 @@ class Client:
             #     f'wait_time: {wait_time}, queue_size: {queue_size}, outstanding_requests: {outstanding_requests}')
             return NodeState(queue_size=queue_size, service_time=service_time, wait_time=wait_time,
                              outstanding_requests=outstanding_requests, response_time=response_time,
-                             twice_network_latency=twice_network_latency)
+                             twice_network_latency=twice_network_latency, outstanding_long_requests=long_requests,
+                             outstanding_short_requests=short_requests)
         else:
             # TOOD: Should we init an empty node state?
             return NodeState(outstanding_requests=outstanding_requests, response_time=response_time)
@@ -390,6 +400,11 @@ class ResponseHandler:
 
         # OMG request completed. Time for some book-keeping
         client.pendingRequestsMap[replica_that_served] -= 1
+        if task.is_long_task():
+            client.pending_long_requests[replica_that_served] -= 1
+        else:
+            client.pending_short_requests[replica_that_served] -= 1
+
         client.pendingXserviceMap[replica_that_served] = (1 + client.pendingRequestsMap[
             replica_that_served]) * replica_that_served.service_time
 
