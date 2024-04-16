@@ -124,16 +124,16 @@ class SimulationArgs:
 
 
 class TimeVaryingArgs(SimulationArgs):
-    def __init__(self, interval_param=1.0, time_varying_drift=1.0):
-        super().__init__()
+    def __init__(self, interval_param=1.0, time_varying_drift=1.0, input_args=None):
+        super().__init__(input_args=input_args)
         self.args.exp_scenario = 'time_varying_service_time_servers'
         self.args.interval_param = interval_param
         self.args.time_varying_drift = time_varying_drift
 
 
 class SlowServerArgs(SimulationArgs):
-    def __init__(self, slow_server_fraction=0.5, slow_server_slowness=0.5):
-        super().__init__()
+    def __init__(self, slow_server_fraction=0.5, slow_server_slowness=0.5, input_args=None):
+        super().__init__(input_args=input_args)
         self.args.exp_scenario = 'heterogenous_static_service_time_scenario'
         self.args.slow_server_fraction = slow_server_fraction
         self.args.slow_server_slowness = slow_server_slowness

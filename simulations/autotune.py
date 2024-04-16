@@ -14,7 +14,7 @@ import os
 #   - main performs the run and returns final acc?
 # - retrun optimized model
 
-def objective(trial, json_obj):
+def objective(trial, json_obj, setting):
     input_args = []
     for arg_obj in json_obj:
         # the arg_obj is either const or tuned
@@ -42,7 +42,7 @@ def objective(trial, json_obj):
                 raise RuntimeError("No value_type for argument")
     print(input_args)
     # the output is the value that you want to maximize with your hyperparameter choice
-    return main(input_args=input_args)
+    return main(input_args=input_args, setting=setting)
 
 
 def save_best(study: optuna.study.Study, trial: optuna.trial.FrozenTrial) -> None:
@@ -53,7 +53,7 @@ def save_best(study: optuna.study.Study, trial: optuna.trial.FrozenTrial) -> Non
         json.dump(best_params, json_file)
 
 
-def run_best(config, json_obj, iteration):
+def run_best(config, json_obj, iteration, setting):
     input_args = []
     # set consts
     for arg_obj in json_obj:
@@ -79,7 +79,7 @@ def run_best(config, json_obj, iteration):
             input_args.append(str(arg_obj["value"]))
     print(input_args)
     # run it
-    main(input_args=input_args)
+    main(input_args=input_args, setting=setting)
 
 
 if __name__ == "__main__":
@@ -89,6 +89,7 @@ if __name__ == "__main__":
     # how many "more" trials you want to run
     parser.add_argument("--n", default=10, help="number of trials to run (not including previous ones)", type=int)
     parser.add_argument("--evaluate", action="store_true", help="whether or not to run best")
+    parser.add_argument("--setting", default="sim", choices=["sim", "slow", "uneven"], help="simulation setting", type=str)
     args = parser.parse_args()
 
     # load json
@@ -109,10 +110,10 @@ if __name__ == "__main__":
     study = optuna.create_study(direction="maximize", study_name=study_name, storage=storage_name, load_if_exists=True)
     print(f"Completed {len(study.trials)} / {len(study.trials)+args.n} trials")
     # this will do the autotuning and will save the best hyperparameters after each trial
-    study.optimize(lambda trial : objective(trial, json_obj), n_trials=args.n, callbacks=[save_best])
+    study.optimize(lambda trial : objective(trial, json_obj, args.setting), n_trials=args.n, callbacks=[save_best])
 
     # this will run the model with the best hyperparameters 5 times and save run information to WandB
-    print(f"Evaluating for best parameters")
     if args.evaluate:
+        print(f"Evaluating for best parameters")
         for i in range(5):
-            run_best(study.best_params, json_obj, i)
+            run_best(study.best_params, json_obj, i, args.setting)

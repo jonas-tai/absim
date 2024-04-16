@@ -19,6 +19,8 @@ from model_trainer import Trainer
 from plotting import ExperimentPlot
 import matplotlib.pyplot as plt
 
+import json
+
 
 def print_monitor_time_series_to_file(file_desc, prefix, monitor):
     for entry in monitor:
@@ -39,7 +41,11 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     to_print = False
 
     plot_path = Path('..', simulation_args.args.plot_folder, simulation_args.args.exp_prefix)
+    log_path = Path('..', simulation_args.args.log_folder, simulation_args.args.exp_prefix)
     os.makedirs(plot_path, exist_ok=True)
+    os.makedirs(log_path, exist_ok=True)
+    with open(f"{log_path}/args.json", "w") as json_file:
+        json.dump(vars(simulation_args.args), json_file)
 
     simulation_args.set_print(to_print)
 
@@ -55,8 +61,8 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     for policy in policies_to_run:
         simulation_args.set_policy(policy)
         for i_episode in range(simulation_args.args.num_episodes):
-            if (i_episode+1)%10 == 0:
-                print(f"Episode {i_episode+1} of {policy}")
+            # if (i_episode+1)%10 == 0:
+            #     print(f"Episode {i_episode+1} of {policy}")
             simulation_args.set_seed(i_episode)
             latencies = run_experiment(simulation_args.args, trainer)
             plotter.add_data(latencies, simulation_args.args.selection_strategy, i_episode)
@@ -255,7 +261,7 @@ def run_experiment(args, trainer: Trainer = None):
     arrivalRate = 0
     interArrivalTime = 0
     if (len(service_rate_per_server) > 0):
-        print(service_rate_per_server)
+        # print(service_rate_per_server)
         arrivalRate = (args.utilization * sum(service_rate_per_server))
         interArrivalTime = 1 / float(arrivalRate)
     else:
@@ -347,12 +353,18 @@ def run_experiment(args, trainer: Trainer = None):
 
     return latencyMonitor
 
-def main(input_args=None):
-    args = SimulationArgs(input_args=input_args)
+def main(input_args=None, setting="sim"):
+    if setting == "sim":
+        args = SimulationArgs(input_args=input_args)
+    elif setting =="slow":
+        args = SlowServerArgs(0.5,0.5, input_args=input_args)
+    elif setting =="uneven":
+        args = SlowServerArgs(0.5,0.1, input_args=input_args)
     # args = TimeVaryingArgs(0.1,5)
     # args = SlowServerArgs(0.5,0.5)
     args.set_policy('expDelay')
+    print(args.args)
     return rl_experiment_wrapper(args)
 
 if __name__ == '__main__':
-    main()
+    main(setting="sim")

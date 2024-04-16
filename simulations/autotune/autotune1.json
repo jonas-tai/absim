@@ -3,4 +3,8 @@
 {"key": "plot_folder", "value": "plots/baseline", "key_type": "const"},
 {"key": "num_episodes", "value": [7, 500], "key_type": "tune", "value_type": "int"},
 {"key": "batch_size", "value": [64, 512], "key_type": "tune", "value_type": "int"},
-{"key": "lr", "value": [1e-5, 1e-2], "key_type": "tune", "value_type": "log"}]
+{"key": "lr", "value": [1e-5, 1e-2], "key_type": "tune", "value_type": "log"},
+{"key": "gamma", "value": [0.5, 0.99], "key_type": "tune", "value_type": "float"},
+{"key": "eps_decay", "value": [100, 5000], "key_type": "tune", "value_type": "int"},
+{"key": "lr_scheduler_step_size", "value": [20, 300], "key_type": "tune", "value_type": "int"},
+{"key": "lr_scheduler_gamma", "value": [0.1, 0.99], "key_type": "tune", "value_type": "float"}]
