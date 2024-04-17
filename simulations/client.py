@@ -81,6 +81,7 @@ class Client:
         self.cubicSmax = cubic_smax
         self.cubicBeta = cubic_beta
         self.hysterisis_factor = hysterisis_factor
+        self.handled_requests = 0
 
         # Backpressure related initialization
         if backpressure:
@@ -138,6 +139,7 @@ class Client:
 
     def send_request(self, task: Task, replica_to_serve: Server):
         delay = replica_to_serve.get_server_nw_latency()
+        self.handled_requests += 1
 
         # Immediately send out request
         message_delivery_process = DeliverMessageWithDelay(simulation=self.simulation)

@@ -27,6 +27,7 @@ class ExperimentPlot:
     def plot(self):
         fig, axes = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         sns.lineplot(self.df, x="Epoch", y="Latency", hue="Policy", ax=axes)
+        plt.yscale('log')
         return fig, axes
 
     def plot_episode(self, epoch: int):
@@ -40,4 +41,5 @@ class ExperimentPlot:
 
         sns.lineplot(data=quantiles, x="Epoch", y=f'Latency', hue="Policy", ax=axes)
         plt.title(f'{quantile}th quantile')
+        plt.yscale('log')
         return fig, axes

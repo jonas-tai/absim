@@ -23,7 +23,8 @@ class DQN(nn.Module):
 
         x = F.relu(self.layer1(x))
         x = F.relu(self.layer2(x))
-        return self.layer3(x)
+        x = self.layer3(x)
+        return x
 
     def print_weights(self):
         layer3_weights = self.layer3.weight.data
@@ -34,7 +35,7 @@ class DQN(nn.Module):
         print(f"\nLayer 3 Bias: {layer3_bias}")
 
 
-class SummaryStats():
+class SummaryStats:
     # https://dsp.stackexchange.com/questions/811/determining-the-mean-and-standard-deviation-in-real-time
     def __init__(self, size):
         self.means = torch.zeros(size)
@@ -43,7 +44,7 @@ class SummaryStats():
 
     def add(self, x):
         # stop adding new stats after 10000
-        if self.n >= 10000:
+        if self.n >= 1000:
             return
 
         x = x.flatten()

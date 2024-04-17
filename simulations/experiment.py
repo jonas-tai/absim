@@ -39,8 +39,12 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     torch.manual_seed(1)
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
-    trainer = Trainer(simulation_args.args.num_servers, long_requests_ratio=args.args.long_tasks_fraction)
-    NUM_EPSIODES = 70
+    trainer = Trainer(simulation_args.args.num_servers, long_requests_ratio=args.args.long_tasks_fraction,
+                      gamma=args.args.gamma,
+                      eps_decay=args.args.eps_decay, eps_start=args.args.eps_start, eps_end=args.args.eps_end,
+                      tau=args.args.tau, tau_decay=args.args.tau_decay,
+                      lr=args.args.lr, batch_size=args.args.batch_size)
+    NUM_EPSIODES = 400
     train_plotter = ExperimentPlot()
     test_plotter = ExperimentPlot()
     to_print = False
@@ -300,7 +304,7 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
         inter_arrival_time = 1 / float(arrival_rate)
     else:
         average_service_time = args.service_time * (1 - args.long_tasks_fraction) + args.long_tasks_fraction * (
-                    args.service_time + args.long_task_added_service_time)
+                args.service_time + args.long_task_added_service_time)
         arrival_rate = args.num_servers * \
                        (args.utilization * args.server_concurrency *
                         1 / float(average_service_time))
@@ -330,59 +334,59 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
     if not exp_path.exists():
         exp_path.mkdir(parents=True, exist_ok=True)
 
-    pending_requests_fd = open("../%s/%s_PendingRequests" %
-                               (args.log_folder,
-                                exp_prefix), 'w')
-    wait_mon_fd = open("../%s/%s_WaitMon" % (args.log_folder,
-                                             exp_prefix), 'w')
-    act_mon_fd = open("../%s/%s_ActMon" % (args.log_folder,
-                                           exp_prefix), 'w')
-    latency_fd = open("../%s/%s_Latency" % (args.log_folder,
-                                            exp_prefix), 'w')
-    latency_tracker_fd = open("../%s/%s_LatencyTracker" %
-                              (args.log_folder, exp_prefix), 'w')
-    rate_fd = open("../%s/%s_Rate" % (args.log_folder,
-                                      exp_prefix), 'w')
-    token_fd = open("../%s/%s_Tokens" % (args.log_folder,
-                                         exp_prefix), 'w')
-    receive_rate_fd = open("../%s/%s_ReceiveRate" % (args.log_folder,
-                                                     exp_prefix), 'w')
-    ed_score_fd = open("../%s/%s_EdScore" % (args.log_folder,
-                                             exp_prefix), 'w')
-    server_rrfd = open("../%s/%s_serverRR" % (args.log_folder,
-                                              exp_prefix), 'w')
+    # pending_requests_fd = open("../%s/%s_PendingRequests" %
+    #                            (args.log_folder,
+    #                             exp_prefix), 'w')
+    # wait_mon_fd = open("../%s/%s_WaitMon" % (args.log_folder,
+    #                                          exp_prefix), 'w')
+    # act_mon_fd = open("../%s/%s_ActMon" % (args.log_folder,
+    #                                        exp_prefix), 'w')
+    # latency_fd = open("../%s/%s_Latency" % (args.log_folder,
+    #                                         exp_prefix), 'w')
+    # latency_tracker_fd = open("../%s/%s_LatencyTracker" %
+    #                           (args.log_folder, exp_prefix), 'w')
+    # rate_fd = open("../%s/%s_Rate" % (args.log_folder,
+    #                                   exp_prefix), 'w')
+    # token_fd = open("../%s/%s_Tokens" % (args.log_folder,
+    #                                      exp_prefix), 'w')
+    # receive_rate_fd = open("../%s/%s_ReceiveRate" % (args.log_folder,
+    #                                                  exp_prefix), 'w')
+    # ed_score_fd = open("../%s/%s_EdScore" % (args.log_folder,
+    #                                          exp_prefix), 'w')
+    # server_rrfd = open("../%s/%s_serverRR" % (args.log_folder,
+    #                                           exp_prefix), 'w')
 
-    for clientNode in clients:
-        print_monitor_time_series_to_file(pending_requests_fd,
-                                          clientNode.id,
-                                          clientNode.pendingRequestsMonitor)
-        print_monitor_time_series_to_file(latency_tracker_fd,
-                                          clientNode.id,
-                                          clientNode.latencyTrackerMonitor)
-        print_monitor_time_series_to_file(rate_fd,
-                                          clientNode.id,
-                                          clientNode.rateMonitor)
-        print_monitor_time_series_to_file(token_fd,
-                                          clientNode.id,
-                                          clientNode.tokenMonitor)
-        print_monitor_time_series_to_file(receive_rate_fd,
-                                          clientNode.id,
-                                          clientNode.receiveRateMonitor)
-        print_monitor_time_series_to_file(ed_score_fd,
-                                          clientNode.id,
-                                          clientNode.edScoreMonitor)
+    # for clientNode in clients:
+    #     print_monitor_time_series_to_file(pending_requests_fd,
+    #                                       clientNode.id,
+    #                                       clientNode.pendingRequestsMonitor)
+    #     print_monitor_time_series_to_file(latency_tracker_fd,
+    #                                       clientNode.id,
+    #                                       clientNode.latencyTrackerMonitor)
+    #     print_monitor_time_series_to_file(rate_fd,
+    #                                       clientNode.id,
+    #                                       clientNode.rateMonitor)
+    #     print_monitor_time_series_to_file(token_fd,
+    #                                       clientNode.id,
+    #                                       clientNode.tokenMonitor)
+    #     print_monitor_time_series_to_file(receive_rate_fd,
+    #                                       clientNode.id,
+    #                                       clientNode.receiveRateMonitor)
+    #     print_monitor_time_series_to_file(ed_score_fd,
+    #                                       clientNode.id,
+    #                                       clientNode.edScoreMonitor)
 
     if args.print:
         for serv in servers:
-            print_monitor_time_series_to_file(wait_mon_fd,
-                                              serv.id,
-                                              serv.wait_monitor)
-            print_monitor_time_series_to_file(act_mon_fd,
-                                              serv.id,
-                                              serv.act_monitor)
-            print_monitor_time_series_to_file(server_rrfd,
-                                              serv.id,
-                                              serv.server_RR_monitor)
+            #     print_monitor_time_series_to_file(wait_mon_fd,
+            #                                       serv.id,
+            #                                       serv.wait_monitor)
+            #     print_monitor_time_series_to_file(act_mon_fd,
+            #                                       serv.id,
+            #                                       serv.act_monitor)
+            #     print_monitor_time_series_to_file(server_rrfd,
+            #                                       serv.id,
+            #                                       serv.server_RR_monitor)
             print("------- Server:%s %s ------" % (serv.id, "WaitMon"))
             print("Mean:", serv.wait_monitor.mean())
 
@@ -394,8 +398,8 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
         for p in [50, 95, 99]:
             print(f"p{p} Latency: {latency_monitor.percentile(p)}")
 
-        print_monitor_time_series_to_file(latency_fd, "0",
-                                          latency_monitor)
+        # print_monitor_time_series_to_file(latency_fd, "0",
+        #                                   latency_monitor)
         assert args.num_requests == len(latency_monitor)
 
     return latency_monitor

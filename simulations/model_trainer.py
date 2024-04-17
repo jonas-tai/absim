@@ -19,7 +19,7 @@ StateAction = namedtuple('StateAction', ('state', 'action'))
 
 
 class Trainer:
-    def __init__(self, n_actions, long_requests_ratio: float, batch_size=128, gamma=0.99, eps_start=0.9, eps_end=0.05,
+    def __init__(self, n_actions, long_requests_ratio: float, batch_size=128, gamma=0.8, eps_start=0.9, eps_end=0.01,
                  eps_decay=1000, tau=0.005, lr=1e-4, tau_decay=10):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -41,6 +41,8 @@ class Trainer:
 
         self.losses = []
         self.grads = []
+        self.mean_value = []
+        self.reward_logs = []
 
         # num servers
         self.n_actions = n_actions
@@ -126,8 +128,9 @@ class Trainer:
                 # t.max(1) will return the largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
-                action_chosen = self.policy_net(state.to_tensor(long_requests_ratio=self.long_requests_ratio)).max(
-                    1).indices.view(1, 1)
+                q_values = self.policy_net(state.to_tensor(long_requests_ratio=self.long_requests_ratio))
+                # print(q_values)
+                action_chosen = q_values.max(1).indices.view(1, 1)
         else:
             action_chosen = torch.tensor([[random.randint(0, self.n_actions - 1)]], device=self.device,
                                          dtype=torch.long)
@@ -175,6 +178,9 @@ class Trainer:
 
         expected_state_action_values = (next_state_values * self.GAMMA) + reward_batch
 
+        self.reward_logs.append(reward_batch.mean().item())
+        self.mean_value.append(next_state_values.mean().item())
+
         # Compute Huber loss
         criterion = nn.SmoothL1Loss()
 
@@ -207,6 +213,14 @@ class Trainer:
         fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         plt.plot(range(len(self.grads)), self.grads)
         plt.savefig(plot_path / 'grads.jpg')
+
+        fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
+        plt.plot(range(len(self.reward_logs)), self.reward_logs)
+        plt.savefig(plot_path / 'rewards.jpg')
+
+        fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
+        plt.plot(range(len(self.mean_value)), self.mean_value)
+        plt.savefig(plot_path / 'mean_value.jpg')
 
     def print_weights(self):
         self.policy_net.print_weights()
