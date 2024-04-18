@@ -14,16 +14,13 @@ class SimulationArgs:
         parser.add_argument('--server_concurrency', nargs='?',
                             type=int, default=1, help='Amount of resources per server.')
         parser.add_argument('--service_time', nargs='?',
-                            type=float, default=2, help='Mean? service time per server')
-        parser.add_argument('--workload_model', nargs='?',
-                            type=str, default="poisson",
-                            help='Arrival model of requests from client (constant | poisson)')
+                            type=float, default=25, help='Mean? service time per server')
         parser.add_argument('--service_time_model', nargs='?',
-                            type=str, default="constant", help='Distribution of service time on server (random.expovariat | constant | math.sin')
+                            type=str, default="constant", help='Distribution of service time on server (random.expovariate | constant | math.sin')
         parser.add_argument('--replication_factor', nargs='?',
                             type=int, default=3, help='Replication factor (# of choices)')
         parser.add_argument('--selection_strategy', nargs='?',
-                            type=str, default="expDelay", help='Policy to use for replica selection')
+                            type=str, default="ARS", help='Policy to use for replica selection')
         parser.add_argument('--shadow_read_ratio', nargs='?',
                             type=float, default=0.0, help='Controls the probability of sending a shadow read '
                                                           '(idk exactly what this is, it seems to be a function '
@@ -64,29 +61,32 @@ class SimulationArgs:
                                                         ' more requests than others')
         parser.add_argument('--high_demand_fraction', nargs='?',
                             type=float, default=0, help='Fraction of the high demand clients')
+
+        # Slow server setting parameters
         parser.add_argument('--slow_server_fraction', nargs='?',
                             type=float, default=0, help='Fraction of slow servers '
                                                         '(expScenario=heterogenousStaticServiceTimeScenario)')
         parser.add_argument('--slow_server_slowness', nargs='?',
-                            type=float, default=0, help='How slow those slowed servers are '
-                                                        '(expScenario=heterogenousStaticServiceTimeScenario)')
+                            type=float, default=0.1, help='How slow those slowed servers are '
+                            '(expScenario=heterogenousStaticServiceTimeScenario)')
         parser.add_argument('--interval_param', nargs='?',
-                            type=float, default=0.0, help='Interval between which server service times change '
-                                                          '(expScenario=timeVaryingServiceTimeServers)')
+                            type=float, default=10000.0, help='Interval between which server service times change '
+                            '(expScenario=timeVaryingServiceTimeServers)')
         parser.add_argument('--time_varying_drift', nargs='?',
-                            type=float, default=0.0, help='How much service times change '
+                            type=float, default=10, help='How much service times change '
                                                           '(expScenario=timeVaryingServiceTimeServers)')
+
         parser.add_argument('--rate_intervals', nargs='+', default=[100, 50, 10])
         parser.add_argument('--print', action='store_true',
                             default=True, help='Prints latency at the end of the experiment')
 
         # Slow network setting parameters
         parser.add_argument('--nw_latency_base', nargs='?',
-                            type=float, default=0.0, help='Seems to be the time it takes to deliver requests?')
+                            type=float, default=1.0, help='Seems to be the time it takes to deliver requests?')
         parser.add_argument('--nw_latency_mu', nargs='?',
-                            type=float, default=0.0, help='Seems to be the time it takes to deliver requests?')
+                            type=float, default=0.25, help='Seems to be the time it takes to deliver requests?')
         parser.add_argument('--nw_latency_sigma', nargs='?',
-                            type=float, default=0.0, help='Seems to be the time it takes to deliver requests?')
+                            type=float, default=0.15, help='Seems to be the time it takes to deliver requests?')
         parser.add_argument('--slow_nw_server_fraction', nargs='?',
                             type=float, default=0.4, help='Fraction of servers with slow network'
                                                           '(expScenario=heterogenous_static_nw_delay)')
@@ -98,17 +98,17 @@ class SimulationArgs:
         # Heterogeneous Tasks workload
         parser.add_argument('--long_tasks_fraction', nargs='?',
                             type=float, default=0.0, help='Fraction of tasks that are long tasks'
-                                                          '(expScenario=heterogenous_static_nw_delay)')
+                            '(expScenario=heterogenous_static_nw_delay)')
         parser.add_argument('--long_task_added_service_time', nargs='?',
-                            type=float, default=50,
+                            type=float, default=100,
                             help='How many times slower than short tasks the long tasks take ')
 
         parser.add_argument('--utilization', nargs='?',
-                            type=float, default=0.7, help='Arrival rate of requests')
+                            type=float, default=0.8, help='Arrival rate of requests')
         parser.add_argument('--num_requests', nargs='?',
                             type=int, default=400, help='Number of requests')
         parser.add_argument('--exp_scenario', nargs='?',
-                            type=str, default="base",
+                            type=str, default="time_varying_service_time_servers",
                             help='Defines some scenarios for experiments such as \n'
                                  '[base] - default setting\n'
                                  '[heterogenous_static_nw_delay] - fraction of servers have slow nw\n'
@@ -116,10 +116,13 @@ class SimulationArgs:
                                  'based on server index\n'
                                  '[heterogenousStaticServiceTimeScenario] - '
                                  'fraction of servers are slower\n'
-                                 '[timeVaryingServiceTimeServers] - servers change service times')
+                                 '[time_varying_service_time_servers] - servers change service times')
+        parser.add_argument('--workload_model', nargs='?',
+                            type=str, default="poisson",
+                            help='Arrival model of requests from client (constant | poisson)')
 
         parser.add_argument('--gamma', nargs='?',
-                            type=float, default=0.75, help='Model trainer argument')
+                            type=float, default=0.8, help='Model trainer argument')
         parser.add_argument('--lr', nargs='?',
                             type=float, default=1e-4, help='Model trainer argument')
         parser.add_argument('--tau', nargs='?',

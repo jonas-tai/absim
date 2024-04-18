@@ -146,7 +146,7 @@ class Client:
         self.simulation.process(message_delivery_process.run(task,
                                                              delay,
                                                              replica_to_serve))
-        if self.REPLICA_SELECTION_STRATEGY == "dqn":
+        if self.REPLICA_SELECTION_STRATEGY == 'DQN':
             response_handler = ResponseHandler(self.simulation, self.trainer)
         else:
             response_handler = ResponseHandler(self.simulation)
@@ -214,10 +214,10 @@ class Client:
         elif self.REPLICA_SELECTION_STRATEGY == "clairvoyant":
             # Sort by response times * pending-requests
             oracle_map = {replica: (1 + len(replica.queueResource.queue))
-                                   * replica.serviceTime
+                          * replica.serviceTime
                           for replica in original_replica_set}
             replica_set.sort(key=oracle_map.get)
-        elif self.REPLICA_SELECTION_STRATEGY == "expDelay":
+        elif self.REPLICA_SELECTION_STRATEGY == "ARS":
             sort_map = {}
             for replica in original_replica_set:
                 sort_map[replica] = self.compute_expected_delay(replica)
@@ -233,7 +233,7 @@ class Client:
                     if ((first_node_score - new_node_score) / first_node_score
                             > badness_threshold):
                         replica_set.sort(key=self.dsScores.get)
-        elif self.REPLICA_SELECTION_STRATEGY == "dqn":
+        elif self.REPLICA_SELECTION_STRATEGY == 'DQN':
             node_states = [self.get_node_state(replica) for replica in replica_set]
 
             request_rates = self.request_rate_monitor.get_rates()
@@ -268,7 +268,7 @@ class Client:
             queue_size = metric_map["queueSizeAfter"]
             # print(
             #     f'NodeState: twice_network_latency: {twice_network_latency}, service_time: {service_time}, '
-            #     f'wait_time: {wait_time}, queue_size: {queue_size}, outstanding_requests: {outstanding_requests}')
+            #     f'wait_time: {wait_time}, queue_size: {queue_size}, outstanding_requests: {outstanding_requests}, long_requests: {long_requests}, short_requests: {short_requests}')
             return NodeState(queue_size=queue_size, service_time=service_time, wait_time=wait_time,
                              outstanding_requests=outstanding_requests, response_time=response_time,
                              twice_network_latency=twice_network_latency, outstanding_long_requests=long_requests,
@@ -320,7 +320,7 @@ class Client:
         for metric in metric_map:
             self.expected_delay_map[replica][metric] \
                 = alpha * metric_map[metric] + (1 - alpha) \
-                  * self.expected_delay_map[replica][metric]
+                * self.expected_delay_map[replica][metric]
 
     def update_rates(self, replica, metricMap, task):
         # Cubic Parameters go here
@@ -420,7 +420,7 @@ class ResponseHandler:
                                                         task_finished - client.taskSentTimeTracker[task]))
         metric_map = task.completion_event.value
         metric_map["responseTime"] = client.responseTimesMap[replica_that_served]
-        metric_map["nw"] = metric_map["responseTime"] - metric_map["serviceTime"]
+        metric_map["nw"] = metric_map["responseTime"] - metric_map["serviceTime"]  # - metric_map["waitingTime"]
         client.update_ema(replica_that_served, metric_map)
         client.receiveRate[replica_that_served].add(1)
 
@@ -449,8 +449,6 @@ class ResponseHandler:
 
             replica_id = replica_that_served.id
             task.latency_monitor.observe(latency)
-
-
 
 
 class RequestRateMonitor:

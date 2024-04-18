@@ -114,7 +114,7 @@ class Trainer:
         policy_net_state_dict = self.policy_net.state_dict()
         for key in policy_net_state_dict:
             target_net_state_dict[key] = policy_net_state_dict[key] * tau + target_net_state_dict[key] * (
-                    1 - tau)
+                1 - tau)
         self.target_net.load_state_dict(target_net_state_dict)
         self.clean_up_after_step(task_id=task_id)
 
@@ -208,18 +208,23 @@ class Trainer:
         fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         plt.clf()
         plt.plot(range(len(self.losses)), self.losses)
+        plt.savefig(plot_path / 'pdfs/losses.pdf')
         plt.savefig(plot_path / 'losses.jpg')
+
         plt.clf()
         fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         plt.plot(range(len(self.grads)), self.grads)
+        plt.savefig(plot_path / 'pdfs/grads.pdf')
         plt.savefig(plot_path / 'grads.jpg')
 
         fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         plt.plot(range(len(self.reward_logs)), self.reward_logs)
+        plt.savefig(plot_path / 'pdfs/rewards.pdf')
         plt.savefig(plot_path / 'rewards.jpg')
 
         fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         plt.plot(range(len(self.mean_value)), self.mean_value)
+        plt.savefig(plot_path / 'pdfs/mean_value.pdf')
         plt.savefig(plot_path / 'mean_value.jpg')
 
     def print_weights(self):

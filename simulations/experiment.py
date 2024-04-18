@@ -44,7 +44,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
                       eps_decay=args.args.eps_decay, eps_start=args.args.eps_start, eps_end=args.args.eps_end,
                       tau=args.args.tau, tau_decay=args.args.tau_decay,
                       lr=args.args.lr, batch_size=args.args.batch_size)
-    NUM_EPSIODES = 400
+    NUM_EPSIODES = 100
     train_plotter = ExperimentPlot()
     test_plotter = ExperimentPlot()
     to_print = False
@@ -58,28 +58,31 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
 
     simulation_args.args.exp_prefix = str(experiment_num)
     os.makedirs(plot_path, exist_ok=True)
+    os.makedirs(plot_path / 'pdfs', exist_ok=True)
 
     simulation_args.set_print(to_print)
 
     log_arguments(plot_path)
 
     policies_to_run = [
-        'expDelay',
+        'ARS',
         # 'response_time',
         # 'weighted_response_time',
         'random',
-        'dqn'
+        'DQN'
     ]
 
     print('Starting experiments')
     for policy in policies_to_run:
         simulation_args.set_policy(policy)
+        # if policy == 'DQN':
+        #     simulation_args.set_print(True)
         for i_episode in range(NUM_EPSIODES):
             print(i_episode)
             simulation_args.set_seed(i_episode)
             latencies = run_experiment(simulation_args.args, trainer)
             train_plotter.add_data(latencies, simulation_args.args.selection_strategy, i_episode)
-            if policy == 'dqn':
+            if policy == 'DQN':
                 # Update LR
                 trainer.scheduler.step()
 
@@ -94,29 +97,46 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
                 test_plotter.add_data(latencies, simulation_args.args.selection_strategy, i_episode)
 
     print('Finished')
+    train_plotter.export_data(out_folder=plot_path, file_name='train_data.csv')
+    test_plotter.export_data(out_folder=plot_path, file_name='test_data.csv')
 
     trainer.plot_grads_and_losses(plot_path=plot_path)
 
     fig, ax = train_plotter.plot()
+    plt.savefig(plot_path / 'pdfs/output_train.pdf')
     plt.savefig(plot_path / 'output_train.jpg')
+
     fig, ax = train_plotter.plot_quantile(0.90)
+    plt.savefig(plot_path / 'pdfs/output_train_p_90.pdf')
     plt.savefig(plot_path / 'output_train_p_90.jpg')
+
     fig, ax = train_plotter.plot_quantile(0.95)
+    plt.savefig(plot_path / 'pdfs/output_train_p_95.pdf')
     plt.savefig(plot_path / 'output_train_p_95.jpg')
+
     fig, ax = train_plotter.plot_quantile(0.99)
+    plt.savefig(plot_path / 'pdfs/output_train_p_99.pdf')
     plt.savefig(plot_path / 'output_train_p_99.jpg')
 
     plt_episode = NUM_EPSIODES - 1
     fig, ax = train_plotter.plot_episode(epoch=plt_episode)
+    plt.savefig(plot_path / f'pdfs/output_train_{plt_episode}_epoch.pdf')
     plt.savefig(plot_path / f'output_train_{plt_episode}_epoch.jpg')
 
     fig, ax = test_plotter.plot()
+    plt.savefig(plot_path / 'pdfs/output.pdf')
     plt.savefig(plot_path / 'output.jpg')
+
     fig, ax = test_plotter.plot_quantile(0.90)
+    plt.savefig(plot_path / 'pdfs/output_p_90.pdf')
     plt.savefig(plot_path / 'output_p_90.jpg')
+
     fig, ax = test_plotter.plot_quantile(0.95)
+    plt.savefig(plot_path / 'pdfs/output_p_95.pdf')
     plt.savefig(plot_path / 'output_p_95.jpg')
+
     fig, ax = test_plotter.plot_quantile(0.99)
+    plt.savefig(plot_path / 'pdfs/output_p_99.pdf')
     plt.savefig(plot_path / 'output_p_99.jpg')
 
 
@@ -169,7 +189,7 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
         if args.slow_server_fraction > 0.0:
             slow_server_rate = (args.server_concurrency *
                                 1 / float(base_service_time)) * \
-                               args.slow_server_slowness
+                args.slow_server_slowness
             num_slow_servers = int(args.slow_server_fraction * args.num_servers)
             slow_server_rates = [slow_server_rate] * num_slow_servers
 
@@ -177,7 +197,7 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
             total_rate = (args.server_concurrency *
                           1 / float(args.service_time) * args.num_servers)
             fast_server_rate = (total_rate - sum(slow_server_rates)) \
-                               / float(num_fast_servers)
+                / float(num_fast_servers)
             fast_server_rates = [fast_server_rate] * num_fast_servers
             service_rate_per_server = slow_server_rates + fast_server_rates
         else:
@@ -187,9 +207,9 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
         simulation.random.shuffle(service_rate_per_server)
         # print(sum(serviceRatePerServer), (1/float(baseServiceTime)) * args.num_servers)
         assert sum(service_rate_per_server) > 0.99 * \
-               (1 / float(base_service_time)) * args.num_servers
+            (1 / float(base_service_time)) * args.num_servers
         assert sum(service_rate_per_server) <= \
-               (1 / float(base_service_time)) * args.num_servers
+            (1 / float(base_service_time)) * args.num_servers
 
         # Start the servers
         for i in range(args.num_servers):
@@ -257,12 +277,12 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
 
     if args.high_demand_fraction > 0.0 and args.demand_skew >= 0:
         heavy_client_weight = base_demand_weight * \
-                              args.demand_skew / args.high_demand_fraction
+            args.demand_skew / args.high_demand_fraction
         num_heavy_clients = int(args.high_demand_fraction * args.num_clients)
         heavy_client_weights = [heavy_client_weight] * num_heavy_clients
 
         light_client_weight = base_demand_weight * \
-                              (1 - args.demand_skew) / (1 - args.high_demand_fraction)
+            (1 - args.demand_skew) / (1 - args.high_demand_fraction)
         num_light_clients = args.num_clients - num_heavy_clients
         light_client_weights = [light_client_weight] * num_light_clients
         client_weights = heavy_client_weights + light_client_weights
@@ -304,10 +324,10 @@ def run_experiment(args, trainer: Trainer = None, eval_mode=False):
         inter_arrival_time = 1 / float(arrival_rate)
     else:
         average_service_time = args.service_time * (1 - args.long_tasks_fraction) + args.long_tasks_fraction * (
-                args.service_time + args.long_task_added_service_time)
+            args.service_time + args.long_task_added_service_time)
         arrival_rate = args.num_servers * \
-                       (args.utilization * args.server_concurrency *
-                        1 / float(average_service_time))
+            (args.utilization * args.server_concurrency *
+             1 / float(average_service_time))
         inter_arrival_time = 1 / float(arrival_rate)
 
     for i in range(args.num_workload):
@@ -409,5 +429,5 @@ if __name__ == '__main__':
     args = SimulationArgs()
     # args = TimeVaryingArgs(0.1,5)
     # args = SlowServerArgs(0.5,0.5)
-    args.set_policy('expDelay')
+    args.set_policy('ARS')
     rl_experiment_wrapper(args)

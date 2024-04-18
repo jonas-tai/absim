@@ -6,15 +6,15 @@ import inspect
 
 @dataclass
 class NodeState:
-    response_time: int
-    outstanding_requests: int
-    queue_size: int = 0
-    service_time: int = 0
+    response_time: float
+    outstanding_requests: float
+    queue_size: float = 0
+    service_time: float = 0
     # Wait time is no feature of ARS, we should experiment with using it
-    wait_time: int = 0
+    wait_time: float = 0
     # Probably unnecessary since we want to keep this constant for now, might be interesting to experiment
     # with varying network delays
-    twice_network_latency: int = 0
+    twice_network_latency: float = 0
     outstanding_long_requests: int = 0
     outstanding_short_requests: int = 0
 
@@ -22,17 +22,17 @@ class NodeState:
         if long_requests_ratio > 0:
             return torch.tensor(
                 [[self.queue_size, self.service_time, self.wait_time, self.response_time, self.outstanding_requests,
-                  self.twice_network_latency, self.outstanding_long_requests, self.outstanding_short_requests]],
+                 self.outstanding_long_requests, self.outstanding_short_requests]],  # self.twice_network_latency
                 dtype=torch.float32)
         return torch.tensor(
             [[self.queue_size, self.service_time, self.wait_time, self.response_time, self.outstanding_requests,
-              self.twice_network_latency]], dtype=torch.float32)
+              ]], dtype=torch.float32)  # self.twice_network_latency
 
     @staticmethod
     def get_node_state_size(long_requests_ratio: float) -> int:
         if long_requests_ratio > 0:
-            return 8
-        return 6
+            return 7
+        return 5
 
 
 @dataclass

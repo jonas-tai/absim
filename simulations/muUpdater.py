@@ -7,6 +7,7 @@ class MuUpdater:
         self.rateChangeFactor = rateChangeFactor
         self.simulation = simulation
         self.simulation.process(self.run())
+        self.is_slow = True
 
     def run(self):
         while (1):
@@ -16,8 +17,12 @@ class MuUpdater:
                 rate = 1 / float(self.serviceTime)
                 self.server.service_time = 1 / float(rate)
             else:
-                rate = 1 / float(self.serviceTime)
-                rate += self.rateChangeFactor * rate
-                self.server.service_time = 1 / float(rate)
-            # print(self.simulation.now, self.server.id, self.server.serviceTime)
+                if self.is_slow:
+                    rate = 1 / float(self.serviceTime)
+                    rate += self.rateChangeFactor * rate
+                    self.server.service_time = 1 / float(rate)
+                self.is_slow = False
+            print('Test')
+            print(self.rateChangeFactor)
+            print(self.intervalParam)
             yield self.simulation.timeout(self.intervalParam)
