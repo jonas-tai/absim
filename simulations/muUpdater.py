@@ -22,7 +22,7 @@ class MuUpdater:
                     rate += self.rateChangeFactor * rate
                     self.server.service_time = 1 / float(rate)
                 self.is_slow = False
-            print('Test')
-            print(self.rateChangeFactor)
-            print(self.intervalParam)
+            # print('Test')
+            # print(self.rateChangeFactor)
+            # print(self.intervalParam)
             yield self.simulation.timeout(self.intervalParam)

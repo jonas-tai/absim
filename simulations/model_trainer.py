@@ -19,7 +19,7 @@ StateAction = namedtuple('StateAction', ('state', 'action'))
 
 
 class Trainer:
-    def __init__(self, n_actions, long_requests_ratio: float, batch_size=128, gamma=0.8, eps_start=0.9, eps_end=0.01,
+    def __init__(self, n_actions, long_requests_ratio: float, batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2,
                  eps_decay=1000, tau=0.005, lr=1e-4, tau_decay=10):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -113,8 +113,7 @@ class Trainer:
         target_net_state_dict = self.target_net.state_dict()
         policy_net_state_dict = self.policy_net.state_dict()
         for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key] * tau + target_net_state_dict[key] * (
-                1 - tau)
+            target_net_state_dict[key] = policy_net_state_dict[key] * tau + target_net_state_dict[key] * (1 - tau)
         self.target_net.load_state_dict(target_net_state_dict)
         self.clean_up_after_step(task_id=task_id)
 

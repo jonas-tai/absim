@@ -106,9 +106,9 @@ class SimulationArgs:
         parser.add_argument('--utilization', nargs='?',
                             type=float, default=0.8, help='Arrival rate of requests')
         parser.add_argument('--num_requests', nargs='?',
-                            type=int, default=400, help='Number of requests')
+                            type=int, default=4000, help='Number of requests')
         parser.add_argument('--exp_scenario', nargs='?',
-                            type=str, default="time_varying_service_time_servers",
+                            type=str, default="base",
                             help='Defines some scenarios for experiments such as \n'
                                  '[base] - default setting\n'
                                  '[heterogenous_static_nw_delay] - fraction of servers have slow nw\n'
@@ -122,13 +122,13 @@ class SimulationArgs:
                             help='Arrival model of requests from client (constant | poisson)')
 
         parser.add_argument('--gamma', nargs='?',
-                            type=float, default=0.8, help='Model trainer argument')
+                            type=float, default=0.9, help='Model trainer argument')
         parser.add_argument('--lr', nargs='?',
-                            type=float, default=1e-4, help='Model trainer argument')
+                            type=float, default=1e-5, help='Model trainer argument')
         parser.add_argument('--tau', nargs='?',
                             type=float, default=0.005, help='Model trainer argument')
         parser.add_argument('--eps_decay', nargs='?',
-                            type=float, default=1000, help='Model trainer argument')
+                            type=float, default=10000, help='Model trainer argument')
         parser.add_argument('--batch_size', nargs='?',
                             type=float, default=128, help='Model trainer argument')
         parser.add_argument('--tau_decay', nargs='?',
@@ -136,7 +136,7 @@ class SimulationArgs:
         parser.add_argument('--eps_start', nargs='?',
                             type=float, default=0.9, help='Model trainer argument')
         parser.add_argument('--eps_end', nargs='?',
-                            type=float, default=0.01, help='Model trainer argument')
+                            type=float, default=0.05, help='Model trainer argument')
 
         self.parser = parser
         self.args = parser.parse_args()

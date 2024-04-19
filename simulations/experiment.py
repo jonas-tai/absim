@@ -44,7 +44,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
                       eps_decay=args.args.eps_decay, eps_start=args.args.eps_start, eps_end=args.args.eps_end,
                       tau=args.args.tau, tau_decay=args.args.tau_decay,
                       lr=args.args.lr, batch_size=args.args.batch_size)
-    NUM_EPSIODES = 100
+    NUM_EPSIODES = 2000
     train_plotter = ExperimentPlot()
     test_plotter = ExperimentPlot()
     to_print = False
