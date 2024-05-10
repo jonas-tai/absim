@@ -42,6 +42,8 @@ class Client:
         self.time_since_last_req = 0
         self.trainer = trainer
         self.request_rate_monitor = RequestRateMonitor(simulation, rate_intervals)
+        self.requests_handled = 0
+        self.dqn_decision_equal_to_ars = 0
 
         # Book-keeping and metrics to be recorded follow...
 
@@ -218,10 +220,7 @@ class Client:
                           for replica in original_replica_set}
             replica_set.sort(key=oracle_map.get)
         elif self.REPLICA_SELECTION_STRATEGY == "ARS":
-            sort_map = {}
-            for replica in original_replica_set:
-                sort_map[replica] = self.compute_expected_delay(replica)
-            replica_set.sort(key=sort_map.get)
+            replica_set = self.get_ars_ranking(original_replica_set)
         elif self.REPLICA_SELECTION_STRATEGY == "ds":
             first_node = replica_set[0]
             first_node_score = self.dsScores[first_node]
@@ -243,15 +242,25 @@ class Client:
             self.trainer.record_state_and_action(task_id=task.id, state=state, action=action)
             # Map action back to server id
             replica = next(server for server in replica_set if server.get_server_id() == action)
-            # TODO: Delete this and print statements
-            # replica = [server for server in replica_set if server.get_server_id() == action][0]
 
+            ars_replica_ranking = self.get_ars_ranking(original_replica_set)
+            if ars_replica_ranking[0] == replica:
+                self.dqn_decision_equal_to_ars += 1
             # set the first replica to be the "action"
             replica_set[0] = replica
         else:
             print(self.REPLICA_SELECTION_STRATEGY)
             assert False, "REPLICA_SELECTION_STRATEGY isn't set or is invalid"
+        self.requests_handled += 1
+        return replica_set
 
+    def get_ars_ranking(self, replica_list: List[Server]) -> List[Server]:
+        sort_map = {}
+        for replica in replica_list:
+            sort_map[replica] = self.compute_expected_delay(replica)
+
+        replica_set = replica_list.copy()
+        replica_set.sort(key=sort_map.get)
         return replica_set
 
     def get_node_state(self, replica: str) -> NodeState:
