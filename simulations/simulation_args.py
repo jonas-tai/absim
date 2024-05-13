@@ -122,13 +122,13 @@ class SimulationArgs:
                             help='Arrival model of requests from client (constant | poisson)')
 
         parser.add_argument('--gamma', nargs='?',
-                            type=float, default=0.8, help='Model trainer argument')
+                            type=float, default=0.9, help='Model trainer argument')
         parser.add_argument('--lr', nargs='?',
                             type=float, default=1e-4, help='Model trainer argument')
         parser.add_argument('--tau', nargs='?',
                             type=float, default=0.005, help='Model trainer argument')
         parser.add_argument('--eps_decay', nargs='?',
-                            type=float, default=1000, help='Model trainer argument')
+                            type=float, default=10000, help='Model trainer argument')
         parser.add_argument('--batch_size', nargs='?',
                             type=float, default=128, help='Model trainer argument')
         parser.add_argument('--tau_decay', nargs='?',

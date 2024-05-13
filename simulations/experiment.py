@@ -3,22 +3,13 @@ import os
 
 import torch
 
-import server
-import client
-from simulator import Simulation
-import workload
 import random
-import constants
 import numpy as np
-import sys
-import muUpdater
-from simulations.monitor import Monitor
 from simulation_args import SimulationArgs
 from pathlib import Path
 from model_trainer import Trainer
 from simulations.plotting import ExperimentPlot
 from experiment_runner import ExperimentRunner
-import matplotlib.pyplot as plt
 
 
 def print_monitor_time_series_to_file(file_desc, prefix, monitor):
@@ -48,8 +39,6 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
                       tau=args.args.tau, tau_decay=args.args.tau_decay,
                       lr=args.args.lr, batch_size=args.args.batch_size)
     NUM_EPSIODES = 300
-    train_plotter = ExperimentPlot()
-    test_plotter = ExperimentPlot()
     to_print = False
 
     experiment_num = 0
@@ -62,6 +51,9 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     simulation_args.args.exp_prefix = str(experiment_num)
     os.makedirs(plot_path, exist_ok=True)
     os.makedirs(plot_path / 'pdfs', exist_ok=True)
+
+    train_plotter = ExperimentPlot(plot_path=plot_path, is_train_data=True)
+    test_plotter = ExperimentPlot(plot_path=plot_path, is_train_data=False)
 
     simulation_args.set_print(to_print)
 
@@ -109,42 +101,21 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
 
     trainer.plot_grads_and_losses(plot_path=plot_path)
 
-    fig, ax = train_plotter.plot()
-    plt.savefig(plot_path / 'pdfs/output_train.pdf')
-    plt.savefig(plot_path / 'output_train.jpg')
-
+    fig, ax = train_plotter.plot_latency()
     fig, ax = train_plotter.plot_quantile(0.90)
-    plt.savefig(plot_path / 'pdfs/output_train_p_90.pdf')
-    plt.savefig(plot_path / 'output_train_p_90.jpg')
-
     fig, ax = train_plotter.plot_quantile(0.95)
-    plt.savefig(plot_path / 'pdfs/output_train_p_95.pdf')
-    plt.savefig(plot_path / 'output_train_p_95.jpg')
-
     fig, ax = train_plotter.plot_quantile(0.99)
-    plt.savefig(plot_path / 'pdfs/output_train_p_99.pdf')
-    plt.savefig(plot_path / 'output_train_p_99.jpg')
 
     plt_episode = NUM_EPSIODES - 1
     fig, ax = train_plotter.plot_episode(epoch=plt_episode)
-    plt.savefig(plot_path / f'pdfs/output_train_{plt_episode}_epoch.pdf')
-    plt.savefig(plot_path / f'output_train_{plt_episode}_epoch.jpg')
+    fig, ax = train_plotter.plot_policy_episode(epoch=plt_episode, policy='DQN')
+    fig, ax = train_plotter.plot_policy_episode(epoch=plt_episode, policy='ARS')
+    fig, ax = train_plotter.plot_policy_episode(epoch=plt_episode, policy='random')
 
-    fig, ax = test_plotter.plot()
-    plt.savefig(plot_path / 'pdfs/output.pdf')
-    plt.savefig(plot_path / 'output.jpg')
-
+    fig, ax = test_plotter.plot_latency()
     fig, ax = test_plotter.plot_quantile(0.90)
-    plt.savefig(plot_path / 'pdfs/output_p_90.pdf')
-    plt.savefig(plot_path / 'output_p_90.jpg')
-
     fig, ax = test_plotter.plot_quantile(0.95)
-    plt.savefig(plot_path / 'pdfs/output_p_95.pdf')
-    plt.savefig(plot_path / 'output_p_95.jpg')
-
     fig, ax = test_plotter.plot_quantile(0.99)
-    plt.savefig(plot_path / 'pdfs/output_p_99.pdf')
-    plt.savefig(plot_path / 'output_p_99.jpg')
 
 
 if __name__ == '__main__':

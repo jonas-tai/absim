@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 import torch
-import inspect
+from sklearn.preprocessing import PolynomialFeatures
 
 
 @dataclass
@@ -43,18 +43,23 @@ class State:
     request_trend: List[int]
     node_states: List[NodeState]
 
-    def to_tensor(self, long_requests_ratio: float) -> torch.Tensor:
+    def to_tensor(self, long_requests_ratio: float, poly_feat_degree: int = 3) -> torch.Tensor:
         node_state_tensor = torch.cat(
             [node_state.to_tensor(long_requests_ratio=long_requests_ratio) for node_state in self.node_states], 1)
         general_state = self.request_trend + [self.time_since_last_req,
                                               int(self.is_long_request)] if long_requests_ratio > 0 else self.request_trend + [
             self.time_since_last_req]
         general_state_tensor = torch.tensor([general_state], dtype=torch.float32)
-        return torch.cat((general_state_tensor, node_state_tensor), 1)
+        state_tensor = torch.cat((general_state_tensor, node_state_tensor), 1)
+
+        poly = PolynomialFeatures(poly_feat_degree)
+        poly_state = poly.fit_transform(state_tensor)
+        return torch.tensor(poly_state, dtype=torch.float32)
 
     @staticmethod
     def get_state_size(num_servers: int, long_requests_ratio: float, num_request_rates: int = 3):
         num_other_features = 2 if long_requests_ratio > 0 else 1
         state_size = num_servers * NodeState.get_node_state_size(
             long_requests_ratio=long_requests_ratio) + num_request_rates + num_other_features
-        return state_size
+        # TODO: Fix
+        return 1540

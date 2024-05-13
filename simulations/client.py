@@ -12,7 +12,9 @@ from yunomi.stats.exp_decay_sample import ExponentiallyDecayingSample
 
 from simulations.server import Server
 from simulations.state import NodeState, State
-from collections import defaultdict
+from collections import defaultdict, namedtuple
+
+LatencyReplica = namedtuple('LatencyReplica', ('latency', 'replica_id'))
 
 
 class Client:
@@ -457,7 +459,7 @@ class ResponseHandler:
                 self.trainer.execute_step_if_state_present(task_id=task.id, latency=latency)
 
             replica_id = replica_that_served.id
-            task.latency_monitor.observe(latency)
+            task.latency_monitor.observe(LatencyReplica(latency=latency, replica_id=replica_id))
 
 
 class RequestRateMonitor:
