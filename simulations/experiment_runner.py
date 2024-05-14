@@ -1,6 +1,7 @@
 from typing import List
 import server
 import client
+from simulations.state import StateParser
 from simulator import Simulation
 import workload
 import constants
@@ -12,10 +13,11 @@ from model_trainer import Trainer
 
 
 class ExperimentRunner:
-    def __init__(self) -> None:
+    def __init__(self, state_parser: StateParser) -> None:
         self.servers: List[server.Server] = []
         self.clients: List[client.Client] = []
         self.workload_gens: List[workload.Workload] = []
+        self.state_parser = state_parser
 
     def reset_stats(self) -> None:
         self.servers = []
@@ -177,10 +179,17 @@ class ExperimentRunner:
         assert sum(client_weights) > 0.99 * args.num_clients
         assert sum(client_weights) <= args.num_clients
 
+        # Start workload generators (analogous to YCSB)
+        latency_monitor = Monitor(name="Latency", simulation=simulation)
+        state_latency_monitor = Monitor(name='StateLatency', simulation=simulation)
+
         # Start the clients
         for i in range(args.num_clients):
             c = client.Client(id_="Client%s" % (i),
                               server_list=self.servers,
+                              latency_monitor=latency_monitor,
+                              state_latency_monitor=state_latency_monitor,
+                              state_parser=self.state_parser,
                               replica_selection_strategy=args.selection_strategy,
                               access_pattern=args.access_pattern,
                               replication_factor=args.replication_factor,
@@ -196,9 +205,6 @@ class ExperimentRunner:
                               trainer=trainer,
                               simulation=simulation)
             self.clients.append(c)
-
-        # Start workload generators (analogous to YCSB)
-        latency_monitor = Monitor(name="Latency", simulation=simulation)
 
         # This is where we set the inter-arrival times based on
         # the required utilization level and the service time
@@ -222,7 +228,8 @@ class ExperimentRunner:
                                   inter_arrival_time * args.num_workload,
                                   args.num_requests / args.num_workload,
                                   simulation,
-                                  long_tasks_fraction=args.long_tasks_fraction)
+                                  long_tasks_fraction=args.long_tasks_fraction,
+                                  state_latency_monitor=state_latency_monitor)
             simulation.process(w.run())
             self.workload_gens.append(w)
 
@@ -307,4 +314,4 @@ class ExperimentRunner:
             #                                   latency_monitor)
             assert args.num_requests == len(latency_monitor)
 
-        return latency_monitor
+        return latency_monitor, state_latency_monitor

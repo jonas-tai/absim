@@ -12,18 +12,17 @@ from matplotlib import pyplot as plt
 
 from replay_memory import ReplayMemory, Transition
 from model import DQN, SummaryStats
-from simulations.state import State
+from simulations.state import State, StateParser
 from collections import defaultdict
 
 StateAction = namedtuple('StateAction', ('state', 'action'))
 
 
 class Trainer:
-    def __init__(self, n_actions, long_requests_ratio: float, batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2,
+    def __init__(self, state_parser: StateParser, n_actions: int, batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2,
                  eps_decay=1000, tau=0.005, lr=1e-4, tau_decay=10):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        self.long_requests_ratio = long_requests_ratio
+        self.state_parser = state_parser
 
         self.task_to_state_action: Dict[str, StateAction] = {}
         self.task_to_next_state: Dict[str, torch.Tensor] = {}
@@ -47,7 +46,7 @@ class Trainer:
         # num servers
         self.n_actions = n_actions
 
-        n_observations = State.get_state_size(num_servers=n_actions, long_requests_ratio=long_requests_ratio)
+        n_observations = self.state_parser.get_state_size()
 
         self.eval_mode = False
         self.policy_net = DQN(n_observations, n_actions).to(self.device)
@@ -55,7 +54,7 @@ class Trainer:
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
-        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=50, gamma=0.5)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.5)
         self.memory = ReplayMemory(10000, self.policy_net.summary)
 
         self.steps_done = 0
@@ -67,7 +66,7 @@ class Trainer:
         if self.eval_mode:
             return
         action = torch.tensor([[action]], device=self.device)
-        state = state.to_tensor(long_requests_ratio=self.long_requests_ratio)
+        state = self.state_parser.state_to_tensor(state=state)
         self.task_to_state_action[task_id] = StateAction(state, action)
 
         if self.last_task_id is not None:
@@ -127,7 +126,7 @@ class Trainer:
                 # t.max(1) will return the largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
-                q_values = self.policy_net(state.to_tensor(long_requests_ratio=self.long_requests_ratio))
+                q_values = self.policy_net(self.state_parser.state_to_tensor(state=state))
                 # print(q_values)
                 action_chosen = q_values.max(1).indices.view(1, 1)
         else:

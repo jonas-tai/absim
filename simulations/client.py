@@ -11,14 +11,15 @@ import math
 from yunomi.stats.exp_decay_sample import ExponentiallyDecayingSample
 
 from simulations.server import Server
-from simulations.state import NodeState, State
+from simulations.state import NodeState, State, StateParser
 from collections import defaultdict, namedtuple
 
 LatencyReplica = namedtuple('LatencyReplica', ('latency', 'replica_id'))
+StateLatency = namedtuple('StateLatency', ('state', 'latency'))
 
 
 class Client:
-    def __init__(self, id_, server_list: List[Server], replica_selection_strategy,
+    def __init__(self, id_, server_list: List[Server], latency_monitor: Monitor, state_latency_monitor: Monitor, state_parser: StateParser, replica_selection_strategy,
                  access_pattern, replication_factor, backpressure,
                  shadow_read_ratio, rate_interval,
                  cubic_c, cubic_smax, cubic_beta, hysterisis_factor,
@@ -26,6 +27,9 @@ class Client:
         if rate_intervals is None:
             rate_intervals = [1000, 500, 100]
         self.id = id_
+        self.state_parser = state_parser
+        self.latency_monitor = latency_monitor
+        self.state_latency_monitor = state_latency_monitor
         self.server_list = server_list
         self.accessPattern = access_pattern
         self.replication_factor = replication_factor
@@ -150,10 +154,7 @@ class Client:
         self.simulation.process(message_delivery_process.run(task,
                                                              delay,
                                                              replica_to_serve))
-        if self.REPLICA_SELECTION_STRATEGY == 'DQN':
-            response_handler = ResponseHandler(self.simulation, self.trainer)
-        else:
-            response_handler = ResponseHandler(self.simulation)
+        response_handler = ResponseHandler(self.simulation)
         self.simulation.process(response_handler.run(self, task, replica_to_serve))
 
         # Book-keeping for metrics
@@ -173,6 +174,14 @@ class Client:
 
     def sort(self, task: Task, original_replica_set: List[Server]) -> List[Server]:
         replica_set = original_replica_set[0:]
+
+        node_states = [self.get_node_state(replica) for replica in replica_set]
+
+        request_rates = self.request_rate_monitor.get_rates()
+        state = State(time_since_last_req=self.time_since_last_req, request_trend=request_rates,
+                      node_states=node_states, is_long_request=task.is_long_task())
+
+        task.set_state(state=state)
 
         if self.REPLICA_SELECTION_STRATEGY == "random":
             # Pick a random node for the request.
@@ -235,11 +244,6 @@ class Client:
                             > badness_threshold):
                         replica_set.sort(key=self.dsScores.get)
         elif self.REPLICA_SELECTION_STRATEGY == 'DQN':
-            node_states = [self.get_node_state(replica) for replica in replica_set]
-
-            request_rates = self.request_rate_monitor.get_rates()
-            state = State(time_since_last_req=self.time_since_last_req, request_trend=request_rates,
-                          node_states=node_states, is_long_request=task.is_long_task())
             action = self.trainer.select_action(state)
             self.trainer.record_state_and_action(task_id=task.id, state=state, action=action)
             # Map action back to server id
@@ -401,9 +405,8 @@ class DeliverMessageWithDelay:
 class ResponseHandler:
     def __init__(self, simulation, trainer: Trainer = None):
         self.simulation = simulation
-        self.trainer = trainer
 
-    def run(self, client, task, replica_that_served):
+    def run(self, client: Client, task: Task, replica_that_served):
         yield self.simulation.timeout(0)
         yield task.completion_event
 
@@ -453,13 +456,18 @@ class ResponseHandler:
 
         # Does not make sense to record shadow read latencies
         # as a latency measurement
-        if task.latency_monitor is not None:
+        if task.id != 'ShadowRead':
             # Task completed, we call the trainer to see if we can do a step
-            if self.trainer is not None:
-                self.trainer.execute_step_if_state_present(task_id=task.id, latency=latency)
+            if client.REPLICA_SELECTION_STRATEGY == 'DQN':
+                client.trainer.execute_step_if_state_present(task_id=task.id, latency=latency)
+
+            state = task.get_state()
+            if state is not None:
+                client.state_latency_monitor.observe(StateLatency(
+                    state=client.state_parser.state_to_tensor(state=state), latency=latency))
 
             replica_id = replica_that_served.id
-            task.latency_monitor.observe(LatencyReplica(latency=latency, replica_id=replica_id))
+            client.latency_monitor.observe(LatencyReplica(latency=latency, replica_id=replica_id))
 
 
 class RequestRateMonitor:

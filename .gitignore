@@ -1,3 +1,4 @@
 .idea
 logs
 plots
+simulations/__pycache__

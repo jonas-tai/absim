@@ -1,19 +1,23 @@
 import random
+from typing import List
+from simulations.client import Client
+from simulations.monitor import Monitor
 import task
 import numpy
 
 
 class Workload:
 
-    def __init__(self, id_, latencyMonitor, clientList,
-                 model, model_param, numRequests, simulation, long_tasks_fraction: float = 0):
-        self.latencyMonitor = latencyMonitor
-        self.clientList = clientList
+    def __init__(self, id_, latency_monitor: Monitor, client_list: List[Client],
+                 model, model_param, num_requests, simulation, state_latency_monitor: Monitor, long_tasks_fraction: float = 0):
+        self.latency_monitor = latency_monitor
+        self.state_latency_monitor = state_latency_monitor
+        self.client_list = client_list
         self.model = model
         self.model_param = model_param
-        self.numRequests = numRequests
+        self.num_requests = num_requests
         self.simulation = simulation
-        self.total = sum(client.demandWeight for client in self.clientList)
+        self.total = sum(client.demandWeight for client in self.client_list)
         self.long_tasks_fraction = long_tasks_fraction
         # self.proc = self.simulation.process(self.run(), 'Workload' + str(id_))
 
@@ -24,13 +28,13 @@ class Workload:
 
         task_counter = 0
 
-        while self.numRequests != 0:
+        while self.num_requests != 0:
             yield self.simulation.timeout(0)
 
             is_long_task = False if self.simulation.random.random() >= self.long_tasks_fraction else True
 
-            task_to_schedule = task.Task("Task" + str(task_counter), self.latencyMonitor, self.simulation,
-                                         is_long_task=is_long_task)
+            task_to_schedule = task.Task("Task" + str(task_counter),
+                                         simulation=self.simulation, is_long_task=is_long_task)
             task_counter += 1
 
             # Push out a task...
@@ -47,12 +51,12 @@ class Workload:
             if self.model == "constant":
                 yield self.simulation.timeout(self.model_param)
 
-            self.numRequests -= 1
+            self.num_requests -= 1
 
     def weighted_choice(self):
         r = self.simulation.random.uniform(0, self.total)
         upto = 0
-        for client in self.clientList:
+        for client in self.client_list:
             if upto + client.demandWeight > r:
                 return client
             upto += client.demandWeight
