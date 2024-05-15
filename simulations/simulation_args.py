@@ -1,4 +1,6 @@
 import argparse
+import json
+from pathlib import Path
 
 
 class SimulationArgs:
@@ -81,7 +83,9 @@ class SimulationArgs:
         parser.add_argument('--print', action='store_true',
                             default=True, help='Prints latency at the end of the experiment')
         parser.add_argument('--poly_feat_degree', nargs='?',
-                            type=float, default=3, help='Degree of created polynomial and interaction features')
+                            type=float, default=1, help='Degree of created polynomial and interaction features')
+        parser.add_argument('--collect_data_points', action='store_true',
+                            default=True, help='Collect and export data points for training of supervised model')
 
         # Slow network setting parameters
         parser.add_argument('--nw_latency_base', nargs='?',
@@ -171,3 +175,11 @@ class SlowServerArgs(SimulationArgs):
         self.args.exp_scenario = 'heterogenous_static_service_time_scenario'
         self.args.slow_server_fraction = slow_server_fraction
         self.args.slow_server_slowness = slow_server_slowness
+
+
+def log_arguments(out_folder: Path, args):
+    args_dict = vars(args.args)
+
+    json_file_path = out_folder / 'arguments.json'
+    with open(json_file_path, 'w') as json_file:
+        json.dump(args_dict, json_file, indent=4)

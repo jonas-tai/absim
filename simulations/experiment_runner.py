@@ -180,15 +180,13 @@ class ExperimentRunner:
         assert sum(client_weights) <= args.num_clients
 
         # Start workload generators (analogous to YCSB)
-        latency_monitor = Monitor(name="Latency", simulation=simulation)
-        state_latency_monitor = Monitor(name='StateLatency', simulation=simulation)
+        data_point_monitor = Monitor(name="Latency", simulation=simulation)
 
         # Start the clients
         for i in range(args.num_clients):
             c = client.Client(id_="Client%s" % (i),
                               server_list=self.servers,
-                              latency_monitor=latency_monitor,
-                              state_latency_monitor=state_latency_monitor,
+                              data_point_monitor=data_point_monitor,
                               state_parser=self.state_parser,
                               replica_selection_strategy=args.selection_strategy,
                               access_pattern=args.access_pattern,
@@ -222,14 +220,14 @@ class ExperimentRunner:
             inter_arrival_time = 1 / float(arrival_rate)
 
         for i in range(args.num_workload):
-            w = workload.Workload(i, latency_monitor,
+            w = workload.Workload(i, data_point_monitor,
                                   self.clients,
                                   args.workload_model,
                                   inter_arrival_time * args.num_workload,
                                   args.num_requests / args.num_workload,
                                   simulation,
-                                  long_tasks_fraction=args.long_tasks_fraction,
-                                  state_latency_monitor=state_latency_monitor)
+                                  long_tasks_fraction=args.long_tasks_fraction
+                                  )
             simulation.process(w.run())
             self.workload_gens.append(w)
 
@@ -306,12 +304,12 @@ class ExperimentRunner:
                 print("Mean:", serv.act_monitor.mean())
 
             print("------- Latency ------")
-            print("Mean Latency:", latency_monitor.mean())
+            print("Mean Latency:", data_point_monitor.mean())
             for p in [50, 95, 99]:
-                print(f"p{p} Latency: {latency_monitor.percentile(p)}")
+                print(f"p{p} Latency: {data_point_monitor.percentile(p)}")
 
             # print_monitor_time_series_to_file(latency_fd, "0",
-            #                                   latency_monitor)
-            assert args.num_requests == len(latency_monitor)
+            #                                   data_point_monitor)
+            assert args.num_requests == len(data_point_monitor)
 
-        return latency_monitor, state_latency_monitor
+        return data_point_monitor

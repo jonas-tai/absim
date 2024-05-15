@@ -1,42 +1,54 @@
-import random
-import math
-from collections import namedtuple
 from pathlib import Path
-from typing import Dict
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
 from matplotlib import pyplot as plt
 
-from replay_memory import ReplayMemory, Transition
-from model import DQN, SummaryStats
-from simulations.state import State
-from collections import defaultdict
-
-StateAction = namedtuple('StateAction', ('state', 'action'))
+from model import DQN
+from simulations.data.csv_dataset import CSVDataset
+from simulations.state import State, StateParser
+import torch.utils.data.dataloader as dataloader
 
 
-class Trainer:
-    def __init__(self, n_actions, long_requests_ratio: float, batch_size=128, gamma=0.8, eps_start=0.9, eps_end=0.05,
-                 eps_decay=1000, tau=0.005, lr=1e-4, tau_decay=10):
+class SupervisedModelTrainer:
+    def __init__(self, n_labels, out_folder: Path, data_path: Path, state_parser: StateParser, seed: int,
+                 target_col: str = 'Replica', print_interval: int = 100, batch_size=128,  lr=1e-4) -> None:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.long_requests_ratio = long_requests_ratio
+        self.seed = seed
+        self.out_folder = out_folder
+        self.state_parser = state_parser
+        self.print_interval = print_interval
 
-        self.task_to_state_action: Dict[str, StateAction] = {}
-        self.task_to_next_state: Dict[str, torch.Tensor] = {}
-        self.task_to_reward: Dict[str, torch.Tensor] = {}
-        self.last_task_id: str = None
+        self.trainset = CSVDataset(
+            mode='train',
+            data_path=data_path,
+            seed=seed,
+            target_col=target_col,
+            transform=torch.from_numpy
+        )
+
+        self.trainloader = dataloader.DataLoader(self.trainset, batch_size=batch_size, shuffle=True)
+
+        self.testset = CSVDataset(
+            mode='test',
+            data_path=data_path,
+            seed=seed,
+            target_col=target_col,
+            transform=torch.from_numpy
+        )
+
+        self.testloader = dataloader.DataLoader(self.testset,  batch_size=batch_size, shuffle=True)
+
+        # val_data = CSVDataset(
+        #     mode='val',
+        #     data_path=data_path,
+        #     target_col='Replica_id',
+        #     transform=ToTensor()
+        # )
 
         self.BATCH_SIZE = batch_size
-        self.GAMMA = gamma
-        self.EPS_START = eps_start
-        self.EPS_END = eps_end
-        self.EPS_DECAY = eps_decay
-        self.TAU = tau
-        self.TAU_DECAY = tau_decay
         self.LR = lr
 
         self.losses = []
@@ -44,164 +56,76 @@ class Trainer:
         self.mean_value = []
         self.reward_logs = []
 
-        # num servers
-        self.n_actions = n_actions
+        self.mode = "train"
+        self.n_feats = self.state_parser.get_state_size()
 
-        n_observations = State.get_state_size(num_servers=n_actions, long_requests_ratio=long_requests_ratio)
+        self.net = DQN(self.n_feats, n_labels).to(self.device)
 
-        self.eval_mode = False
-        self.policy_net = DQN(n_observations, n_actions).to(self.device)
-        self.target_net = DQN(n_observations, n_actions).to(self.device)
-        self.target_net.load_state_dict(self.policy_net.state_dict())
-
-        self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
-        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=50, gamma=0.5)
-        self.memory = ReplayMemory(10000, self.policy_net.summary)
+        self.optimizer = optim.AdamW(self.net.parameters(), lr=self.LR, amsgrad=True)
+        # self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=50, gamma=0.5)
+        self.criterion = nn.CrossEntropyLoss()
 
         self.steps_done = 0
-        self.actions_chosen = defaultdict(int)
 
-        self.reward_stats = SummaryStats(1)
+    def train_model(self, epochs: int) -> None:
+        print(f'Training model for {epochs} epochs')
+        for epoch in range(epochs):
+            running_loss = 0.0
+            for i, data in enumerate(self.trainloader, 0):
+                # get the inputs; data is a list of [inputs, labels]
+                features, labels = data
 
-    def record_state_and_action(self, task_id: str, state: State, action: int) -> None:
-        if self.eval_mode:
-            return
-        action = torch.tensor([[action]], device=self.device)
-        state = state.to_tensor(long_requests_ratio=self.long_requests_ratio)
-        self.task_to_state_action[task_id] = StateAction(state, action)
+                # zero the parameter gradients
+                self.optimizer.zero_grad()
 
-        if self.last_task_id is not None:
-            self.task_to_next_state[self.last_task_id] = state
-            if self.last_task_id in self.task_to_reward:
-                # Reward (latency) of last task already present and not pushed to memory yet
-                self.training_step(task_id=self.last_task_id)
-        self.last_task_id = task_id
+                # forward + backward + optimize
+                outputs = self.net(features)
+                loss = self.criterion(outputs, labels)
+                loss.backward()
 
-    def execute_step_if_state_present(self, task_id: str, latency: int) -> None:
-        if self.eval_mode:
-            return
-        self.task_to_reward[task_id] = torch.tensor([[- latency]], device=self.device, dtype=torch.float32)
-        if task_id not in self.task_to_next_state:
-            # Next state not present because request finished before next request arrived
-            return
-        self.training_step(task_id)
+                grads = [
+                    param.grad.detach().flatten()
+                    for param in self.net.parameters()
+                    if param.grad is not None
+                ]
+                norm = torch.cat(grads).norm()
+                self.grads.append(norm.item())
+                self.losses.append(loss.item())
 
-    def push_to_memory(self, task_id: str) -> None:
-        state_action = self.task_to_state_action[task_id]
-        next_state = self.task_to_next_state[task_id]
-        reward = self.task_to_reward[task_id]
-        self.reward_stats.add(reward)
-        self.memory.push(state_action.state, state_action.action, next_state, reward)
+                self.optimizer.step()
 
-    def clean_up_after_step(self, task_id: str) -> None:
-        del self.task_to_state_action[task_id]
-        del self.task_to_next_state[task_id]
-        del self.task_to_reward[task_id]
+                # print statistics
+                running_loss += loss.item()
+                if i % self.print_interval == (self.print_interval - 1):
+                    print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / self.print_interval:.3f}')
 
-    def training_step(self, task_id: str):
+                    running_loss = 0.0
+        print('Finished Training')
 
-        # Store the transition in memory
-        self.push_to_memory(task_id)
+    def test_model(self) -> None:
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for data in self.testloader:
+                features, labels = data
+                # calculate outputs by running features through the network
+                outputs = self.net(features)
+                # the class with the highest energy is what we choose as prediction
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
 
-        # Perform one step of the optimization (on the policy network)
-        self.optimize_model()
+        print(f'Accuracy of the network on the test data: {100 * correct // total} %')
 
-        # Soft update of the target network's weights
-        # θ′ ← τ θ + (1 −τ )θ′
-        tau = self.TAU + (1 - self.TAU) * math.exp(-1. * self.steps_done / self.TAU_DECAY)
-
-        target_net_state_dict = self.target_net.state_dict()
-        policy_net_state_dict = self.policy_net.state_dict()
-        for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key] * tau + target_net_state_dict[key] * (1 - tau)
-        self.target_net.load_state_dict(target_net_state_dict)
-        self.clean_up_after_step(task_id=task_id)
+    def export_model(self) -> None:
+        PATH = self.out_folder / 'model.pth'
+        torch.save(self.net.state_dict(), PATH)
 
     def select_action(self, state: State):
-        sample = random.random()
-        eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(
-            -1. * self.steps_done / self.EPS_DECAY)
-
-        if self.eval_mode or sample > eps_threshold:
-            with torch.no_grad():
-                # t.max(1) will return the largest column value of each row.
-                # second column on max result is index of where max element was
-                # found, so we pick action with the larger expected reward.
-                q_values = self.policy_net(state.to_tensor(long_requests_ratio=self.long_requests_ratio))
-                # print(q_values)
-                action_chosen = q_values.max(1).indices.view(1, 1)
-        else:
-            action_chosen = torch.tensor([[random.randint(0, self.n_actions - 1)]], device=self.device,
-                                         dtype=torch.long)
-
-        if not self.eval_mode:
-            self.steps_done += 1
-            self.actions_chosen[action_chosen.item()] += 1
-        return action_chosen
-
-    def optimize_model(self):
-        if len(self.memory) < self.BATCH_SIZE:
-            return
-        transitions = self.memory.sample(self.BATCH_SIZE)
-        # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
-        # detailed explanation). This converts batch-array of Transitions
-        # to Transition of batch-arrays.
-        batch = Transition(*zip(*transitions))
-
-        # Compute a mask of non-final states and concatenate the batch elements
-        # (a final state would've been the one after which simulation ended)
-        non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                                batch.next_state)), device=self.device, dtype=torch.bool)
-        non_final_next_states = torch.cat([s for s in batch.next_state if s is not None])
-        state_batch = torch.cat(batch.state)
-        action_batch = torch.cat(batch.action)
-        reward_batch = torch.cat(batch.reward)
-
-        reward_batch = (reward_batch - self.reward_stats.means) * self.reward_stats.inv_sqrt_sd()
-
-        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-        # columns of actions taken. These are the actions which would've been taken
-        # for each batch state according to policy_net
-        state_action_values = self.policy_net(state_batch).gather(1, action_batch)
-
-        # Compute V(s_{t+1}) for all next states.
-        # Expected values of actions for non_final_next_states are computed based
-        # on the "older" target_net; selecting their best reward with max(1).values
-        # This is merged based on the mask, such that we'll have either the expected
-        # state value or 0 in case the state was final.
-        next_state_values = torch.zeros(self.BATCH_SIZE, device=self.device)
-        with torch.no_grad():
-            next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1).values
-        # Compute the expected Q values
-        next_state_values = next_state_values.unsqueeze(1)
-
-        expected_state_action_values = (next_state_values * self.GAMMA) + reward_batch
-
-        self.reward_logs.append(reward_batch.mean().item())
-        self.mean_value.append(next_state_values.mean().item())
-
-        # Compute Huber loss
-        criterion = nn.SmoothL1Loss()
-
-        loss = criterion(state_action_values, expected_state_action_values)
-
-        # Optimize the model
-        self.optimizer.zero_grad()
-        loss.backward()
-
-        grads = [
-            param.grad.detach().flatten()
-            for param in self.policy_net.parameters()
-            if param.grad is not None
-        ]
-        norm = torch.cat(grads).norm()
-
-        self.losses.append(loss.item())
-        self.grads.append(norm.item())
-
-        # In-place gradient clipping
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 1)
-        self.optimizer.step()
+        features = self.state_parser.state_to_tensor(state=state)
+        output = self.net(features)
+        _, predicted = torch.max(output, 1)
+        return predicted
 
     def plot_grads_and_losses(self, plot_path: Path):
         fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
@@ -215,16 +139,3 @@ class Trainer:
         plt.plot(range(len(self.grads)), self.grads)
         plt.savefig(plot_path / 'pdfs/grads.pdf')
         plt.savefig(plot_path / 'grads.jpg')
-
-        fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
-        plt.plot(range(len(self.reward_logs)), self.reward_logs)
-        plt.savefig(plot_path / 'pdfs/rewards.pdf')
-        plt.savefig(plot_path / 'rewards.jpg')
-
-        fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
-        plt.plot(range(len(self.mean_value)), self.mean_value)
-        plt.savefig(plot_path / 'pdfs/mean_value.pdf')
-        plt.savefig(plot_path / 'mean_value.jpg')
-
-    def print_weights(self):
-        self.policy_net.print_weights()

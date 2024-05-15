@@ -5,10 +5,10 @@ import torch
 
 import random
 import numpy as np
-from simulation_args import SimulationArgs
+from simulation_args import SimulationArgs, log_arguments
 from pathlib import Path
 from model_trainer import Trainer
-from simulations.feature_data_analyzer import FeatureDataAnalyzer
+from simulations.feature_data_collector import FeatureDataCollector
 from simulations.plotting import ExperimentPlot
 from experiment_runner import ExperimentRunner
 from simulations.state import StateParser
@@ -17,14 +17,6 @@ from simulations.state import StateParser
 def print_monitor_time_series_to_file(file_desc, prefix, monitor):
     for entry in monitor:
         file_desc.write("%s %s %s\n" % (prefix, entry[0], entry[1]))
-
-
-def log_arguments(out_folder: Path):
-    args_dict = vars(args.args)
-
-    json_file_path = out_folder / 'arguments.json'
-    with open(json_file_path, 'w') as json_file:
-        json.dump(args_dict, json_file, indent=4)
 
 
 def rl_experiment_wrapper(simulation_args: SimulationArgs):
@@ -45,7 +37,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
                       eps_decay=args.args.eps_decay, eps_start=args.args.eps_start, eps_end=args.args.eps_end,
                       tau=args.args.tau, tau_decay=args.args.tau_decay,
                       lr=args.args.lr, batch_size=args.args.batch_size)
-    NUM_EPSIODES = 2000
+    NUM_EPSIODES = 50
     LAST_EPOCH = NUM_EPSIODES - 1
     to_print = False
 
@@ -62,12 +54,12 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
 
     train_plotter = ExperimentPlot(out_folder=plot_path, is_train_data=True)
     test_plotter = ExperimentPlot(out_folder=plot_path, is_train_data=False)
-    train_data_analyzer = FeatureDataAnalyzer(out_folder=plot_path, is_train_data=True)
-    test_data_analyzer = FeatureDataAnalyzer(out_folder=plot_path, is_train_data=False)
+    train_data_analyzer = FeatureDataCollector(out_folder=plot_path, state_parser=state_parser, is_train_data=True)
+    test_data_analyzer = FeatureDataCollector(out_folder=plot_path, state_parser=state_parser, is_train_data=False)
 
     simulation_args.set_print(to_print)
 
-    log_arguments(plot_path)
+    log_arguments(plot_path, simulation_args)
 
     policies_to_run = [
         'ARS',
@@ -85,11 +77,11 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
         for i_episode in range(NUM_EPSIODES):
             print(i_episode)
             simulation_args.set_seed(i_episode)
-            latencies, state_latency_monitor = experiment_runner.run_experiment(simulation_args.args, trainer)
-            train_plotter.add_data(latencies, policy, i_episode)
+            data_point_monitor = experiment_runner.run_experiment(simulation_args.args, trainer)
+            train_plotter.add_data(data_point_monitor, policy, i_episode)
 
-            if i_episode == LAST_EPOCH:
-                train_data_analyzer.add_data(state_latency_monitor, policy=policy, epoch_num=i_episode)
+            if simulation_args.args.collect_data_points or i_episode == LAST_EPOCH:
+                train_data_analyzer.add_data(data_point_monitor, policy=policy, epoch_num=i_episode)
 
             if policy == 'DQN':
                 # Print number of DQN decisions that matched ARS
@@ -101,21 +93,23 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
                 # trainer.print_weights()
 
                 trainer.eval_mode = True
-                test_latencies, test_state_latency_monitor = experiment_runner.run_experiment(
+                test_data_point_monitor = experiment_runner.run_experiment(
                     simulation_args.args, trainer, eval_mode=trainer.eval_mode)
-                test_plotter.add_data(test_latencies, simulation_args.args.selection_strategy, i_episode)
+                test_plotter.add_data(test_data_point_monitor, simulation_args.args.selection_strategy, i_episode)
                 trainer.eval_mode = False
             else:
                 # Note that this uses the same seed at the moment
-                test_plotter.add_data(latencies, simulation_args.args.selection_strategy, i_episode)
+                test_plotter.add_data(data_point_monitor, simulation_args.args.selection_strategy, i_episode)
 
     print('Finished')
-    train_data_analyzer.run_latency_lin_reg()
+    train_data_analyzer.run_latency_lin_reg(epoch=LAST_EPOCH)
 
     train_plotter.export_data(file_name='train_data.csv')
     test_plotter.export_data(file_name='test_data.csv')
 
-    train_data_analyzer.export_data()
+    train_data_analyzer.export_epoch_data(epoch=LAST_EPOCH)
+    if simulation_args.args.collect_data_points:
+        train_data_analyzer.export_training_data()
 
     trainer.plot_grads_and_losses(plot_path=plot_path)
 

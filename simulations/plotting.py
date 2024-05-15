@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 from simulations.monitor import Monitor
-from simulations.client import LatencyReplica
+from simulations.client import DataPoint
 
 
 class ExperimentPlot:
@@ -19,7 +19,7 @@ class ExperimentPlot:
         self.is_train_data = is_train_data
 
     def add_data(self, monitor: Monitor, policy: str, epoch_num: int):
-        latency_replica_time_tuples: List[Tuple[LatencyReplica, float]] = monitor.get_data()
+        latency_replica_time_tuples: List[Tuple[DataPoint, float]] = monitor.get_data()
         df_entries = [{
             "Time": time,
             "Latency": latency_replica.latency,

@@ -14,12 +14,11 @@ from simulations.server import Server
 from simulations.state import NodeState, State, StateParser
 from collections import defaultdict, namedtuple
 
-LatencyReplica = namedtuple('LatencyReplica', ('latency', 'replica_id'))
-StateLatency = namedtuple('StateLatency', ('state', 'latency'))
+DataPoint = namedtuple('LatencyReplica', ('state', 'latency', 'replica_id'))
 
 
 class Client:
-    def __init__(self, id_, server_list: List[Server], latency_monitor: Monitor, state_latency_monitor: Monitor, state_parser: StateParser, replica_selection_strategy,
+    def __init__(self, id_, server_list: List[Server], data_point_monitor: Monitor, state_parser: StateParser, replica_selection_strategy,
                  access_pattern, replication_factor, backpressure,
                  shadow_read_ratio, rate_interval,
                  cubic_c, cubic_smax, cubic_beta, hysterisis_factor,
@@ -28,8 +27,7 @@ class Client:
             rate_intervals = [1000, 500, 100]
         self.id = id_
         self.state_parser = state_parser
-        self.latency_monitor = latency_monitor
-        self.state_latency_monitor = state_latency_monitor
+        self.data_point_monitor = data_point_monitor
         self.server_list = server_list
         self.accessPattern = access_pattern
         self.replication_factor = replication_factor
@@ -462,12 +460,9 @@ class ResponseHandler:
                 client.trainer.execute_step_if_state_present(task_id=task.id, latency=latency)
 
             state = task.get_state()
-            if state is not None:
-                client.state_latency_monitor.observe(StateLatency(
-                    state=client.state_parser.state_to_tensor(state=state), latency=latency))
 
             replica_id = replica_that_served.id
-            client.latency_monitor.observe(LatencyReplica(latency=latency, replica_id=replica_id))
+            client.data_point_monitor.observe(DataPoint(state=state, latency=latency, replica_id=replica_id))
 
 
 class RequestRateMonitor:

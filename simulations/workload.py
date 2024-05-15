@@ -8,10 +8,9 @@ import numpy
 
 class Workload:
 
-    def __init__(self, id_, latency_monitor: Monitor, client_list: List[Client],
-                 model, model_param, num_requests, simulation, state_latency_monitor: Monitor, long_tasks_fraction: float = 0):
-        self.latency_monitor = latency_monitor
-        self.state_latency_monitor = state_latency_monitor
+    def __init__(self, id_, data_point_monitor: Monitor, client_list: List[Client],
+                 model, model_param, num_requests, simulation, long_tasks_fraction: float = 0):
+        self.data_point_monitor = data_point_monitor
         self.client_list = client_list
         self.model = model
         self.model_param = model_param
