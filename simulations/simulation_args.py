@@ -13,12 +13,7 @@ class SimulationArgs:
         parser.add_argument('--num_workload', nargs='?',
                             type=int, default=1, help='Number of workload generators. Seems to distribute the '
                                                       'tasks out to different clients.')
-        parser.add_argument('--server_concurrency', nargs='?',
-                            type=int, default=1, help='Amount of resources per server.')
-        parser.add_argument('--service_time', nargs='?',
-                            type=float, default=25, help='Mean? service time per server')
-        parser.add_argument('--service_time_model', nargs='?',
-                            type=str, default="constant", help='Distribution of service time on server (random.expovariate | constant | math.sin')
+
         parser.add_argument('--replication_factor', nargs='?',
                             type=int, default=3, help='Replication factor (# of choices)')
         parser.add_argument('--selection_strategy', nargs='?',
@@ -51,7 +46,7 @@ class SimulationArgs:
         parser.add_argument('--seed', nargs='?',
                             type=int, default=25072014)
         parser.add_argument('--simulation_duration', nargs='?',
-                            type=int, default=100000, help='Time that experiment takes, '
+                            type=int, default=10000000, help='Time that experiment takes, '
                                                            'note that if this is too low and numRequests is too high, '
                                                            'it will error')
 
@@ -83,9 +78,32 @@ class SimulationArgs:
         parser.add_argument('--print', action='store_true',
                             default=True, help='Prints latency at the end of the experiment')
         parser.add_argument('--poly_feat_degree', nargs='?',
-                            type=float, default=1, help='Degree of created polynomial and interaction features')
+                            type=float, default=3, help='Degree of created polynomial and interaction features')
         parser.add_argument('--collect_data_points', action='store_true',
-                            default=True, help='Collect and export data points for training of supervised model')
+                            default=False, help='Collect and export data points for training of supervised model')
+        parser.add_argument('--server_concurrency', nargs='?',
+                            type=int, default=2, help='Amount of resources per server.')
+        parser.add_argument('--service_time', nargs='?',
+                            type=float, default=25, help='Mean? service time per server')
+        parser.add_argument('--service_time_model', nargs='?',
+                            type=str, default="random.expovariate", help='Distribution of service time on server (random.expovariate | constant | math.sin')
+        parser.add_argument('--utilization', nargs='?',
+                            type=float, default=0.8, help='Arrival rate of requests')
+        parser.add_argument('--num_requests', nargs='?',
+                            type=int, default=1000, help='Number of requests')
+        parser.add_argument('--exp_scenario', nargs='?',
+                            type=str, default="base",
+                            help='Defines some scenarios for experiments such as \n'
+                                 '[base] - default setting\n'
+                                 '[heterogenous_static_nw_delay] - fraction o6 servers have slow nw\n'
+                                 '[multipleServiceTimeServers] - increasing mean service time '
+                                 'based on server index\n'
+                                 '[heterogenousStaticServiceTimeScenario] - '
+                                 'fraction of servers are slower\n'
+                                 '[time_varying_service_time_servers] - servers change service times')
+        parser.add_argument('--workload_model', nargs='?',
+                            type=str, default="poisson",
+                            help='Arrival model of requests from client (constant | poisson)')
 
         # Slow network setting parameters
         parser.add_argument('--nw_latency_base', nargs='?',
@@ -107,37 +125,28 @@ class SimulationArgs:
                             type=float, default=0.0, help='Fraction of tasks that are long tasks'
                             '(expScenario=heterogenous_static_nw_delay)')
         parser.add_argument('--long_task_added_service_time', nargs='?',
-                            type=float, default=100,
+                            type=float, default=200,
                             help='How many times slower than short tasks the long tasks take ')
 
-        parser.add_argument('--utilization', nargs='?',
-                            type=float, default=0.8, help='Arrival rate of requests')
-        parser.add_argument('--num_requests', nargs='?',
-                            type=int, default=400, help='Number of requests')
-        parser.add_argument('--exp_scenario', nargs='?',
-                            type=str, default="base",
-                            help='Defines some scenarios for experiments such as \n'
-                                 '[base] - default setting\n'
-                                 '[heterogenous_static_nw_delay] - fraction of servers have slow nw\n'
-                                 '[multipleServiceTimeServers] - increasing mean service time '
-                                 'based on server index\n'
-                                 '[heterogenousStaticServiceTimeScenario] - '
-                                 'fraction of servers are slower\n'
-                                 '[time_varying_service_time_servers] - servers change service times')
-        parser.add_argument('--workload_model', nargs='?',
-                            type=str, default="constant",
-                            help='Arrival model of requests from client (constant | poisson)')
+        # RL Training
+        parser.add_argument('--epochs', nargs='?',
+                            type=int, default=400, help='Number of training epochs')
+        parser.add_argument('--num_requests_test', nargs='?',
+                            type=int, default=60000, help='Number of requests for test epochs')
+        parser.add_argument('--test_epochs', nargs='?',
+                            type=int, default=5, help='Number of test epochs')
 
+        # RL Model parameters
         parser.add_argument('--gamma', nargs='?',
                             type=float, default=0.99, help='Model trainer argument')
         parser.add_argument('--lr', nargs='?',
-                            type=float, default=1e-4, help='Model trainer argument')
+                            type=float, default=1e-5, help='Model trainer argument')
         parser.add_argument('--tau', nargs='?',
                             type=float, default=0.005, help='Model trainer argument')
         parser.add_argument('--eps_decay', nargs='?',
                             type=float, default=10000, help='Model trainer argument')
         parser.add_argument('--batch_size', nargs='?',
-                            type=float, default=256, help='Model trainer argument')
+                            type=float, default=32, help='Model trainer argument')
         parser.add_argument('--tau_decay', nargs='?',
                             type=float, default=10000000, help='Model trainer argument')
         parser.add_argument('--eps_start', nargs='?',
@@ -159,6 +168,9 @@ class SimulationArgs:
 
     def set_seed(self, seed):
         self.args.seed = seed
+
+    def set_num_requests(self, num_requests):
+        self.args.num_requests = num_requests
 
 
 class TimeVaryingArgs(SimulationArgs):

@@ -11,7 +11,7 @@ import torch.nn.functional as F
 from matplotlib import pyplot as plt
 
 from replay_memory import ReplayMemory, Transition
-from model import DQN, SummaryStats
+from simulations.models.dqn import DQN, SummaryStats
 from simulations.state import State, StateParser
 from collections import defaultdict
 

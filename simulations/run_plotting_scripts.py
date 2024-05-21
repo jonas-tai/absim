@@ -16,13 +16,21 @@ policy_colors = {
 def plot(df):
     plt.rcParams.update({'font.size': 14})
     fig, axes = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
+
+    print(f'Mean and median latency')
+    # print(df[df['Epoch'] > 20].groupby(['Policy'])['Latency'].mean())
+    # print(df[df['Epoch'] > 20].groupby(['Policy'])['Latency'].median())
+
+    print(df.groupby(['Policy'])['Latency'].mean())
+    print(df.groupby(['Policy'])['Latency'].median())
+
     sns.lineplot(df, x="Epoch", y="Latency", hue="Policy", ax=axes, palette=policy_colors)
-    plt.yscale('log')
+    # plt.yscale('log')
     axes.get_legend().remove()
 
     fig.legend(loc='lower center', ncols=3)
     plt.tight_layout(rect=[0, 0.08, 1, 1])
-    plt.ylim(top=150)
+    # plt.ylim(top=150)
 
     return fig, axes
 
@@ -37,7 +45,7 @@ def plot_episode(df, epoch: int):
 
     fig.legend(loc='lower center', ncols=3)
     plt.tight_layout(rect=[0, 0.08, 1, 1])
-    plt.ylim(top=50)
+    # plt.ylim(top=50)
     return fig, axes
 
 
@@ -45,22 +53,26 @@ def plot_quantile(df, quantile: float, title: str):
     plt.rcParams.update({'font.size': 14})
 
     fig, axes = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
+    print(f'Quantile: {quantile}')
+    # print(df[df['Epoch'] > 20].groupby(['Policy'])['Latency'].quantile(quantile))
+    print(df.groupby(['Policy'])['Latency'].quantile(quantile))
+
     quantiles = df.groupby(['Policy', 'Epoch'])['Latency'].quantile(quantile).reset_index()
 
     sns.lineplot(data=quantiles, x="Epoch", y=f'Latency', hue="Policy", ax=axes, palette=policy_colors)
     plt.title(title)
-    plt.yscale('log')
+    # plt.yscale('log')
     axes.get_legend().remove()
 
     fig.legend(loc='lower center', ncols=3)
     plt.tight_layout(rect=[0, 0.08, 1, 1])
-    plt.ylim(top=150)
+    # plt.ylim(top=150)
 
     return fig, axes
 
 
-base_path = Path('/home/jonas/projects/absim/plots/XXXXX')
-df = pd.read_csv(base_path / 'train_data.csv')
+base_path = Path('/home/jonas/projects/absim/plots/143')
+df = pd.read_csv(base_path / 'test_data.csv')
 
 out_folder = base_path / 'report'
 
@@ -83,10 +95,10 @@ fig, ax = plot_quantile(df, 0.99, title='p99 Latency')
 plt.savefig(out_folder / 'output_train_p_99.pdf')
 plt.savefig(out_folder / 'output_train_p_99.jpg')
 
-plt_episode = 400 - 1
-fig, ax = plot_episode(df=df, epoch=plt_episode)
-plt.savefig(out_folder / f'output_train_{plt_episode}_epoch.pdf')
-plt.savefig(out_folder / f'output_train_{plt_episode}_epoch.jpg')
+# plt_episode = 400 - 1
+# fig, ax = plot_episode(df=df, epoch=plt_episode)
+# plt.savefig(out_folder / f'output_train_{plt_episode}_epoch.pdf')
+# plt.savefig(out_folder / f'output_train_{plt_episode}_epoch.jpg')
 
 
 fig, axes = plot(df)

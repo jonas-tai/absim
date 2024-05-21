@@ -28,7 +28,7 @@ def supervised_learning_wrapper(simulation_args: SimulationArgs):
 
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
-    NUM_EPSIODES = 50
+    NUM_EPSIODES = 10
     LAST_EPOCH = NUM_EPSIODES - 1
     SEED = 1
     to_print = False
@@ -44,7 +44,7 @@ def supervised_learning_wrapper(simulation_args: SimulationArgs):
     os.makedirs(plot_path, exist_ok=True)
     os.makedirs(plot_path / 'pdfs', exist_ok=True)
 
-    data_path = Path('/home/jonas/projects/absim/plots/42/data/train_data_points.csv')
+    data_path = Path('/home/jonas/projects/absim/plots/112/data/train_data_points.csv')
 
     trainer = SupervisedModelTrainer(state_parser=state_parser, lr=args.args.lr, batch_size=args.args.batch_size,
                                      n_labels=simulation_args.args.num_servers, out_folder=plot_path, data_path=data_path, seed=1)
@@ -55,6 +55,8 @@ def supervised_learning_wrapper(simulation_args: SimulationArgs):
     print('Starting experiments')
     trainer.train_model(epochs=NUM_EPSIODES)
     print('Finished')
+
+    trainer.test_model()
 
     trainer.plot_grads_and_losses(plot_path=plot_path)
 

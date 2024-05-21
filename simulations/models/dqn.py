@@ -10,10 +10,10 @@ class DQN(nn.Module):
     def __init__(self, n_observations, n_actions, n_hidden=128):
         super(DQN, self).__init__()
 
-        self.layer1 = nn.Linear(n_observations, n_hidden)
-        self.layer2 = nn.Linear(n_hidden, n_hidden)
-        self.layer3 = nn.Linear(n_hidden, n_actions)
-        # self.layer3 = nn.Linear(n_observations, n_actions)
+        # self.layer1 = nn.Linear(n_observations, n_hidden)
+        # self.layer2 = nn.Linear(n_hidden, n_hidden)
+        # self.layer3 = nn.Linear(n_hidden, n_actions)
+        self.layer3 = nn.Linear(n_observations, n_actions)
         self.summary = SummaryStats(n_observations)
 
     # Called with either one element to determine next action, or a batch
@@ -21,8 +21,8 @@ class DQN(nn.Module):
     def forward(self, x):
         x = (x - self.summary.means) * self.summary.inv_sqrt_sd()
 
-        x = F.relu(self.layer1(x))
-        x = F.relu(self.layer2(x))
+        # x = F.relu(self.layer1(x))
+        # x = F.relu(self.layer2(x))
         x = self.layer3(x)
         return x
 

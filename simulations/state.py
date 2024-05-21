@@ -8,6 +8,7 @@ from sklearn.preprocessing import PolynomialFeatures
 class NodeState:
     response_time: float
     outstanding_requests: float
+    ars_score: float
     queue_size: float = 0
     service_time: float = 0
     # Wait time is no feature of ARS, we should experiment with using it
@@ -36,7 +37,8 @@ class StateParser:
         self.poly_feat_degree = poly_feat_degree
 
     def create_dummy_state(self) -> State:
-        node_states = [NodeState(response_time=0.0, outstanding_requests=0.0) for _ in range(self.num_servers)]
+        node_states = [NodeState(response_time=0.0, outstanding_requests=0.0, ars_score=0.0)
+                       for _ in range(self.num_servers)]
         dummy_state = State(time_since_last_req=0, is_long_request=False, request_trend=[
                             0 for _ in range(self.num_request_rates)], node_states=node_states)
         return dummy_state
@@ -58,7 +60,8 @@ class StateParser:
 
     def node_state_to_tensor(self, node_state: NodeState) -> torch.Tensor:
         state_features = [node_state.queue_size, node_state.service_time,
-                          node_state.wait_time, node_state.response_time, node_state.outstanding_requests]
+                          node_state.wait_time, node_state.response_time, node_state.outstanding_requests]  # node_state.ars_score
+        # state_features = [node_state.ars_score]
         # node_state.twice_network_latency
 
         if self.long_requests_ratio > 0:
@@ -71,6 +74,7 @@ class StateParser:
             [self.node_state_to_tensor(node_state) for node_state in state.node_states], 1)
 
         general_state = state.request_trend + [state.time_since_last_req]
+        # general_state = []
         if self.long_requests_ratio > 0:
             general_state += [int(state.is_long_request)]
         general_state_tensor = torch.tensor([general_state], dtype=torch.float32)

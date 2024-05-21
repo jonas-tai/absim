@@ -5,7 +5,8 @@ import torch.nn as nn
 import torch.optim as optim
 from matplotlib import pyplot as plt
 
-from model import DQN
+from simulations.models.classifier import Classifier
+from simulations.models.dqn import DQN
 from simulations.data.csv_dataset import CSVDataset
 from simulations.state import State, StateParser
 import torch.utils.data.dataloader as dataloader
@@ -13,7 +14,7 @@ import torch.utils.data.dataloader as dataloader
 
 class SupervisedModelTrainer:
     def __init__(self, n_labels, out_folder: Path, data_path: Path, state_parser: StateParser, seed: int,
-                 target_col: str = 'Replica', print_interval: int = 100, batch_size=128,  lr=1e-4) -> None:
+                 target_col: str = 'Replica', print_interval: int = 200, batch_size=128,  lr=1e-4) -> None:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.seed = seed
@@ -53,13 +54,12 @@ class SupervisedModelTrainer:
 
         self.losses = []
         self.grads = []
-        self.mean_value = []
-        self.reward_logs = []
+        self.accuracies = []
 
         self.mode = "train"
         self.n_feats = self.state_parser.get_state_size()
 
-        self.net = DQN(self.n_feats, n_labels).to(self.device)
+        self.net = Classifier(self.n_feats, n_labels).to(self.device)
 
         self.optimizer = optim.AdamW(self.net.parameters(), lr=self.LR, amsgrad=True)
         # self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=50, gamma=0.5)
@@ -69,6 +69,8 @@ class SupervisedModelTrainer:
 
     def train_model(self, epochs: int) -> None:
         print(f'Training model for {epochs} epochs')
+
+        LAST_EPOCHS = epochs - 1
         for epoch in range(epochs):
             running_loss = 0.0
             for i, data in enumerate(self.trainloader, 0):
@@ -78,8 +80,19 @@ class SupervisedModelTrainer:
                 # zero the parameter gradients
                 self.optimizer.zero_grad()
 
+                # print(features)
                 # forward + backward + optimize
                 outputs = self.net(features)
+
+                _, predicted = torch.max(outputs.data, 1)
+                total = labels.size(0)
+                correct = (predicted == labels).sum().item()
+
+                # if epoch == LAST_EPOCHS:
+                _, predicted = torch.max(outputs, 1)
+                # print(outputs)
+                # print(predicted)
+                # print(labels)
                 loss = self.criterion(outputs, labels)
                 loss.backward()
 
@@ -97,9 +110,12 @@ class SupervisedModelTrainer:
                 # print statistics
                 running_loss += loss.item()
                 if i % self.print_interval == (self.print_interval - 1):
+                    print(f'Accuracy of the network on the last batch: {100 * correct // total} %')
+
                     print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / self.print_interval:.3f}')
 
-                    running_loss = 0.0
+                running_loss = 0.0
+            self.test_model()
         print('Finished Training')
 
     def test_model(self) -> None:
@@ -112,10 +128,16 @@ class SupervisedModelTrainer:
                 outputs = self.net(features)
                 # the class with the highest energy is what we choose as prediction
                 _, predicted = torch.max(outputs.data, 1)
+
+                # print(outputs)
+                # print(predicted)
+                # print(labels)
+
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
-
-        print(f'Accuracy of the network on the test data: {100 * correct // total} %')
+        accuracy = 100 * correct // total
+        self.accuracies.append(accuracy)
+        print(f'Accuracy of the network on the test data: {accuracy} %')
 
     def export_model(self) -> None:
         PATH = self.out_folder / 'model.pth'
@@ -139,3 +161,9 @@ class SupervisedModelTrainer:
         plt.plot(range(len(self.grads)), self.grads)
         plt.savefig(plot_path / 'pdfs/grads.pdf')
         plt.savefig(plot_path / 'grads.jpg')
+
+        plt.clf()
+        fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
+        plt.plot(range(len(self.accuracies)), self.accuracies)
+        plt.savefig(plot_path / 'pdfs/accuracies.pdf')
+        plt.savefig(plot_path / 'accuracies.jpg')
