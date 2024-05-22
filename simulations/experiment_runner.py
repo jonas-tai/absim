@@ -44,7 +44,7 @@ class ExperimentRunner:
         assert args.exp_scenario != ""
 
         service_rate_per_server = []
-        if args.exp_scenario == "base":
+        if args.exp_scenario == "base" or args.exp_scenario == 'heterogenous_requests_scenario':
             # Start the servers
             for i in range(args.num_servers):
                 serv = server.Server(i,
@@ -238,11 +238,11 @@ class ExperimentRunner:
         # print(a bunch of timeseries)
         #
 
-        exp_prefix = f'{args.exp_prefix}_test' if eval_mode else args.exp_prefix
-        exp_path = Path('..', args.log_folder, exp_prefix)
+        # exp_prefix = f'{args.exp_prefix}_test' if eval_mode else args.exp_prefix
+        # exp_path = Path('..', args.log_folder, exp_prefix)
 
-        if not exp_path.exists():
-            exp_path.mkdir(parents=True, exist_ok=True)
+        # if not exp_path.exists():
+        #     exp_path.mkdir(parents=True, exist_ok=True)
 
         # pending_requests_fd = open("../%s/%s_PendingRequests" %
         #                            (args.log_folder,

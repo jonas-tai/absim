@@ -8,7 +8,7 @@ from simulations.client import DataPoint
 
 
 class ExperimentPlot:
-    def __init__(self, out_folder: Path, is_train_data: bool = True):
+    def __init__(self, plot_folder: Path, data_folder: Path):
         self.df = None
         self.policy_colors = {
             "ARS": "C0",
@@ -17,8 +17,8 @@ class ExperimentPlot:
             "round_robin": "C3",
             'DQN_EXPLR': "C4",
         }
-        self.out_folder = out_folder
-        self.is_train_data = is_train_data
+        self.plot_folder = plot_folder
+        self.data_folder = data_folder
 
     def add_data(self, monitor: Monitor, policy: str, epoch_num: int):
         latency_replica_time_tuples: List[Tuple[DataPoint, float]] = monitor.get_data()
@@ -41,13 +41,12 @@ class ExperimentPlot:
         return - self.df[self.df['Policy'] == 'DQN']['Latency'].quantile(0.99)
 
     def export_data(self, file_name: str = 'train_data.csv'):
-        out_path = self.out_folder / file_name
+        out_path = self.data_folder / file_name
         self.df.to_csv(out_path)
 
     def export_plots(self, file_name: str) -> None:
-        prefix = 'train' if self.is_train_data else 'test'
-        plt.savefig(self.out_folder / f'pdfs/{prefix}_{file_name}.pdf')
-        plt.savefig(self.out_folder / f'{prefix}_{file_name}.jpg')
+        plt.savefig(self.plot_folder / f'pdfs/{file_name}.pdf')
+        plt.savefig(self.plot_folder / f'{file_name}.jpg')
 
     def plot_latency(self):
         plt.rcParams.update({'font.size': 14})

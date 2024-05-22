@@ -1,5 +1,6 @@
 .idea
 logs
+outputs
 plots
 simulations/__pycache__
 *.pyc

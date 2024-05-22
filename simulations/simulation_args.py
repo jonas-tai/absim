@@ -1,10 +1,11 @@
 import argparse
 import json
 from pathlib import Path
+from typing import Any, List
 
 
 class SimulationArgs:
-    def __init__(self, input_args=None):
+    def __init__(self, input_args=None) -> None:
         parser = argparse.ArgumentParser(description='Absinthe sim.')
         parser.add_argument('--num_clients', nargs='?',
                             type=int, default=1, help='Number of clients')
@@ -50,8 +51,9 @@ class SimulationArgs:
                                                            'note that if this is too low and numRequests is too high, '
                                                            'it will error')
 
-        parser.add_argument('--log_folder', nargs='?', type=str, default="logs")
+        parser.add_argument('--data_folder', nargs='?', type=str, default="data")
         parser.add_argument('--plot_folder', nargs='?', type=str, default="plots")
+        parser.add_argument('--output_folder',  nargs='?', type=str, default="outputs")
 
         parser.add_argument('--demand_skew', nargs='?',
                             type=float, default=0, help='Skews clients such that some clients send many'
@@ -95,7 +97,8 @@ class SimulationArgs:
                             type=str, default="base",
                             help='Defines some scenarios for experiments such as \n'
                                  '[base] - default setting\n'
-                                 '[heterogenous_static_nw_delay] - fraction o6 servers have slow nw\n'
+                                 '[heterogenous_requests_scenario] - fraction of requests is long\n'
+                                 '[heterogenous_static_nw_delay] - fraction of servers have slow nw\n'
                                  '[multipleServiceTimeServers] - increasing mean service time '
                                  'based on server index\n'
                                  '[heterogenousStaticServiceTimeScenario] - '
@@ -167,6 +170,7 @@ class SimulationArgs:
         self.parser = parser
         print(input_args)
         self.args = parser.parse_args(args=input_args)
+        print('After')
         print(self.args)
 
         assert self.args.replication_factor == self.args.num_servers, ('Replication factor is not equal to number of'
@@ -186,19 +190,47 @@ class SimulationArgs:
 
 
 class TimeVaryingArgs(SimulationArgs):
-    def __init__(self, interval_param=1.0, time_varying_drift=1.0):
-        super().__init__()
+    def __init__(self, interval_param: float = 1.0, time_varying_drift: float = 1.0, input_args=None) -> None:
+        super().__init__(input_args=input_args)
         self.args.exp_scenario = 'time_varying_service_time_servers'
         self.args.interval_param = interval_param
         self.args.time_varying_drift = time_varying_drift
 
+    def to_string(self) -> str:
+        return f'time_varying_service_time_servers_{self.args.interval_param}_{self.args.time_varying_drift}'
+
 
 class SlowServerArgs(SimulationArgs):
-    def __init__(self, slow_server_fraction=0.5, slow_server_slowness=0.5):
-        super().__init__()
+    def __init__(self, slow_server_fraction: float = 0.5, slow_server_slowness: float = 0.5, input_args=None) -> None:
+        super().__init__(input_args=input_args)
         self.args.exp_scenario = 'heterogenous_static_service_time_scenario'
         self.args.slow_server_fraction = slow_server_fraction
         self.args.slow_server_slowness = slow_server_slowness
+
+    def to_string(self) -> str:
+        return f'heterogenous_static_service_time_scenario_{self.args.slow_server_fraction}_{self.args.slow_server_slowness}'
+
+
+class HeterogeneousRequestsArgs(SimulationArgs):
+    def __init__(self, long_tasks_fraction: float = 0.2, long_task_added_service_time: int = 200, input_args=None) -> None:
+        super().__init__(input_args=input_args)
+        print('Initialized')
+        self.args.exp_scenario = 'heterogenous_requests_scenario'
+        self.args.long_task_added_service_time = long_task_added_service_time
+        self.args.long_tasks_fraction = long_tasks_fraction
+
+    def to_string(self) -> str:
+        return f'heterogenous_requests_scenario_{self.args.long_tasks_fraction}_{self.args.long_task_added_service_time}'
+
+
+class BaseArgs(SimulationArgs):
+    def __init__(self, input_args=None) -> None:
+        super().__init__(input_args=input_args)
+        self.args.exp_scenario = 'base'
+        self.args.long_tasks_fraction = 0.0
+
+    def to_string(self) -> str:
+        return 'base'
 
 
 def log_arguments(out_folder: Path, args):

@@ -20,7 +20,7 @@ class AnalysisData:
 
 
 class FeatureDataCollector:
-    def __init__(self, out_folder: Path, state_parser: StateParser, is_train_data: bool = True) -> None:
+    def __init__(self, out_folder: Path, state_parser: StateParser) -> None:
         self.data: List[AnalysisData] = []
         self.policy_colors = {
             "ARS": "C0",
@@ -30,7 +30,6 @@ class FeatureDataCollector:
             'DQN_EXPLR': "C4",
         }
         self.out_folder = out_folder
-        self.is_train_data = is_train_data
         self.state_parser = state_parser
 
     def add_data(self, monitor: Monitor, policy: str, epoch_num: int) -> None:
@@ -50,32 +49,22 @@ class FeatureDataCollector:
                          reward_data=reward_data, feature_data=feature_data))
 
     def export_epoch_data(self, epoch: int) -> None:
-        prefix = 'train' if self.is_train_data else 'test'
-        data_out_folder = self.out_folder / 'data'
-        os.makedirs(data_out_folder, exist_ok=True)
-
         for analysis_data in self.data:
             if analysis_data.epoch != epoch:
                 continue
-            out_path = data_out_folder / f'{prefix}_{analysis_data.epoch}_{analysis_data.policy}_data.csv'
+            out_path = self.out_folder / f'{analysis_data.epoch}_{analysis_data.policy}_data.csv'
             combined_df = pd.concat(objs=[analysis_data.reward_data, analysis_data.feature_data], axis=1)
             combined_df.reset_index(drop=True, inplace=True)
             combined_df.to_csv(out_path)
 
     def export_training_data(self) -> None:
-        prefix = 'train' if self.is_train_data else 'test'
-        data_out_folder = self.out_folder / 'data'
-        out_path = data_out_folder / f'{prefix}_data_points.csv'
-
-        os.makedirs(data_out_folder, exist_ok=True)
-
         train_data_df = pd.DataFrame()
         for analysis_data in self.data:
             combined_df = pd.concat(objs=[analysis_data.reward_data['Replica'], analysis_data.feature_data], axis=1)
             combined_df.reset_index(drop=True, inplace=True)
             train_data_df = pd.concat([train_data_df, combined_df], ignore_index=True)
 
-        train_data_df.to_csv(out_path, index=False)
+        train_data_df.to_csv(self.out_folder, index=False)
 
     def run_latency_lin_reg(self, epoch: int) -> None:
         prefix = 'train' if self.is_train_data else 'test'

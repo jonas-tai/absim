@@ -199,7 +199,6 @@ class Client:
             replica_set[0] = replica_set[self.next_RR_replica]
             # Increase round robin counter
             self.next_RR_replica = (self.next_RR_replica + 1) % len(self.server_list)
-
         elif self.REPLICA_SELECTION_STRATEGY == "pending":
             # Sort by number of pending requests
             replica_set.sort(key=self.pendingRequestsMap.get)
@@ -271,20 +270,14 @@ class Client:
         return replica_set[0]
 
     def get_ars_ranking(self, replica_list: List[Server]) -> List[Server]:
-        # sort_map = {}
-        # print('Calculating ARS score')
         for replica in replica_list:
-            # print(replica.id)
             self.arsScoresMap[replica] = self.compute_expected_delay(replica)
-            # sort_map[replica] = self.compute_expected_delay(replica)
 
         replica_set = replica_list.copy()
-        # print(self.arsScoresMap.items())
         replica_set.sort(key=self.arsScoresMap.get)
         return replica_set
 
     def get_node_state(self, replica: Server) -> NodeState:
-        # print(replica.id)
         outstanding_requests = self.pendingRequestsMap[replica]
         response_time = self.responseTimesMap[replica]
         long_requests = self.pending_long_requests[replica]
@@ -408,7 +401,7 @@ class Client:
 
 
 class DeliverMessageWithDelay:
-    def __init__(self, simulation):
+    def __init__(self, simulation) -> None:
         # self.simulation.process(self.run())
         # self.simulation.Process.__init__(self, name='DeliverMessageWithDelay')
         self.simulation = simulation
@@ -419,7 +412,7 @@ class DeliverMessageWithDelay:
 
 
 class ResponseHandler:
-    def __init__(self, simulation, trainer: Trainer = None):
+    def __init__(self, simulation) -> None:
         self.simulation = simulation
 
     def run(self, client: Client, task: Task, replica_that_served):
