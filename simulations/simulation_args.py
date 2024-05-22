@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 class SimulationArgs:
-    def __init__(self):
+    def __init__(self, input_args=None):
         parser = argparse.ArgumentParser(description='Absinthe sim.')
         parser.add_argument('--num_clients', nargs='?',
                             type=int, default=1, help='Number of clients')
@@ -146,18 +146,24 @@ class SimulationArgs:
         parser.add_argument('--tau', nargs='?',
                             type=float, default=0.005, help='Model trainer argument')
         parser.add_argument('--eps_decay', nargs='?',
-                            type=float, default=10000, help='Model trainer argument')
+                            type=int, default=10000, help='Model trainer argument')
         parser.add_argument('--batch_size', nargs='?',
-                            type=float, default=32, help='Model trainer argument')
+                            type=int, default=32, help='Model trainer argument')
         parser.add_argument('--tau_decay', nargs='?',
-                            type=float, default=10000000, help='Model trainer argument')
+                            type=int, default=10000000, help='Model trainer argument')
         parser.add_argument('--eps_start', nargs='?',
                             type=float, default=0.9, help='Model trainer argument')
         parser.add_argument('--eps_end', nargs='?',
                             type=float, default=0.0, help='Model trainer argument')
+        parser.add_argument('--lr_scheduler_step_size', nargs='?',
+                            type=int, default=100, help='Model trainer argument')
+        parser.add_argument('--lr_scheduler_gamma', nargs='?',
+                            type=float, default=0.5, help='Model trainer argument')
 
         self.parser = parser
-        self.args = parser.parse_args()
+        print(input_args)
+        self.args = parser.parse_args(args=input_args)
+        print(self.args)
 
         assert self.args.replication_factor == self.args.num_servers, ('Replication factor is not equal to number of'
                                                                        ' servers, i.e., #actions != #servers')

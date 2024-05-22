@@ -20,7 +20,7 @@ StateAction = namedtuple('StateAction', ('state', 'action'))
 
 class Trainer:
     def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int, batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2,
-                 eps_decay=1000, tau=0.005, lr=1e-4, tau_decay=10):
+                 eps_decay=1000, tau=0.005, lr=1e-4, tau_decay=10, lr_scheduler_step_size=50, lr_scheduler_gamma=0.5):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.state_parser = state_parser
 
@@ -54,7 +54,8 @@ class Trainer:
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
-        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.5)
+        self.scheduler = optim.lr_scheduler.StepLR(
+            self.optimizer, step_size=lr_scheduler_step_size, gamma=lr_scheduler_gamma)
         self.memory = ReplayMemory(10000, self.policy_net.summary)
 
         self.steps_done = 0

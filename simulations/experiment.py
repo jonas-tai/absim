@@ -9,6 +9,7 @@ from simulation_args import SimulationArgs, log_arguments
 from pathlib import Path
 from model_trainer import Trainer
 from simulations.feature_data_collector import FeatureDataCollector
+from simulations.monitor import Monitor
 from simulations.plotting import ExperimentPlot
 from experiment_runner import ExperimentRunner
 from simulations.state import StateParser
@@ -40,10 +41,10 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs) -> None:
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
     trainer = Trainer(state_parser=state_parser, model_structure=simulation_args.args.model_structure, n_actions=simulation_args.args.num_servers,
-                      gamma=args.args.gamma,
-                      eps_decay=args.args.eps_decay, eps_start=args.args.eps_start, eps_end=args.args.eps_end,
-                      tau=args.args.tau, tau_decay=args.args.tau_decay,
-                      lr=args.args.lr, batch_size=args.args.batch_size)
+                      gamma=simulation_args.args.gamma,
+                      eps_decay=simulation_args.args.eps_decay, eps_start=simulation_args.args.eps_start, eps_end=simulation_args.args.eps_end,
+                      tau=simulation_args.args.tau, tau_decay=simulation_args.args.tau_decay,
+                      lr=simulation_args.args.lr, batch_size=simulation_args.args.batch_size, lr_scheduler_gamma=simulation_args.args.lr_scheduler_gamma, lr_scheduler_step_size=simulation_args.args.lr_scheduler_step_size)
     NUM_EPSIODES = simulation_args.args.epochs
     LAST_EPOCH = NUM_EPSIODES - 1
     to_print = False
@@ -113,7 +114,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs) -> None:
     for policy in POLICIES_TO_RUN:
         fig, ax = train_plotter.plot_policy_episode(epoch=LAST_EPOCH, policy=policy)
 
-    run_rl_test(simulation_args=simulation_args, experiment_num=experiment_num, trainer=trainer)
+    return run_rl_test(simulation_args=simulation_args, experiment_num=experiment_num, trainer=trainer)
 
 
 def run_rl_test(simulation_args: SimulationArgs, experiment_num: int, trainer: Trainer):
@@ -191,11 +192,19 @@ def run_rl_test(simulation_args: SimulationArgs, experiment_num: int, trainer: T
     fig, ax = test_plotter.plot_episode(epoch=LAST_EPOCH)
     for policy in POLICIES_TO_RUN:
         fig, ax = test_plotter.plot_policy_episode(epoch=LAST_EPOCH, policy=policy)
+    return test_plotter.get_autotuner_objective()
+
+
+def main(input_args=None, setting="sim"):
+    if setting == "sim":
+        args = SimulationArgs(input_args=input_args)
+    # elif setting =="slow":
+    #     args = SlowServerArgs(0.5,0.5, input_args=input_args)
+    # elif setting =="uneven":
+    #     args = SlowServerArgs(0.5,0.1, input_args=input_args)
+    args.set_policy('ARS')
+    return rl_experiment_wrapper(args)
 
 
 if __name__ == '__main__':
-    args = SimulationArgs()
-    # args = TimeVaryingArgs(0.1,5)
-    # args = SlowServerArgs(0.5,0.5)
-    args.set_policy('ARS')
-    rl_experiment_wrapper(args)
+    main(setting="sim")

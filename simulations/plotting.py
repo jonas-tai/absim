@@ -36,6 +36,9 @@ class ExperimentPlot:
         else:
             self.df = pd.concat((self.df, df), axis=0)
 
+    def get_autotuner_objective(self):
+        return - self.df[self.df['Policy'] == 'DQN']['Latency'].quantile(0.99)
+
     def export_data(self, file_name: str = 'train_data.csv'):
         out_path = self.out_folder / file_name
         self.df.to_csv(out_path)

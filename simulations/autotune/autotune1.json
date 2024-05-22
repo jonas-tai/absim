@@ -1,0 +1,107 @@
+[
+    {
+        "key": "exp_prefix",
+        "value": "baseline",
+        "key_type": "const"
+    },
+    {
+        "key": "log_folder",
+        "value": "logs/baseline",
+        "key_type": "const"
+    },
+    {
+        "key": "plot_folder",
+        "value": "plots/baseline",
+        "key_type": "const"
+    },
+    {
+        "key": "epochs",
+        "value": [
+            150,
+            300
+        ],
+        "key_type": "tune",
+        "value_type": "int"
+    },
+    {
+        "key": "batch_size",
+        "value": [
+            8,
+            512
+        ],
+        "key_type": "tune",
+        "value_type": "int"
+    },
+    {
+        "key": "lr",
+        "value": [
+            1e-6,
+            1e-2
+        ],
+        "key_type": "tune",
+        "value_type": "log"
+    },
+    {
+        "key": "gamma",
+        "value": [
+            0.5,
+            0.99
+        ],
+        "key_type": "tune",
+        "value_type": "float"
+    },
+    {
+        "key": "tau",
+        "value": [
+            0.00005,
+            0.05
+        ],
+        "key_type": "tune",
+        "value_type": "float"
+    },
+    {
+        "key": "eps_end",
+        "value": [
+            0.0,
+            0.1
+        ],
+        "key_type": "tune",
+        "value_type": "float"
+    },
+    {
+        "key": "eps_decay",
+        "value": [
+            100,
+            10000
+        ],
+        "key_type": "tune",
+        "value_type": "int"
+    },
+    {
+        "key": "tau_decay",
+        "value": [
+            100,
+            10000
+        ],
+        "key_type": "tune",
+        "value_type": "int"
+    },
+    {
+        "key": "lr_scheduler_step_size",
+        "value": [
+            20,
+            300
+        ],
+        "key_type": "tune",
+        "value_type": "int"
+    },
+    {
+        "key": "lr_scheduler_gamma",
+        "value": [
+            0.1,
+            0.99
+        ],
+        "key_type": "tune",
+        "value_type": "float"
+    }
+]

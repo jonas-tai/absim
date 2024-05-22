@@ -27,7 +27,7 @@ class ReplayMemory(object):
         self.summary.add(state)
 
     def sample(self, batch_size):
-        indices = random.sample(range(self.size), batch_size)
+        indices = random.sample(range(self.size), int(batch_size))
         return [self.memory[index] for index in indices]
 
     def __len__(self):

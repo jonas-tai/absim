@@ -1,0 +1,1 @@
+{"epochs": 12, "batch_size": 175, "lr": 0.0009822865044849254, "gamma": 0.6032039113882322, "eps_decay": 1090, "lr_scheduler_step_size": 265, "lr_scheduler_gamma": 0.6940470327430092, "trial_number": 12}
