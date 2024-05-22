@@ -7,22 +7,26 @@ import torch
 
 class DQN(nn.Module):
 
-    def __init__(self, n_observations, n_actions, n_hidden=128):
+    def __init__(self, n_observations: int, n_actions: int, n_hidden: int = 128, model_structure: str = "linear"):
         super(DQN, self).__init__()
-
-        # self.layer1 = nn.Linear(n_observations, n_hidden)
-        # self.layer2 = nn.Linear(n_hidden, n_hidden)
-        # self.layer3 = nn.Linear(n_hidden, n_actions)
-        self.layer3 = nn.Linear(n_observations, n_actions)
+        self.model_structure = model_structure
+        if self.model_structure == 'three_layers':
+            self.layer1 = nn.Linear(n_observations, n_hidden)
+            self.layer2 = nn.Linear(n_hidden, n_hidden)
+            self.layer3 = nn.Linear(n_hidden, n_actions)
+        elif self.model_structure == 'linear':
+            self.layer3 = nn.Linear(n_observations, n_actions)
+        else:
+            raise Exception(f'Unknown model structure {self.model_structure}')
         self.summary = SummaryStats(n_observations)
 
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
     def forward(self, x):
         x = (x - self.summary.means) * self.summary.inv_sqrt_sd()
-
-        # x = F.relu(self.layer1(x))
-        # x = F.relu(self.layer2(x))
+        if self.model_structure == 'three_layers':
+            x = F.relu(self.layer1(x))
+            x = F.relu(self.layer2(x))
         x = self.layer3(x)
         return x
 
