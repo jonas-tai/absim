@@ -13,7 +13,8 @@ class ExperimentPlot:
         self.policy_colors = {
             "ARS": "C0",
             "random": "C1",
-            "DQN": "C2"
+            "DQN": "C2",
+            "round_robin": "C3"
         }
         self.out_folder = out_folder
         self.is_train_data = is_train_data

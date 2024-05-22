@@ -19,7 +19,7 @@ StateAction = namedtuple('StateAction', ('state', 'action'))
 
 
 class Trainer:
-    def __init__(self, state_parser: StateParser, n_actions: int, batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2,
+    def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int, batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2,
                  eps_decay=1000, tau=0.005, lr=1e-4, tau_decay=10):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.state_parser = state_parser
@@ -49,8 +49,8 @@ class Trainer:
         n_observations = self.state_parser.get_state_size()
 
         self.eval_mode = False
-        self.policy_net = DQN(n_observations, n_actions).to(self.device)
-        self.target_net = DQN(n_observations, n_actions).to(self.device)
+        self.policy_net = DQN(n_observations, n_actions, model_structure=model_structure).to(self.device)
+        self.target_net = DQN(n_observations, n_actions, model_structure=model_structure).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)

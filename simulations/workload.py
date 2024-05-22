@@ -7,7 +7,6 @@ import numpy
 
 
 class Workload:
-
     def __init__(self, id_, data_point_monitor: Monitor, client_list: List[Client],
                  model, model_param, num_requests, simulation, long_tasks_fraction: float = 0):
         self.data_point_monitor = data_point_monitor

@@ -78,7 +78,7 @@ class SimulationArgs:
         parser.add_argument('--print', action='store_true',
                             default=True, help='Prints latency at the end of the experiment')
         parser.add_argument('--poly_feat_degree', nargs='?',
-                            type=float, default=3, help='Degree of created polynomial and interaction features')
+                            type=float, default=2, help='Degree of created polynomial and interaction features')
         parser.add_argument('--collect_data_points', action='store_true',
                             default=False, help='Collect and export data points for training of supervised model')
         parser.add_argument('--server_concurrency', nargs='?',
@@ -88,7 +88,7 @@ class SimulationArgs:
         parser.add_argument('--service_time_model', nargs='?',
                             type=str, default="random.expovariate", help='Distribution of service time on server (random.expovariate | constant | math.sin')
         parser.add_argument('--utilization', nargs='?',
-                            type=float, default=0.8, help='Arrival rate of requests')
+                            type=float, default=0.7, help='Arrival rate of requests')
         parser.add_argument('--num_requests', nargs='?',
                             type=int, default=1000, help='Number of requests')
         parser.add_argument('--exp_scenario', nargs='?',
@@ -130,13 +130,15 @@ class SimulationArgs:
 
         # RL Training
         parser.add_argument('--epochs', nargs='?',
-                            type=int, default=400, help='Number of training epochs')
+                            type=int, default=200, help='Number of training epochs')
         parser.add_argument('--num_requests_test', nargs='?',
                             type=int, default=60000, help='Number of requests for test epochs')
         parser.add_argument('--test_epochs', nargs='?',
                             type=int, default=5, help='Number of test epochs')
 
         # RL Model parameters
+        parser.add_argument('--model_structure', nargs='?',
+                            type=str, default="linear", help='Model layers (linear | three_layers)')
         parser.add_argument('--gamma', nargs='?',
                             type=float, default=0.99, help='Model trainer argument')
         parser.add_argument('--lr', nargs='?',

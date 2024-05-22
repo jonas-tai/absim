@@ -15,21 +15,21 @@ from simulations.state import StateParser
 
 
 POLICIES_TO_RUN = [
+    'round_robin',
     'ARS',
     # 'response_time',
     # 'weighted_response_time',
-    'random',
+    # 'random',
     'DQN'
 ]
 
 
-def print_monitor_time_series_to_file(file_desc, prefix, monitor):
+def print_monitor_time_series_to_file(file_desc, prefix, monitor) -> None:
     for entry in monitor:
         file_desc.write("%s %s %s\n" % (prefix, entry[0], entry[1]))
 
 
-def rl_experiment_wrapper(simulation_args: SimulationArgs):
-
+def rl_experiment_wrapper(simulation_args: SimulationArgs) -> None:
     state_parser = StateParser(num_servers=simulation_args.args.num_servers,
                                long_requests_ratio=simulation_args.args.long_tasks_fraction,
                                num_request_rates=len(simulation_args.args.rate_intervals),
@@ -39,7 +39,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
 
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
-    trainer = Trainer(state_parser=state_parser, n_actions=simulation_args.args.num_servers,
+    trainer = Trainer(state_parser=state_parser, model_structure=simulation_args.args.model_structure, n_actions=simulation_args.args.num_servers,
                       gamma=args.args.gamma,
                       eps_decay=args.args.eps_decay, eps_start=args.args.eps_start, eps_end=args.args.eps_end,
                       tau=args.args.tau, tau_decay=args.args.tau_decay,
@@ -110,9 +110,8 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs):
     fig, ax = train_plotter.plot_quantile(0.99)
 
     fig, ax = train_plotter.plot_episode(epoch=LAST_EPOCH)
-    fig, ax = train_plotter.plot_policy_episode(epoch=LAST_EPOCH, policy='DQN')
-    fig, ax = train_plotter.plot_policy_episode(epoch=LAST_EPOCH, policy='ARS')
-    fig, ax = train_plotter.plot_policy_episode(epoch=LAST_EPOCH, policy='random')
+    for policy in POLICIES_TO_RUN:
+        fig, ax = train_plotter.plot_policy_episode(epoch=LAST_EPOCH, policy=policy)
 
     run_rl_test(simulation_args=simulation_args, experiment_num=experiment_num, trainer=trainer)
 
@@ -190,9 +189,8 @@ def run_rl_test(simulation_args: SimulationArgs, experiment_num: int, trainer: T
     fig, ax = test_plotter.plot_quantile(0.99)
 
     fig, ax = test_plotter.plot_episode(epoch=LAST_EPOCH)
-    fig, ax = test_plotter.plot_policy_episode(epoch=LAST_EPOCH, policy='DQN')
-    fig, ax = test_plotter.plot_policy_episode(epoch=LAST_EPOCH, policy='ARS')
-    fig, ax = test_plotter.plot_policy_episode(epoch=LAST_EPOCH, policy='random')
+    for policy in POLICIES_TO_RUN:
+        fig, ax = test_plotter.plot_policy_episode(epoch=LAST_EPOCH, policy=policy)
 
 
 if __name__ == '__main__':
