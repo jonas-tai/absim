@@ -47,7 +47,8 @@ class SummaryStats:
         self.n = 0
 
     def add(self, x):
-        # stop adding new stats after 10000
+        # stop adding new stats after 1000
+        # TODO: Tune this parameter
         if self.n >= 1000:
             return
 

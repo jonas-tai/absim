@@ -122,7 +122,7 @@ class SimulationArgs:
 
         # Heterogeneous Tasks workload
         parser.add_argument('--long_tasks_fraction', nargs='?',
-                            type=float, default=0.0, help='Fraction of tasks that are long tasks'
+                            type=float, default=0.2, help='Fraction of tasks that are long tasks'
                             '(expScenario=heterogenous_static_nw_delay)')
         parser.add_argument('--long_task_added_service_time', nargs='?',
                             type=float, default=200,
@@ -131,10 +131,14 @@ class SimulationArgs:
         # RL Training
         parser.add_argument('--epochs', nargs='?',
                             type=int, default=200, help='Number of training epochs')
+
+        # RL Model evaluation
         parser.add_argument('--num_requests_test', nargs='?',
                             type=int, default=60000, help='Number of requests for test epochs')
         parser.add_argument('--test_epochs', nargs='?',
                             type=int, default=5, help='Number of test epochs')
+        parser.add_argument('--dqn_explr', nargs='?',
+                            type=float, default=0.1, help='Exploration used by DQN_EXPLR')
 
         # RL Model parameters
         parser.add_argument('--model_structure', nargs='?',

@@ -12,11 +12,12 @@ POLICY_COLORS = {
     "ARS": "C0",
     "random": "C1",
     "DQN": "C2",
-    "round_robin": "C3"
+    "round_robin": "C3",
+    'DQN_EXPLR': "C4",
 }
 
 mode = 'test'
-base_path = Path('/home/jonas/projects/absim/plots/163')
+base_path = Path('/home/jonas/projects/absim/plots/165')
 df = pd.read_csv(base_path / f'{mode}_data.csv')
 
 out_folder = base_path / mode

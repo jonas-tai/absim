@@ -254,7 +254,7 @@ class Client:
                     if ((first_node_score - new_node_score) / first_node_score
                             > badness_threshold):
                         replica_set.sort(key=self.dsScores.get)
-        elif self.REPLICA_SELECTION_STRATEGY == 'DQN':
+        elif self.REPLICA_SELECTION_STRATEGY == 'DQN' or self.REPLICA_SELECTION_STRATEGY == 'DQN_EXPLR':
             action = self.trainer.select_action(state)
             self.trainer.record_state_and_action(task_id=task.id, state=state, action=action)
             # Map action back to server id

@@ -15,13 +15,24 @@ from experiment_runner import ExperimentRunner
 from simulations.state import StateParser
 
 
-POLICIES_TO_RUN = [
+TRAIN_POLICIES_TO_RUN = [
     'round_robin',
     'ARS',
     # 'response_time',
     # 'weighted_response_time',
     # 'random',
     'DQN'
+]
+
+
+EVAL_POLICIES_TO_RUN = [
+    'round_robin',
+    'ARS',
+    # 'response_time',
+    # 'weighted_response_time',
+    # 'random',
+    'DQN',
+    'DQN_EXPLR'
 ]
 
 
@@ -68,7 +79,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs) -> None:
     log_arguments(plot_path, simulation_args)
 
     print('Starting experiments')
-    for policy in POLICIES_TO_RUN:
+    for policy in TRAIN_POLICIES_TO_RUN:
         simulation_args.set_policy(policy)
         # if policy == 'DQN':
         #     simulation_args.set_print(True)
@@ -111,7 +122,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs) -> None:
     fig, ax = train_plotter.plot_quantile(0.99)
 
     fig, ax = train_plotter.plot_episode(epoch=LAST_EPOCH)
-    for policy in POLICIES_TO_RUN:
+    for policy in TRAIN_POLICIES_TO_RUN:
         fig, ax = train_plotter.plot_policy_episode(epoch=LAST_EPOCH, policy=policy)
 
     return run_rl_test(simulation_args=simulation_args, experiment_num=experiment_num, trainer=trainer)
@@ -129,7 +140,6 @@ def run_rl_test(simulation_args: SimulationArgs, experiment_num: int, trainer: T
 
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
-    trainer.eval_mode = True
 
     NUM_TEST_EPSIODES = simulation_args.args.test_epochs
     NUM_TEST_REQUESTS = simulation_args.args.num_requests_test
@@ -153,8 +163,18 @@ def run_rl_test(simulation_args: SimulationArgs, experiment_num: int, trainer: T
     # log_arguments(plot_path, simulation_args)
 
     print('Starting Test Sequence')
-    for policy in POLICIES_TO_RUN:
+    for policy in EVAL_POLICIES_TO_RUN:
         simulation_args.set_policy(policy)
+
+        if policy == 'DQN_EXPLR':
+            trainer.eval_mode = False
+            trainer.EPS_END = simulation_args.args.dqn_explr
+            trainer.EPS_START = simulation_args.args.dqn_explr
+        elif policy == 'DQN':
+            trainer.EPS_START = simulation_args.args.eps_start
+            trainer.EPS_END = simulation_args.args.eps_end
+            trainer.eval_mode = True
+
         for i_episode in range(NUM_TEST_EPSIODES):
             seed = BASE_TEST_SEED + i_episode
 
@@ -190,7 +210,7 @@ def run_rl_test(simulation_args: SimulationArgs, experiment_num: int, trainer: T
     fig, ax = test_plotter.plot_quantile(0.99)
 
     fig, ax = test_plotter.plot_episode(epoch=LAST_EPOCH)
-    for policy in POLICIES_TO_RUN:
+    for policy in EVAL_POLICIES_TO_RUN:
         fig, ax = test_plotter.plot_policy_episode(epoch=LAST_EPOCH, policy=policy)
     return test_plotter.get_autotuner_objective()
 

@@ -14,7 +14,8 @@ class ExperimentPlot:
             "ARS": "C0",
             "random": "C1",
             "DQN": "C2",
-            "round_robin": "C3"
+            "round_robin": "C3",
+            'DQN_EXPLR': "C4",
         }
         self.out_folder = out_folder
         self.is_train_data = is_train_data
