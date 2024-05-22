@@ -2,3 +2,4 @@
 logs
 plots
 simulations/__pycache__
+*.pyc
