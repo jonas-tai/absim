@@ -60,7 +60,7 @@ class StateParser:
 
     def node_state_to_tensor(self, node_state: NodeState) -> torch.Tensor:
         state_features = [node_state.queue_size, node_state.service_time,
-                          node_state.wait_time, node_state.response_time, node_state.outstanding_requests]  # node_state.ars_score
+                          node_state.response_time, node_state.outstanding_requests]  # node_state.ars_score, node_state.wait_time,
         # state_features = [node_state.ars_score]
         # node_state.twice_network_latency
 

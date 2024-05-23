@@ -212,7 +212,7 @@ class SlowServerArgs(SimulationArgs):
 
 
 class HeterogeneousRequestsArgs(SimulationArgs):
-    def __init__(self, long_tasks_fraction: float = 0.2, long_task_added_service_time: int = 200, input_args=None) -> None:
+    def __init__(self, long_tasks_fraction: float = 0.1, long_task_added_service_time: int = 200, input_args=None) -> None:
         super().__init__(input_args=input_args)
         print('Initialized')
         self.args.exp_scenario = 'heterogenous_requests_scenario'

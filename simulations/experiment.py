@@ -80,8 +80,10 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, input_args: Any | Non
     run_rl_training(simulation_args=simulation_args, trainer=trainer, state_parser=state_parser, out_folder=out_path)
     run_rl_test(simulation_args=simulation_args, out_folder=out_path,
                 experiment='test', trainer=trainer, state_parser=state_parser)
-    additional_test_args = [HeterogeneousRequestsArgs(input_args=input_args, long_tasks_fraction=0.8,
+    additional_test_args = [HeterogeneousRequestsArgs(input_args=input_args, long_tasks_fraction=0.4,
                                                       long_task_added_service_time=200)]
+    # additional_test_args = []
+
     for args in additional_test_args:
         print('Running with args:')
         print(args)
@@ -141,7 +143,7 @@ def run_rl_training(simulation_args: SimulationArgs, trainer: Trainer, state_par
     print('Finished')
     # train_data_analyzer.run_latency_lin_reg(epoch=LAST_EPOCH)
 
-    train_plotter.export_data(file_name='train_data.csv')
+    train_plotter.export_data()
 
     if simulation_args.args.collect_data_points:
         train_data_analyzer.export_epoch_data(epoch=LAST_EPOCH)
@@ -218,7 +220,7 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
     # test_data_analyzer.run_latency_lin_reg(epoch=LAST_EPOCH)
 
     # Export data
-    test_plotter.export_data(file_name='test_data.csv')
+    test_plotter.export_data()
     if simulation_args.args.collect_data_points:
         test_data_analyzer.export_epoch_data(epoch=LAST_EPOCH)
         test_data_analyzer.export_training_data()
@@ -229,14 +231,12 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
 
 
 def plot_collected_data(plotter: ExperimentPlot, epoch_to_plot: int, policies_to_plot: List[str]) -> None:
-    fig, ax = plotter.plot_latency()
-    fig, ax = plotter.plot_quantile(0.90)
-    fig, ax = plotter.plot_quantile(0.95)
-    fig, ax = plotter.plot_quantile(0.99)
+    plotter.generate_plots()
+    plotter.save_stats_to_file()
 
-    fig, ax = plotter.plot_episode(epoch=epoch_to_plot)
+    plotter.plot_episode(epoch=epoch_to_plot)
     for policy in policies_to_plot:
-        fig, ax = plotter.plot_policy_episode(epoch=epoch_to_plot, policy=policy)
+        plotter.plot_policy_episode(epoch=epoch_to_plot, policy=policy)
 
 
 def main(input_args=None, setting="base"):
