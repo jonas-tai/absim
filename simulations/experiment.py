@@ -284,7 +284,8 @@ def main(input_args=None, setting="base") -> None:
     args.args.epochs = 200
     args.args.num_requests = 3000
     args.args.num_requests_test = 3000
-    args.args.eps_decay = 100000
+    args.args.eps_decay = 80000
+    args.args.lr_scheduler_step_size = 50
     for slow_server_slowness in [2.0, 3.0]:
         for dqn_explr in [0.1]:
             for utilization in [0.45, 0.7]:

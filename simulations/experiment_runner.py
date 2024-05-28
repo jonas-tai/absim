@@ -6,7 +6,7 @@ from simulator import Simulation
 import workload
 import constants
 import sys
-import muUpdater
+import simulations.mu_updater as mu_updater
 from simulations.monitor import Monitor
 from pathlib import Path
 from model_trainer import Trainer
@@ -132,11 +132,11 @@ class ExperimentRunner:
                                      service_time_model=args.service_time_model,
                                      simulation=simulation,
                                      long_task_added_service_time=args.long_task_added_service_time)
-                mup = muUpdater.MuUpdater(serv,
-                                          args.interval_param,
-                                          args.service_time,
-                                          args.time_varying_drift,
-                                          simulation)
+                mup = mu_updater.MuUpdater(serv,
+                                           args.interval_param,
+                                           args.service_time,
+                                           args.time_varying_drift,
+                                           simulation)
                 simulation.process(mup.run())
                 self.servers.append(serv)
         elif args.exp_scenario == "heterogenous_static_nw_delay":
