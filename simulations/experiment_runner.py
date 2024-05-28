@@ -29,7 +29,7 @@ class ExperimentRunner:
         ratio = self.clients[client_index].dqn_decision_equal_to_ars / self.clients[client_index].requests_handled
         print(f'DQN matched ARS for {ratio * 100}% of decisions')
 
-    def run_experiment(self, args, trainer: Trainer = None, eval_mode=False) -> Monitor:
+    def run_experiment(self, args, num_requests: int, trainer: Trainer = None, eval_mode=False) -> Monitor:
         self.reset_stats()
 
         # Set the random seed
@@ -68,46 +68,58 @@ class ExperimentRunner:
             base_service_time = args.service_time
 
             assert 0 <= args.slow_server_fraction < 1.0
-            assert 0 <= args.slow_server_slowness < 1.0
+            assert 0 <= args.slow_server_slowness
             assert not (args.slow_server_slowness == 0 and args.slow_server_fraction != 0)
             assert not (args.slow_server_slowness != 0 and args.slow_server_fraction == 0)
+            # TODO: Fix this for heterogeneous requests
             assert args.long_tasks_fraction == 0
 
             if args.slow_server_fraction > 0.0:
-                slow_server_rate = (args.server_concurrency *
-                                    1 / float(base_service_time)) * \
-                    args.slow_server_slowness
+                '''
+                Note, this is different from the initial implementation, which sets the fast server rate such that
+                the average service time is the service time specified
+                '''
+                slow_server_rate = 1 / float(base_service_time) * (1 / args.slow_server_slowness)
+
                 num_slow_servers = int(args.slow_server_fraction * args.num_servers)
+                num_fast_servers = args.num_servers - num_slow_servers
+
                 slow_server_rates = [slow_server_rate] * num_slow_servers
 
-                num_fast_servers = args.num_servers - num_slow_servers
-                total_rate = (args.server_concurrency *
-                              1 / float(args.service_time) * args.num_servers)
-                fast_server_rate = (total_rate - sum(slow_server_rates)) \
-                    / float(num_fast_servers)
+                fast_server_rate = (1 / float(args.service_time))
                 fast_server_rates = [fast_server_rate] * num_fast_servers
-                service_rate_per_server = slow_server_rates + fast_server_rates
-            else:
-                service_rate_per_server = [args.server_concurrency *
-                                           1 / float(args.service_time)] * args.num_servers
 
-            simulation.random.shuffle(service_rate_per_server)
+                service_rate_per_server = slow_server_rates + fast_server_rates
+
+                server_slow_assignment = [True] * num_slow_servers + [False] * num_fast_servers
+            else:
+                service_rate_per_server = [1 / float(args.service_time)] * args.num_servers
+
+            simulation.random.shuffle(server_slow_assignment)
             # print(sum(serviceRatePerServer), (1/float(baseServiceTime)) * args.num_servers)
-            assert sum(service_rate_per_server) > 0.99 * \
-                (1 / float(base_service_time)) * args.num_servers
-            assert sum(service_rate_per_server) <= \
-                (1 / float(base_service_time)) * args.num_servers
+
+            # We dont scale the rate to the average rate
+            # assert sum(service_rate_per_server) > 0.99 * \
+            #     (1 / float(base_service_time)) * args.num_servers
+            # assert sum(service_rate_per_server) <= \
+            #     (1 / float(base_service_time)) * args.num_servers
 
             # Start the servers
             for i in range(args.num_servers):
-                st = 1 / float(service_rate_per_server[i])
+                # Service time changes modified via service_time_factor
+                service_time = base_service_time
+
                 serv = server.Server(i,
                                      resource_capacity=args.server_concurrency,
-                                     service_time=st,
+                                     service_time=service_time,
                                      service_time_model=args.service_time_model,
                                      simulation=simulation,
                                      long_task_added_service_time=args.long_task_added_service_time)
+                if server_slow_assignment[i]:
+                    print(f'Slow server with factor: {args.slow_server_slowness}')
+                    serv.SERVICE_TIME_FACTOR = args.slow_server_slowness
                 self.servers.append(serv)
+
         elif args.exp_scenario == "time_varying_service_time_servers":
             assert args.interval_param != 0.0
             assert args.time_varying_drift != 0.0
@@ -209,7 +221,7 @@ class ExperimentRunner:
         # of the overall server pool.
         if len(service_rate_per_server) > 0:
             print(service_rate_per_server)
-            arrival_rate = (args.utilization * sum(service_rate_per_server))
+            arrival_rate = (args.utilization * args.server_concurrency * sum(service_rate_per_server))
             inter_arrival_time = 1 / float(arrival_rate)
         else:
             average_service_time = args.service_time * (1 - args.long_tasks_fraction) + args.long_tasks_fraction * (
@@ -224,7 +236,7 @@ class ExperimentRunner:
                                   self.clients,
                                   args.workload_model,
                                   inter_arrival_time * args.num_workload,
-                                  args.num_requests / args.num_workload,
+                                  num_requests / args.num_workload,
                                   simulation,
                                   long_tasks_fraction=args.long_tasks_fraction
                                   )
@@ -310,6 +322,6 @@ class ExperimentRunner:
 
             # print_monitor_time_series_to_file(latency_fd, "0",
             #                                   data_point_monitor)
-            assert args.num_requests == len(data_point_monitor)
+            assert num_requests == len(data_point_monitor)
 
         return data_point_monitor

@@ -22,6 +22,9 @@ class Server:
         self.NW_LATENCY_BASE = nw_latency_base
         self.NW_LATENCY_MU = nw_latency_mu
         self.NW_LATENCY_SIGMA = nw_latency_sigma
+
+        self.SERVICE_TIME_FACTOR = 1
+
         self.long_task_added_service_time = long_task_added_service_time
         self.server_RR_monitor = Monitor(simulation)
         self.wait_monitor = Monitor(simulation)
@@ -52,6 +55,9 @@ class Server:
         # Add service time if long task
         if is_long_task:
             service_time += self.long_task_added_service_time
+
+        # If server is slowed, multiply service time with factor
+        service_time = service_time * self.SERVICE_TIME_FACTOR
         return service_time
 
 

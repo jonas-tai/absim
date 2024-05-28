@@ -127,7 +127,8 @@ def run_rl_training(simulation_args: SimulationArgs, trainer: Trainer, state_par
             torch.manual_seed(i_episode)
             simulation_args.set_seed(i_episode)
 
-            data_point_monitor = experiment_runner.run_experiment(simulation_args.args, trainer)
+            data_point_monitor = experiment_runner.run_experiment(
+                simulation_args.args, num_requests=simulation_args.args.num_requests, trainer=trainer)
             train_plotter.add_data(data_point_monitor, policy, i_episode)
 
             if simulation_args.args.collect_data_points or i_episode == LAST_EPOCH:
@@ -170,8 +171,6 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
     LAST_EPOCH = NUM_TEST_EPSIODES - 1
     to_print = False
 
-    simulation_args.set_num_requests(NUM_TEST_REQUESTS)
-
     experiment_folder = out_folder / experiment
     plot_path = experiment_folder / simulation_args.args.plot_folder
     data_folder = experiment_folder / simulation_args.args.data_folder
@@ -210,7 +209,7 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
             simulation_args.set_seed(seed)
 
             test_data_point_monitor = experiment_runner.run_experiment(
-                simulation_args.args, trainer, eval_mode=trainer.eval_mode)
+                simulation_args.args, num_requests=NUM_TEST_REQUESTS, trainer=trainer, eval_mode=trainer.eval_mode)
             test_plotter.add_data(test_data_point_monitor, simulation_args.args.selection_strategy, i_episode)
 
             if simulation_args.args.collect_data_points or i_episode == LAST_EPOCH:
@@ -269,12 +268,89 @@ def main(input_args=None, setting="base") -> None:
     #     args = SlowServerArgs(0.5,0.1, input_args=input_args)
     args.set_policy('ARS')
 
-    rl_experiment_wrapper(args, input_args=input_args)
+    _ = rl_experiment_wrapper(args, input_args=input_args)
 
     args.args.long_tasks_fraction = 0.4
+    _ = rl_experiment_wrapper(args, input_args=input_args)
 
-    ARGS_TO_RUN = [HeterogeneousRequestsArgs(input_args=input_args)]
+    args.args.dqn_explr = 0.2
+    _ = rl_experiment_wrapper(args, input_args=input_args)
 
+    args.args.dqn_explr = 0.3
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.dqn_explr = 0.4
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.dqn_explr = 0.2
+    args.args.utilization = 0.7
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.dqn_explr = 0.1
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.dqn_explr = 0.3
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.dqn_explr = 0.4
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.long_tasks_fraction = 0.2
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.dqn_explr = 0.1
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.dqn_explr = 0.3
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.dqn_explr = 0.2
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.utilization = 0.45
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.dqn_explr = 0.1
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.dqn_explr = 0.3
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.dqn_explr = 0.4
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    # Static slow server workloads
+    args = StaticSlowServerArgs(input_args=input_args)
+    args.args.dqn_explr = 0.1
+    args.args.utilization = 0.7
+    args.args.long_tasks_fraction = 0.0
+    args.args.epochs = 400
+    args.args.num_requests = 3000
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.utilization = 0.45
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.slow_server_slowness = 2.5
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.utilization = 0.7
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.dqn_explr = 0.2
+    args.args.slow_server_slowness = 3.0
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.utilization = 0.45
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.slow_server_slowness = 2.5
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.utilization = 0.7
+    _ = rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.dqn_explr = 0.3
     return rl_experiment_wrapper(args, input_args=input_args)
 
 

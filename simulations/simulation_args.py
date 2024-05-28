@@ -10,13 +10,13 @@ class SimulationArgs:
         parser.add_argument('--num_clients', nargs='?',
                             type=int, default=1, help='Number of clients')
         parser.add_argument('--num_servers', nargs='?',
-                            type=int, default=3, help='Number of servers')
+                            type=int, default=5, help='Number of servers')
         parser.add_argument('--num_workload', nargs='?',
                             type=int, default=1, help='Number of workload generators. Seems to distribute the '
                                                       'tasks out to different clients.')
 
         parser.add_argument('--replication_factor', nargs='?',
-                            type=int, default=3, help='Replication factor (# of choices)')
+                            type=int, default=5, help='Replication factor (# of choices)')
         parser.add_argument('--selection_strategy', nargs='?',
                             type=str, default="ARS", help='Policy to use for replica selection')
         parser.add_argument('--shadow_read_ratio', nargs='?',
@@ -63,16 +63,18 @@ class SimulationArgs:
 
         # Slow server setting parameters
         parser.add_argument('--slow_server_fraction', nargs='?',
-                            type=float, default=0, help='Fraction of slow servers '
-                                                        '(expScenario=heterogenousStaticServiceTimeScenario)')
-        parser.add_argument('--slow_server_slowness', nargs='?',
-                            type=float, default=0.1, help='How slow those slowed servers are '
+                            type=float, default=0.0, help='Fraction of slow servers '
                             '(expScenario=heterogenousStaticServiceTimeScenario)')
+        parser.add_argument('--slow_server_slowness', nargs='?',
+                            type=float, default=2.0, help='Service time change (> 1 make server slower, < 1 makes servers faster)'
+                            '(expScenario=heterogenousStaticServiceTimeScenario)')
+
+        # Time varying slow server
         parser.add_argument('--interval_param', nargs='?',
-                            type=float, default=10000.0, help='Interval between which server service times change '
+                            type=float, default=5000.0, help='Interval between which server service times change '
                             '(expScenario=timeVaryingServiceTimeServers)')
         parser.add_argument('--time_varying_drift', nargs='?',
-                            type=float, default=10, help='How much service times change '
+                            type=float, default=2.0, help='Service time change (> 1 make server slower, < 1 makes servers faster) '
                                                           '(expScenario=timeVaryingServiceTimeServers)')
 
         # General Feature parameters
@@ -90,7 +92,7 @@ class SimulationArgs:
         parser.add_argument('--service_time_model', nargs='?',
                             type=str, default="random.expovariate", help='Distribution of service time on server (random.expovariate | constant | math.sin')
         parser.add_argument('--utilization', nargs='?',
-                            type=float, default=0.7, help='Arrival rate of requests')
+                            type=float, default=0.45, help='Arrival rate of requests')
         parser.add_argument('--num_requests', nargs='?',
                             type=int, default=1000, help='Number of requests')
         parser.add_argument('--exp_scenario', nargs='?',
@@ -125,7 +127,7 @@ class SimulationArgs:
 
         # Heterogeneous Tasks workload
         parser.add_argument('--long_tasks_fraction', nargs='?',
-                            type=float, default=0.2, help='Fraction of tasks that are long tasks'
+                            type=float, default=0.0, help='Fraction of tasks that are long tasks'
                             '(expScenario=heterogenous_static_nw_delay)')
         parser.add_argument('--long_task_added_service_time', nargs='?',
                             type=float, default=200,
@@ -153,7 +155,7 @@ class SimulationArgs:
         parser.add_argument('--tau', nargs='?',
                             type=float, default=0.005, help='Model trainer argument')
         parser.add_argument('--eps_decay', nargs='?',
-                            type=int, default=10000, help='Model trainer argument')
+                            type=int, default=20000, help='Model trainer argument')
         parser.add_argument('--batch_size', nargs='?',
                             type=int, default=32, help='Model trainer argument')
         parser.add_argument('--tau_decay', nargs='?',
@@ -200,8 +202,8 @@ class TimeVaryingArgs(SimulationArgs):
         return f'time_varying_service_time_servers_{self.args.interval_param}_{self.args.time_varying_drift}'
 
 
-class SlowServerArgs(SimulationArgs):
-    def __init__(self, slow_server_fraction: float = 0.5, slow_server_slowness: float = 0.5, input_args=None) -> None:
+class StaticSlowServerArgs(SimulationArgs):
+    def __init__(self, slow_server_fraction: float = 0.2, slow_server_slowness: float = 3.0, input_args=None) -> None:
         super().__init__(input_args=input_args)
         self.args.exp_scenario = 'heterogenous_static_service_time_scenario'
         self.args.slow_server_fraction = slow_server_fraction
@@ -211,8 +213,20 @@ class SlowServerArgs(SimulationArgs):
         return f'heterogenous_static_service_time_scenario_{self.args.slow_server_fraction}_{self.args.slow_server_slowness}'
 
 
+class TimeVaryingServerArgs(SimulationArgs):
+    def __init__(self, interval_param: float = 5000.0, time_varying_drift: float = 2.0, input_args=None) -> None:
+        super().__init__(input_args=input_args)
+        print('Initialized')
+        self.args.exp_scenario = 'time_varying_service_time_servers'
+        self.args.interval_param = interval_param
+        self.args.time_varying_drift = time_varying_drift
+
+    def to_string(self) -> str:
+        return f'time_varying_service_time_servers_{self.args.interval_param}_{self.args.time_varying_drift}'
+
+
 class HeterogeneousRequestsArgs(SimulationArgs):
-    def __init__(self, long_tasks_fraction: float = 0.1, long_task_added_service_time: int = 200, input_args=None) -> None:
+    def __init__(self, long_tasks_fraction: float = 0.2, long_task_added_service_time: int = 200, input_args=None) -> None:
         super().__init__(input_args=input_args)
         print('Initialized')
         self.args.exp_scenario = 'heterogenous_requests_scenario'

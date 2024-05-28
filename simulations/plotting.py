@@ -36,6 +36,7 @@ class ExperimentPlot:
             "Time": time,
             "Latency": data_point.latency,
             "Replica": data_point.replica_id,
+            "Is_long_request": data_point.state.is_long_request,
             "Epoch": epoch_num,
             "Policy": policy
         } for (data_point, time) in data_point_time_tuples]
@@ -60,31 +61,41 @@ class ExperimentPlot:
         plt.savefig(self.plot_folder / f'pdfs/{file_name}.pdf')
         plt.savefig(self.plot_folder / f'{file_name}.jpg')
 
+    def write_df_stats(self, df, file) -> None:
+        file.write('Mean and median latency\n')
+
+        # Mean latency
+        mean_latency = df.groupby(['Policy'])['Latency'].mean()
+        file.write('Mean latency:\n')
+        file.write(mean_latency.to_string() + '\n\n')
+
+        # Median latency
+        median_latency = df.groupby(['Policy'])['Latency'].median()
+        file.write('Median latency:\n')
+        file.write(median_latency.to_string() + '\n\n')
+
+        # Quantiles
+        for quantile in [0.9, 0.95, 0.99]:
+            file.write(f'Quantile: {quantile}\n')
+            # Calculate the quantile latency for each policy and epoch
+            quantile_latency = df.groupby(['Policy', 'Epoch'])['Latency'].quantile(quantile).reset_index()
+
+            # Calculate the mean of the quantile latency over all epochs for each policy
+            mean_quantile_latency = quantile_latency.groupby('Policy')['Latency'].mean()
+            file.write(mean_quantile_latency.to_string() + '\n\n')
+
     def save_stats_to_file(self) -> None:
         out_file = self.data_folder / 'latency_statistics.txt'
 
         with open(out_file, 'w') as file:
-            file.write('Mean and median latency\n')
+            file.write('Overall stats\n')
+            self.write_df_stats(df=self.df, file=file)
 
-            # Mean latency
-            mean_latency = self.df.groupby(['Policy'])['Latency'].mean()
-            file.write('Mean latency:\n')
-            file.write(mean_latency.to_string() + '\n\n')
+            file.write('Long requests stats\n')
+            self.write_df_stats(df=self.df[self.df['Is_long_request']], file=file)
 
-            # Median latency
-            median_latency = self.df.groupby(['Policy'])['Latency'].median()
-            file.write('Median latency:\n')
-            file.write(median_latency.to_string() + '\n\n')
-
-            # Quantiles
-            for quantile in [0.9, 0.95, 0.99]:
-                file.write(f'Quantile: {quantile}\n')
-                # Calculate the quantile latency for each policy and epoch
-                quantile_latency = self.df.groupby(['Policy', 'Epoch'])['Latency'].quantile(quantile).reset_index()
-
-                # Calculate the mean of the quantile latency over all epochs for each policy
-                mean_quantile_latency = quantile_latency.groupby('Policy')['Latency'].mean()
-                file.write(mean_quantile_latency.to_string() + '\n\n')
+            file.write('Short requests stats\n')
+            self.write_df_stats(df=self.df[self.df['Is_long_request'] == False], file=file)
 
     def plot_latency(self):
         plt.rcParams.update({'font.size': 14})
