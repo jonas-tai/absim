@@ -5,10 +5,17 @@ import seaborn as sns
 
 import pandas as pd
 
+from simulations.plotting import ExperimentPlot
 
-mode = 'test'
-base_path = Path('/home/jonas/projects/absim/outputs/165')
-df = pd.read_csv(base_path / f'{mode}_data.csv')
+for i in range(106, 107):
+    mode = 'test'
+    base_path = Path(f'/home/jonas/projects/absim/outputs/{i}/{mode}')
 
-out_folder = base_path / mode
-os.makedirs(out_folder, exist_ok=True)
+    data_folder = base_path / 'data'
+    plot_folder = base_path / 'plots'
+
+    plotter = ExperimentPlot(plot_folder=plot_folder, data_folder=data_folder)
+
+    plotter.from_csv()
+
+    plotter.generate_plots()

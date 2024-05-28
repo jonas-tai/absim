@@ -163,7 +163,7 @@ class SimulationArgs:
         parser.add_argument('--eps_start', nargs='?',
                             type=float, default=0.9, help='Model trainer argument')
         parser.add_argument('--eps_end', nargs='?',
-                            type=float, default=0.0, help='Model trainer argument')
+                            type=float, default=0.01, help='Model trainer argument')
         parser.add_argument('--lr_scheduler_step_size', nargs='?',
                             type=int, default=100, help='Model trainer argument')
         parser.add_argument('--lr_scheduler_gamma', nargs='?',

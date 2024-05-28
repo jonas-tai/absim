@@ -21,7 +21,7 @@ TRAIN_POLICIES_TO_RUN = [
     'ARS',
     # 'response_time',
     # 'weighted_response_time',
-    'random',
+    # 'random',
     'DQN'
 ]
 
@@ -30,7 +30,7 @@ EVAL_POLICIES_TO_RUN = [
     # 'round_robin',
     'ARS',
     'DQN',
-    'random',
+    # 'random',
     'DQN_EXPLR'
 ]
 
@@ -271,22 +271,39 @@ def main(input_args=None, setting="base") -> None:
 
     last = 0.0
     # Heterogeneous requests workloads
-    for long_task_fraction in [0.05, 0.1, 0.2, 0.3, 0.4]:
-        for dqn_explr in [0.1, 0.2, 0.3]:
+    # for long_task_fraction in [0.05, 0.1, 0.2, 0.3, 0.4]:
+    #     for dqn_explr in [0.1, 0.2]:
+    #         for utilization in [0.45, 0.7]:
+    #             args.args.long_tasks_fraction = long_task_fraction
+    #             args.args.dqn_explr = dqn_explr
+    #             args.args.utilization = utilization
+    #             last = rl_experiment_wrapper(args, input_args=input_args)
+
+    # Static slow server workloads
+    args = StaticSlowServerArgs(input_args=input_args)
+    args.args.epochs = 200
+    args.args.num_requests = 3000
+    args.args.num_requests_test = 3000
+    args.args.eps_decay = 100000
+    for slow_server_slowness in [2.0, 3.0]:
+        for dqn_explr in [0.1]:
             for utilization in [0.45, 0.7]:
-                args.args.long_tasks_fraction = long_task_fraction
+                args.args.slow_server_slowness = slow_server_slowness
                 args.args.dqn_explr = dqn_explr
                 args.args.utilization = utilization
                 last = rl_experiment_wrapper(args, input_args=input_args)
 
-    # Static slow server workloads
-    args = StaticSlowServerArgs(input_args=input_args)
-    args.args.epochs = 400
+    args = TimeVaryingServerArgs(input_args=input_args)
+    args.args.epochs = 200
     args.args.num_requests = 3000
-    for slow_server_slowness in [2.0, 2.5, 3.0]:
-        for dqn_explr in [0.1, 0.2, 0.3]:
+    args.args.num_requests_test = 3000
+    args.args.eps_decay = 80000
+    args.args.interval_param = 2500
+    args.args.lr_scheduler_step_size = 50
+    for time_varying_drift in [2.0, 3.0]:
+        for dqn_explr in [0.1]:
             for utilization in [0.45, 0.7]:
-                args.args.slow_server_slowness = slow_server_slowness
+                args.args.time_varying_drift = time_varying_drift
                 args.args.dqn_explr = dqn_explr
                 args.args.utilization = utilization
                 last = rl_experiment_wrapper(args, input_args=input_args)
@@ -295,4 +312,4 @@ def main(input_args=None, setting="base") -> None:
 
 
 if __name__ == '__main__':
-    main(setting="heterogenous_requests_scenario")
+    main(setting="heterogenous_static_service_time_scenario")

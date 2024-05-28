@@ -97,6 +97,7 @@ class ExperimentPlot:
             file.write('Short requests stats\n')
             self.write_df_stats(df=self.df[self.df['Is_long_request'] == False], file=file)
 
+    # TODO: Write decorator for before and after plotting settings
     def plot_latency(self):
         plt.rcParams.update({'font.size': 14})
         fig, axes = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
@@ -179,47 +180,75 @@ class ExperimentPlot:
         self.export_plots(file_name=f'p_{int(quantile * 100)}')
         plt.close()
 
+    def plot_average_quantile_bar_short_long_requests(self, quantile: float, policies: List[str]) -> None:
+        df = self.df[self.df['Policy'].isin(policies) & self.df['Is_long_request']]
+        self.plot_average_quantile_bar_generic(df, quantile=quantile, prefix=f'long_req_', order=policies)
+
+        df = self.df[self.df['Policy'].isin(policies) & (self.df['Is_long_request'] == False)]
+        self.plot_average_quantile_bar_generic(df, quantile=quantile, prefix=f'short_req_', order=policies)
+
     def plot_average_quantile_bar(self, quantile: float) -> None:
+        self.plot_average_quantile_bar_generic(self.df, quantile=quantile, prefix='all_')
+
+    def plot_average_quantile_bar_generic(self, df: pd.DataFrame, quantile: float, prefix: str = '', order: List[str] | None = None) -> None:
+        if order is None:
+            order = self.policy_order
+
         plt.rcParams.update({'font.size': 14})
         fig, axes = plt.subplots(figsize=(10, 6), dpi=200)
 
         # Calculate the quantile latency for each policy and epoch
-        quantile_latency = self.df.groupby(['Policy', 'Epoch'])['Latency'].quantile(quantile).reset_index()
+        quantile_latency = df.groupby(['Policy', 'Epoch'])['Latency'].quantile(quantile).reset_index()
 
         # Calculate the mean of the quantile latency over all epochs for each policy
         mean_quantile_latency = quantile_latency.groupby('Policy')['Latency'].mean().reset_index()
 
         # Create bar plot
         sns.barplot(data=mean_quantile_latency, x='Policy', hue='Policy', y='Latency',
-                    palette=POLICY_COLORS, ax=axes, order=self.policy_order)
+                    palette=POLICY_COLORS, ax=axes, order=order)
         axes.set_title(f'Average {quantile*100:.0f}th Quantile Latency by Policy over all epochs')
 
         plt.tight_layout()
 
-        self.export_plots(file_name=f'bar_p_{int(quantile * 100)}')
+        self.export_plots(file_name=f'{prefix}bar_p_{int(quantile * 100)}')
         plt.close()
 
+    def plot_average_latency_bar_short_long_request(self, policies: List[str]) -> None:
+        df = self.df[self.df['Policy'].isin(policies) & self.df['Is_long_request']]
+        self.plot_average_latency_bar_generic(df, prefix=f'long_req_', order=policies)
+
+        df = self.df[self.df['Policy'].isin(policies) & (self.df['Is_long_request'] == False)]
+        self.plot_average_latency_bar_generic(df, prefix=f'short_req_', order=policies)
+
     def plot_average_latency_bar(self):
+        self.plot_average_latency_bar_generic(df=self.df, prefix='all_')
+
+    def plot_average_latency_bar_generic(self, df: pd.DataFrame, prefix: str = '', order: List[str] | None = None) -> None:
+        if order is None:
+            order = self.policy_order
+
         plt.rcParams.update({'font.size': 14})
         fig, axes = plt.subplots(figsize=(10, 6), dpi=200)
 
         # Calculate the mean of the quantile latency over all epochs for each policy
-        mean_quantile_latency = self.df.groupby('Policy')['Latency'].mean().reset_index()
+        mean_quantile_latency = df.groupby('Policy')['Latency'].mean().reset_index()
 
         # Create bar plot
         sns.barplot(data=mean_quantile_latency, x='Policy', hue='Policy', y='Latency',
-                    palette=POLICY_COLORS, ax=axes, order=self.policy_order)
+                    palette=POLICY_COLORS, ax=axes, order=order)
         axes.set_title(f'Average Latency by Policy over all epochs')
 
         plt.tight_layout()
 
-        self.export_plots(file_name=f'bar_mean.pdf')
+        self.export_plots(file_name=f'{prefix}bar_mean.pdf')
         plt.close()
 
-    def generate_plots(self):
+    def generate_plots(self) -> None:
+        reduced_policies = ['DQN', 'DQN_EXPLR', 'ARS']
         self.plot_latency
         self.boxplot_latency()
         self.plot_average_latency_bar()
+        self.plot_average_latency_bar_short_long_request(policies=reduced_policies)
 
         self.plot_quantile(0.90)
         self.plot_quantile(0.95)
@@ -227,3 +256,6 @@ class ExperimentPlot:
         self.plot_average_quantile_bar(0.90)
         self.plot_average_quantile_bar(0.95)
         self.plot_average_quantile_bar(0.99)
+        self.plot_average_quantile_bar_short_long_requests(quantile=0.9, policies=reduced_policies)
+        self.plot_average_quantile_bar_short_long_requests(quantile=0.95, policies=reduced_policies)
+        self.plot_average_quantile_bar_short_long_requests(quantile=0.99, policies=reduced_policies)
