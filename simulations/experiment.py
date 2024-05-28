@@ -6,7 +6,7 @@ import torch
 
 import random
 import numpy as np
-from simulation_args import BaseArgs, HeterogeneousRequestsArgs, SimulationArgs, log_arguments
+from simulation_args import BaseArgs, HeterogeneousRequestsArgs, SimulationArgs, StaticSlowServerArgs, TimeVaryingServerArgs, log_arguments
 from pathlib import Path
 from model_trainer import Trainer
 from simulations.feature_data_collector import FeatureDataCollector
@@ -17,19 +17,20 @@ from simulations.state import StateParser
 
 
 TRAIN_POLICIES_TO_RUN = [
-    'round_robin',
+    # 'round_robin',
     'ARS',
     # 'response_time',
     # 'weighted_response_time',
-    # 'random',
+    'random',
     'DQN'
 ]
 
 
 EVAL_POLICIES_TO_RUN = [
-    'round_robin',
+    # 'round_robin',
     'ARS',
     'DQN',
+    'random',
     'DQN_EXPLR'
 ]
 
@@ -80,9 +81,9 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, input_args: Any | Non
     run_rl_training(simulation_args=simulation_args, trainer=trainer, state_parser=state_parser, out_folder=out_path)
     run_rl_test(simulation_args=simulation_args, out_folder=out_path,
                 experiment='test', trainer=trainer, state_parser=state_parser)
-    additional_test_args = [HeterogeneousRequestsArgs(input_args=input_args, long_tasks_fraction=0.4,
-                                                      long_task_added_service_time=200)]
-    # additional_test_args = []
+    # additional_test_args = [HeterogeneousRequestsArgs(input_args=input_args, long_tasks_fraction=0.4,
+    #   long_task_added_service_time=200)]
+    additional_test_args = []
 
     for args in additional_test_args:
         print('Running with args:')
@@ -138,6 +139,8 @@ def run_rl_training(simulation_args: SimulationArgs, trainer: Trainer, state_par
 
                 # Update LR
                 trainer.scheduler.step()
+
+                trainer.reset_episode_counters()
                 # trainer.print_weights()
 
     print('Finished')
@@ -183,17 +186,18 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
 
     log_arguments(experiment_folder, simulation_args)
 
-    print('Starting Test Sequence')
     for policy in EVAL_POLICIES_TO_RUN:
         simulation_args.set_policy(policy)
+        print(f'Starting Test Sequence for {policy}')
 
         if policy == 'DQN_EXPLR':
-            trainer.eval_mode = False
+            trainer.eval_mode = True
+            print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
             trainer.EPS_END = simulation_args.args.dqn_explr
             trainer.EPS_START = simulation_args.args.dqn_explr
         elif policy == 'DQN':
-            trainer.EPS_START = simulation_args.args.eps_start
-            trainer.EPS_END = simulation_args.args.eps_end
+            trainer.EPS_END = 0
+            trainer.EPS_START = 0
             trainer.eval_mode = True
 
         for i_episode in range(NUM_TEST_EPSIODES):
@@ -212,9 +216,17 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
             if simulation_args.args.collect_data_points or i_episode == LAST_EPOCH:
                 test_data_analyzer.add_data(test_data_point_monitor, policy=policy, epoch_num=i_episode)
 
-            if policy == 'DQN':
+            if policy in ['DQN', 'DQN_EXPLR']:
                 # Print number of DQN decisions that matched ARS
                 experiment_runner.print_dqn_decision_equal_to_ars_ratio()
+                print(f'Exlore actions this episode: {trainer.explore_actions_episode}')
+                print(f'Exploit actions this episode: {trainer.exploit_actions_episode}')
+                trainer.reset_episode_counters()
+
+        # Reset hyperparameters to before values
+        trainer.EPS_START = simulation_args.args.eps_start
+        trainer.EPS_END = simulation_args.args.eps_end
+        trainer.eval_mode = False
 
     print('Finished')
     # test_data_analyzer.run_latency_lin_reg(epoch=LAST_EPOCH)
@@ -239,11 +251,16 @@ def plot_collected_data(plotter: ExperimentPlot, epoch_to_plot: int, policies_to
         plotter.plot_policy_episode(epoch=epoch_to_plot, policy=policy)
 
 
-def main(input_args=None, setting="base"):
+# TODO: Make scenarios enum and find better way to select args for them
+def main(input_args=None, setting="base") -> None:
     if setting == "base":
         args = BaseArgs(input_args=input_args)
     elif setting == "heterogenous_requests_scenario":
         args = HeterogeneousRequestsArgs(input_args=input_args)
+    elif setting == "heterogenous_static_service_time_scenario":
+        args = StaticSlowServerArgs(input_args=input_args)
+    elif setting == "time_varying_service_time_servers":
+        args = TimeVaryingServerArgs(input_args=input_args)
     else:
         raise Exception(f'Unknown setting {setting}')
     # elif setting =="slow":
@@ -251,6 +268,13 @@ def main(input_args=None, setting="base"):
     # elif setting =="uneven":
     #     args = SlowServerArgs(0.5,0.1, input_args=input_args)
     args.set_policy('ARS')
+
+    rl_experiment_wrapper(args, input_args=input_args)
+
+    args.args.long_tasks_fraction = 0.4
+
+    ARGS_TO_RUN = [HeterogeneousRequestsArgs(input_args=input_args)]
+
     return rl_experiment_wrapper(args, input_args=input_args)
 
 

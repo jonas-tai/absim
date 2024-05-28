@@ -38,6 +38,9 @@ class Trainer:
         self.TAU_DECAY = tau_decay
         self.LR = lr
 
+        self.explore_actions_episode = 0
+        self.exploit_actions_episode = 0
+
         self.losses = []
         self.grads = []
         self.mean_value = []
@@ -122,7 +125,7 @@ class Trainer:
         eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(
             -1. * self.steps_done / self.EPS_DECAY)
 
-        if self.eval_mode or sample > eps_threshold:
+        if sample > eps_threshold:
             with torch.no_grad():
                 # t.max(1) will return the largest column value of each row.
                 # second column on max result is index of where max element was
@@ -130,7 +133,9 @@ class Trainer:
                 q_values = self.policy_net(self.state_parser.state_to_tensor(state=state))
                 # print(q_values)
                 action_chosen = q_values.max(1).indices.view(1, 1)
+                self.exploit_actions_episode += 1
         else:
+            self.explore_actions_episode += 1
             action_chosen = torch.tensor([[random.randint(0, self.n_actions - 1)]], device=self.device,
                                          dtype=torch.long)
 
@@ -202,6 +207,10 @@ class Trainer:
         # In-place gradient clipping
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 1)
         self.optimizer.step()
+
+    def reset_episode_counters(self) -> None:
+        self.explore_actions_episode = 0
+        self.exploit_actions_episode = 0
 
     def plot_grads_and_losses(self, plot_path: Path):
         fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')

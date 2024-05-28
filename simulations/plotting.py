@@ -31,14 +31,14 @@ class ExperimentPlot:
         self.policy_order = [policy for policy in POLICY_ORDER if policy in self.df['Policy'].unique()]
 
     def add_data(self, monitor: Monitor, policy: str, epoch_num: int):
-        latency_replica_time_tuples: List[Tuple[DataPoint, float]] = monitor.get_data()
+        data_point_time_tuples: List[Tuple[DataPoint, float]] = monitor.get_data()
         df_entries = [{
             "Time": time,
-            "Latency": latency_replica.latency,
-            "Replica": latency_replica.replica_id,
+            "Latency": data_point.latency,
+            "Replica": data_point.replica_id,
             "Epoch": epoch_num,
             "Policy": policy
-        } for (latency_replica, time) in latency_replica_time_tuples]
+        } for (data_point, time) in data_point_time_tuples]
 
         df = pd.DataFrame(df_entries)
 

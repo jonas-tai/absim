@@ -253,9 +253,12 @@ class Client:
                     if ((first_node_score - new_node_score) / first_node_score
                             > badness_threshold):
                         replica_set.sort(key=self.dsScores.get)
-        elif self.REPLICA_SELECTION_STRATEGY == 'DQN' or self.REPLICA_SELECTION_STRATEGY == 'DQN_EXPLR':
+        elif self.REPLICA_SELECTION_STRATEGY in ['DQN', 'DQN_EXPLR']:
             action = self.trainer.select_action(state)
-            self.trainer.record_state_and_action(task_id=task.id, state=state, action=action)
+
+            if self.REPLICA_SELECTION_STRATEGY == 'DQN':
+                self.trainer.record_state_and_action(task_id=task.id, state=state, action=action)
+
             # Map action back to server id
             replica = next(server for server in replica_set if server.get_server_id() == action)
 
@@ -443,6 +446,7 @@ class ResponseHandler:
                                                         task_finished - client.taskSentTimeTracker[task]))
         metric_map = task.completion_event.value
         metric_map["responseTime"] = client.responseTimesMap[replica_that_served]
+        # TODO: Fix naming, not really NW latency
         metric_map["nw"] = metric_map["responseTime"] - metric_map["serviceTime"]  # - metric_map["waitingTime"]
         client.update_ema(replica_that_served, metric_map)
         client.receiveRate[replica_that_served].add(1)
