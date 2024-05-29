@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 import torch
+import copy
 from sklearn.preprocessing import PolynomialFeatures
 
 
@@ -19,6 +20,19 @@ class NodeState:
     outstanding_long_requests: int = 0
     outstanding_short_requests: int = 0
 
+    def deep_copy(self):
+        return NodeState(
+            response_time=self.response_time,
+            outstanding_requests=self.outstanding_requests,
+            ars_score=self.ars_score,
+            queue_size=self.queue_size,
+            service_time=self.service_time,
+            wait_time=self.wait_time,
+            twice_network_latency=self.twice_network_latency,
+            outstanding_long_requests=self.outstanding_long_requests,
+            outstanding_short_requests=self.outstanding_short_requests
+        )
+
 
 @dataclass
 class State:
@@ -27,6 +41,18 @@ class State:
     # Track the number of requests in the last 1s, 0.5s, 0.1s,...
     request_trend: List[int]
     node_states: List[NodeState]
+
+    def deep_copy(self):
+        # Manually deep copy the list of request_trend
+        request_trend_copy = copy.deepcopy(self.request_trend)
+        # Manually deep copy each NodeState in node_states
+        node_states_copy = [node_state.deep_copy() for node_state in self.node_states]
+        return State(
+            time_since_last_req=self.time_since_last_req,
+            is_long_request=self.is_long_request,
+            request_trend=request_trend_copy,
+            node_states=node_states_copy
+        )
 
 
 class StateParser:

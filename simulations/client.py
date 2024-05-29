@@ -7,6 +7,7 @@ import constants
 from simulations.model_trainer import Trainer
 from task import Task
 import math
+import threading
 
 from yunomi.stats.exp_decay_sample import ExponentiallyDecayingSample
 
@@ -14,7 +15,7 @@ from simulations.server import Server
 from simulations.state import NodeState, State, StateParser
 from collections import defaultdict, namedtuple
 
-DataPoint = namedtuple('LatencyReplica', ('state', 'latency', 'replica_id'))
+DataPoint = namedtuple('DataPoint', ('state', 'latency', 'replica_id', 'is_duplicate', 'is_faster_response'))
 
 
 class Client:
@@ -22,7 +23,9 @@ class Client:
                  access_pattern, replication_factor, backpressure,
                  shadow_read_ratio, rate_interval,
                  cubic_c, cubic_smax, cubic_beta, hysterisis_factor,
-                 demand_weight, simulation, rate_intervals=None, trainer: Trainer = None):
+                 demand_weight, simulation, duplication_rate: float = 0.0, rate_intervals=None, trainer: Trainer = None):
+        self.lock = threading.Lock()
+
         if rate_intervals is None:
             rate_intervals = [1000, 500, 100]
         self.id = id_
@@ -39,15 +42,17 @@ class Client:
         self.tokenMonitor = Monitor(name="TokenMonitor", simulation=simulation)
         self.edScoreMonitor = Monitor(name="edScoreMonitor", simulation=simulation)
         self.backpressure = backpressure  # True / False
-        self.shadowReadRatio = shadow_read_ratio
+        self.shadow_read_ratio = shadow_read_ratio
         self.demandWeight = demand_weight
         self.simulation = simulation
         self.last_req_start_time = self.simulation.now
         self.time_since_last_req = 0
         self.trainer = trainer
         self.request_rate_monitor = RequestRateMonitor(simulation, rate_intervals)
+        # Tracks number of requests handled (requests that arrived, excludes duplicate requests)
         self.requests_handled = 0
         self.dqn_decision_equal_to_ars = 0
+        self.duplication_rate = duplication_rate
 
         # Keep track of which replica round robin serves next
         self.next_RR_replica = 0
@@ -72,6 +77,7 @@ class Client:
         # Used to track response time from the perspective of the client
         self.taskSentTimeTracker = {}
         self.taskArrivalTimeTracker = {}
+        self.duplicated_tasks_latency_tracker = {}
 
         # Record waiting and service times as relayed by the server
         self.expected_delay_map = {node: {} for node in server_list}
@@ -145,19 +151,21 @@ class Client:
         if self.backpressure is False:
             replica_to_serve = self.sort(task, replica_set)
             self.send_request(task, replica_to_serve)
+            # TODO: Make this copies to avoid potential race conditions?
+            self.maybe_send_duplicate_request(task=task, replica_to_serve=replica_to_serve, replica_set=replica_set)
 
             self.maybe_send_shadow_reads(replica_to_serve, replica_set)
         else:
             self.backpressureSchedulers[replica_set[0]].enqueue(task, replica_set)
 
     def send_request(self, task: Task, replica_to_serve: Server):
-        delay = replica_to_serve.get_server_nw_latency()
+        nw_delay = replica_to_serve.get_server_nw_latency()
         self.handled_requests += 1
 
         # Immediately send out request
         message_delivery_process = DeliverMessageWithDelay(simulation=self.simulation)
         self.simulation.process(message_delivery_process.run(task,
-                                                             delay,
+                                                             nw_delay,
                                                              replica_to_serve))
         response_handler = ResponseHandler(self.simulation)
         self.simulation.process(response_handler.run(self, task, replica_to_serve))
@@ -327,14 +335,24 @@ class Client:
             return 0
         return total
 
-    def maybe_send_shadow_reads(self, replicaToServe, replicaSet):
-        if self.simulation.random.uniform(0, 1.0) < self.shadowReadRatio:
-            for replica in replicaSet:
-                if replica is not replicaToServe:
+    def maybe_send_duplicate_request(self, task: Task, replica_to_serve: Server, replica_set: List[Server]):
+        # Potentially send duplicate request
+        if self.simulation.random.random() < self.duplication_rate:
+            # Send duplicate request to other replica than exploit request
+            replica_set_duplicate_req = [
+                replica for replica in replica_set if replica.get_server_id() != replica_to_serve.get_server_id()]
+            duplicate_replica = self.simulation.random.shuffle(replica_set_duplicate_req)
+            duplicate_task = task.create_duplicate_task()
+            self.taskArrivalTimeTracker[duplicate_task] = self.taskArrivalTimeTracker[task]
+
+            self.send_request(task=duplicate_task, replica_to_serve=duplicate_replica)
+
+    def maybe_send_shadow_reads(self, replica_to_serve, replica_set):
+        if self.simulation.random.uniform(0, 1.0) < self.shadow_read_ratio:
+            for replica in replica_set:
+                if replica is not replica_to_serve:
                     shadow_read_task = Task("ShadowRead", None, self.simulation)
-                    self.taskArrivalTimeTracker[shadow_read_task] = \
-                        self.simulation.now
-                    self.taskSentTimeTracker[shadow_read_task] = self.simulation.now
+                    self.taskArrivalTimeTracker[shadow_read_task] = self.simulation.now
                     self.send_request(shadow_read_task, replica)
                     self.rateLimiters[replica].forceUpdates()
 
@@ -446,8 +464,10 @@ class ResponseHandler:
                                                         task_finished - client.taskSentTimeTracker[task]))
         metric_map = task.completion_event.value
         metric_map["responseTime"] = client.responseTimesMap[replica_that_served]
-        # TODO: Fix naming, not really NW latency
+        # TODO: Fix naming, not really NW latency but nw latency + wait time
         metric_map["nw"] = metric_map["responseTime"] - metric_map["serviceTime"]  # - metric_map["waitingTime"]
+
+        # TODO: Validate that correct for duplication if using dynamic snitch with duplication
         client.update_ema(replica_that_served, metric_map)
         client.receiveRate[replica_that_served].add(1)
 
@@ -458,8 +478,7 @@ class ResponseHandler:
         client.lastSeen[replica_that_served] = task_finished
 
         if client.REPLICA_SELECTION_STRATEGY == "ds":
-            client.latencyEdma[replica_that_served] \
-                .update(metric_map["responseTime"])
+            client.latencyEdma[replica_that_served].update(metric_map["responseTime"])
 
         del client.taskSentTimeTracker[task]
         del client.taskArrivalTimeTracker[task]
@@ -467,17 +486,27 @@ class ResponseHandler:
         # task.start is created at Task creation time in workload.py
         latency = task_finished - task.start
 
+        is_faster_response = True
+        if task.has_duplicate or task.is_duplicate:
+            with client.lock:
+                if task.original_id not in client.duplicated_tasks_latency_tracker:
+                    client.duplicated_tasks_latency_tracker[task.original_id] = latency
+                else:
+                    is_faster_response = False
+                    del client.duplicated_tasks_latency_tracker[task.original_id]
+
         # Does not make sense to record shadow read latencies
         # as a latency measurement
         if task.id != 'ShadowRead':
             # Task completed, we call the trainer to see if we can do a step
-            if client.REPLICA_SELECTION_STRATEGY == 'DQN':
+            if client.REPLICA_SELECTION_STRATEGY == 'DQN' and not task.is_duplicate:
                 client.trainer.execute_step_if_state_present(task_id=task.id, latency=latency)
 
             state = task.get_state()
 
             replica_id = replica_that_served.id
-            client.data_point_monitor.observe(DataPoint(state=state, latency=latency, replica_id=replica_id))
+            client.data_point_monitor.observe(DataPoint(state=state, latency=latency,
+                                              replica_id=replica_id, is_duplicate=task.is_duplicate, is_faster_response=is_faster_response))
 
 
 class RequestRateMonitor:
@@ -646,6 +675,7 @@ class DynamicSnitch:
     '''
     Model for Cassandra's native dynamic snitching approach
     '''
+    # TODO: Validate that correct for duplication if using dynamic snitch with duplication
 
     def __init__(self, client, snitchUpdateInterval, simulation):
         self.SNITCHING_INTERVAL = snitchUpdateInterval

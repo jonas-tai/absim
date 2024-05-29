@@ -213,7 +213,8 @@ class ExperimentRunner:
                               demand_weight=client_weights[i],
                               rate_intervals=args.rate_intervals,
                               trainer=trainer,
-                              simulation=simulation)
+                              simulation=simulation,
+                              duplication_rate=args.duplication_rateu)
             self.clients.append(c)
 
         # This is where we set the inter-arrival times based on

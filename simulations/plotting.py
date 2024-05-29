@@ -18,6 +18,7 @@ POLICY_COLORS = {
 }
 
 
+# TODO: Add plotting for work duplication
 class ExperimentPlot:
     def __init__(self, plot_folder: Path, data_folder: Path, use_log_scale: bool = False) -> None:
         self.df = None
@@ -37,6 +38,8 @@ class ExperimentPlot:
             "Latency": data_point.latency,
             "Replica": data_point.replica_id,
             "Is_long_request": data_point.state.is_long_request,
+            "Is_faster_response": data_point.state.is_faster_response,
+            "Is_duplicate": data_point.state.is_duplicate,
             "Epoch": epoch_num,
             "Policy": policy
         } for (data_point, time) in data_point_time_tuples]
