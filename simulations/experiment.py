@@ -116,8 +116,7 @@ def run_rl_training(simulation_args: SimulationArgs, trainer: Trainer, state_par
 
     log_arguments(experiment_folder, simulation_args)
 
-    # TODO: Change to 0
-    duplication_rate = simulation_args.args.duplication_rate
+    duplication_rate = 0.0
 
     print('Starting experiments')
     for policy in TRAIN_POLICIES_TO_RUN:
@@ -194,13 +193,12 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
     for policy in EVAL_POLICIES_TO_RUN:
         simulation_args.set_policy(policy)
         print(f'Starting Test Sequence for {policy}')
-        duplication_rate = 0.0
         # Reset hyperparameters
         trainer.EPS_START = simulation_args.args.eps_start
         trainer.EPS_END = simulation_args.args.eps_end
         trainer.eval_mode = False
 
-        duplication_rate = simulation_args.args.duplication_rate
+        duplication_rate = 0.0
 
         utilization = simulation_args.args.utilization
         if policy == 'DQN_EXPLR':
@@ -278,38 +276,42 @@ def main(input_args=None, setting="base") -> None:
     else:
         raise Exception(f'Unknown setting {setting}')
 
-    last = rl_experiment_wrapper(args, input_args=input_args)
-    return
+    args.set_policy('ARS')
+
+    for duplication_rate in [0.01, 0.05]:
+        args.args.duplication_rate = duplication_rate
+        _ = rl_experiment_wrapper(args, input_args=input_args)
     # elif setting =="slow":
     #     args = SlowServerArgs(0.5,0.5, input_args=input_args)
     # elif setting =="uneven":
     #     args = SlowServerArgs(0.5,0.1, input_args=input_args)
-    args.set_policy('ARS')
 
     last = 0.0
     # Heterogeneous requests workloads
-    # for long_task_fraction in [0.05, 0.1, 0.2, 0.3, 0.4]:
-    #     for dqn_explr in [0.1, 0.2]:
+    args = HeterogeneousRequestsArgs(input_args=input_args)
+
+    for long_task_fraction in [0.2, 0.4]:
+        for duplication_rate in [0.05, 0.1]:
+            for utilization in [0.45, 0.7]:
+                args.args.duplication_rate = duplication_rate
+                args.args.long_tasks_fraction = long_task_fraction
+                args.args.utilization = utilization
+                last = rl_experiment_wrapper(args, input_args=input_args)
+
+    # Static slow server workloads
+    # args = StaticSlowServerArgs(input_args=input_args)
+    # args.args.epochs = 300
+    # args.args.num_requests = 8000
+    # args.args.num_requests_test = 60000
+    # args.args.eps_decay = 400000
+    # args.args.lr_scheduler_step_size = 70
+    # for slow_server_slowness in [2.0, 3.0]:
+    #     for dqn_explr in [0.1]:
     #         for utilization in [0.45, 0.7]:
-    #             args.args.long_tasks_fraction = long_task_fraction
+    #             args.args.slow_server_slowness = slow_server_slowness
     #             args.args.dqn_explr = dqn_explr
     #             args.args.utilization = utilization
     #             last = rl_experiment_wrapper(args, input_args=input_args)
-
-    # Static slow server workloads
-    args = StaticSlowServerArgs(input_args=input_args)
-    args.args.epochs = 300
-    args.args.num_requests = 8000
-    args.args.num_requests_test = 60000
-    args.args.eps_decay = 400000
-    args.args.lr_scheduler_step_size = 70
-    for slow_server_slowness in [2.0, 3.0]:
-        for dqn_explr in [0.1]:
-            for utilization in [0.45, 0.7]:
-                args.args.slow_server_slowness = slow_server_slowness
-                args.args.dqn_explr = dqn_explr
-                args.args.utilization = utilization
-                last = rl_experiment_wrapper(args, input_args=input_args)
 
     args = TimeVaryingServerArgs(input_args=input_args)
     args.args.epochs = 300
@@ -319,14 +321,16 @@ def main(input_args=None, setting="base") -> None:
     args.args.interval_param = 2500
     args.args.lr_scheduler_step_size = 70
     for time_varying_drift in [2.0, 3.0]:
-        for interval in [500, 2500, 50, 200]:
+        for interval in [500]:  # 200, 50
             for dqn_explr in [0.1]:
                 for utilization in [0.45, 0.7]:
-                    args.args.interval_param = interval
-                    args.args.time_varying_drift = time_varying_drift
-                    args.args.dqn_explr = dqn_explr
-                    args.args.utilization = utilization
-                    last = rl_experiment_wrapper(args, input_args=input_args)
+                    for duplication_rate in [0.05, 0.1]:
+                        args.args.duplication_rate = duplication_rate
+                        args.args.interval_param = interval
+                        args.args.time_varying_drift = time_varying_drift
+                        args.args.dqn_explr = dqn_explr
+                        args.args.utilization = utilization
+                        last = rl_experiment_wrapper(args, input_args=input_args)
 
     return last
 

@@ -92,7 +92,7 @@ class SimulationArgs:
         parser.add_argument('--service_time_model', nargs='?',
                             type=str, default="random.expovariate", help='Distribution of service time on server (random.expovariate | constant | math.sin')
         parser.add_argument('--utilization', nargs='?',
-                            type=float, default=0.45, help='Arrival rate of requests')
+                            type=float, default=0.7, help='Arrival rate of requests')
         parser.add_argument('--num_requests', nargs='?',
                             type=int, default=1000, help='Number of requests')
         parser.add_argument('--exp_scenario', nargs='?',
@@ -170,7 +170,7 @@ class SimulationArgs:
                             type=float, default=0.5, help='Model trainer argument')
 
         parser.add_argument('--duplication_rate', nargs='?',
-                            type=float, default=0.05, help='Number of requests to duplicate')
+                            type=float, default=0.1, help='Number of requests to duplicate')
 
         self.parser = parser
         print(input_args)

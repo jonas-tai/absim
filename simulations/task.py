@@ -20,7 +20,7 @@ class Task:
     def create_duplicate_task(self):
         duplicate_id = f'duplicate_{self.id}'
         duplicate_task = Task(id_=duplicate_id, simulation=self.simulation,
-                              is_long_task=self.is_long_task, start=self.start, is_duplicate=True, original_id=self.id)
+                              is_long_task=self._is_long_task, start=self.start, is_duplicate=True, original_id=self.id)
         if self.state_at_arrival_time is not None:
             duplicate_task.set_state(self.state_at_arrival_time.deep_copy())
         self.has_duplicate = True
