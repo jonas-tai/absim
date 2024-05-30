@@ -7,7 +7,7 @@ from simulations.monitor import Monitor
 from simulations.client import DataPoint
 
 
-POLICY_ORDER = ["DQN", "DQN_EXPLR", "ARS", "round_robin", "random"]
+POLICY_ORDER = ["DQN", "DQN_DUPL", "DQN_EXPLR", "ARS", "round_robin", "random"]
 
 POLICY_COLORS = {
     "ARS": "C0",
@@ -15,6 +15,7 @@ POLICY_COLORS = {
     "DQN": "C2",
     "round_robin": "C3",
     'DQN_EXPLR': "C4",
+    "DQN_DUPL": 'C5',
 }
 
 
@@ -38,8 +39,8 @@ class ExperimentPlot:
             "Latency": data_point.latency,
             "Replica": data_point.replica_id,
             "Is_long_request": data_point.state.is_long_request,
-            "Is_faster_response": data_point.state.is_faster_response,
-            "Is_duplicate": data_point.state.is_duplicate,
+            "Is_faster_response": data_point.is_faster_response,
+            "Is_duplicate": data_point.is_duplicate,
             "Epoch": epoch_num,
             "Policy": policy
         } for (data_point, time) in data_point_time_tuples]
@@ -78,7 +79,7 @@ class ExperimentPlot:
         file.write(median_latency.to_string() + '\n\n')
 
         # Quantiles
-        for quantile in [0.9, 0.95, 0.99]:
+        for quantile in [0.9, 0.95, 0.99, 0.999]:
             file.write(f'Quantile: {quantile}\n')
             # Calculate the quantile latency for each policy and epoch
             quantile_latency = df.groupby(['Policy', 'Epoch'])['Latency'].quantile(quantile).reset_index()
@@ -209,11 +210,11 @@ class ExperimentPlot:
         # Create bar plot
         sns.barplot(data=mean_quantile_latency, x='Policy', hue='Policy', y='Latency',
                     palette=POLICY_COLORS, ax=axes, order=order)
-        axes.set_title(f'Average {quantile*100:.0f}th Quantile Latency by Policy over all epochs')
+        axes.set_title(f'Average {quantile*100:.1f}th Quantile Latency by Policy over all epochs')
 
         plt.tight_layout()
 
-        self.export_plots(file_name=f'{prefix}bar_p_{int(quantile * 100)}')
+        self.export_plots(file_name=f'{prefix}bar_p_{int(quantile * 1000)}')
         plt.close()
 
     def plot_average_latency_bar_short_long_request(self, policies: List[str]) -> None:
@@ -248,7 +249,13 @@ class ExperimentPlot:
 
     def generate_plots(self) -> None:
         reduced_policies = ['DQN', 'DQN_EXPLR', 'ARS']
-        self.plot_latency
+        print('Before')
+        print(len(self.df))
+        self.df = self.df[self.df['Is_faster_response']]
+        print('After')
+        print(len(self.df))
+
+        self.plot_latency()
         self.boxplot_latency()
         self.plot_average_latency_bar()
         self.plot_average_latency_bar_short_long_request(policies=reduced_policies)
@@ -259,6 +266,8 @@ class ExperimentPlot:
         self.plot_average_quantile_bar(0.90)
         self.plot_average_quantile_bar(0.95)
         self.plot_average_quantile_bar(0.99)
+        self.plot_average_quantile_bar(0.999)
         self.plot_average_quantile_bar_short_long_requests(quantile=0.9, policies=reduced_policies)
         self.plot_average_quantile_bar_short_long_requests(quantile=0.95, policies=reduced_policies)
         self.plot_average_quantile_bar_short_long_requests(quantile=0.99, policies=reduced_policies)
+        self.plot_average_quantile_bar_short_long_requests(quantile=0.999, policies=reduced_policies)

@@ -28,6 +28,7 @@ class FeatureDataCollector:
             "DQN": "C2",
             "round_robin": "C3",
             'DQN_EXPLR': "C4",
+            'DQN_DUPL': "C5",
         }
         self.out_folder = out_folder
         self.state_parser = state_parser

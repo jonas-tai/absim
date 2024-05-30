@@ -31,7 +31,8 @@ EVAL_POLICIES_TO_RUN = [
     'ARS',
     'DQN',
     # 'random',
-    'DQN_EXPLR'
+    'DQN_EXPLR',
+    'DQN_DUPL'
 ]
 
 
@@ -115,6 +116,9 @@ def run_rl_training(simulation_args: SimulationArgs, trainer: Trainer, state_par
 
     log_arguments(experiment_folder, simulation_args)
 
+    # TODO: Change to 0
+    duplication_rate = simulation_args.args.duplication_rate
+
     print('Starting experiments')
     for policy in TRAIN_POLICIES_TO_RUN:
         simulation_args.set_policy(policy)
@@ -127,9 +131,10 @@ def run_rl_training(simulation_args: SimulationArgs, trainer: Trainer, state_par
             np.random.seed(i_episode)
             torch.manual_seed(i_episode)
             simulation_args.set_seed(i_episode)
+            utilization = simulation_args.args.utilization
 
             data_point_monitor = experiment_runner.run_experiment(
-                simulation_args.args, num_requests=simulation_args.args.num_requests, trainer=trainer)
+                simulation_args.args, num_requests=simulation_args.args.num_requests, utilization=utilization, trainer=trainer, duplication_rate=duplication_rate)
             train_plotter.add_data(data_point_monitor, policy, i_episode)
 
             if simulation_args.args.collect_data_points or i_episode == LAST_EPOCH:
@@ -189,7 +194,15 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
     for policy in EVAL_POLICIES_TO_RUN:
         simulation_args.set_policy(policy)
         print(f'Starting Test Sequence for {policy}')
+        duplication_rate = 0.0
+        # Reset hyperparameters
+        trainer.EPS_START = simulation_args.args.eps_start
+        trainer.EPS_END = simulation_args.args.eps_end
+        trainer.eval_mode = False
 
+        duplication_rate = simulation_args.args.duplication_rate
+
+        utilization = simulation_args.args.utilization
         if policy == 'DQN_EXPLR':
             trainer.eval_mode = True
             print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
@@ -199,6 +212,12 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
             trainer.EPS_END = 0
             trainer.EPS_START = 0
             trainer.eval_mode = True
+        elif policy == 'DQN_DUPL':
+            duplication_rate = simulation_args.args.duplication_rate
+            trainer.EPS_END = 0
+            trainer.EPS_START = 0
+            trainer.eval_mode = True
+            # utilization -= duplication_rate
 
         for i_episode in range(NUM_TEST_EPSIODES):
             seed = BASE_TEST_SEED + i_episode
@@ -210,23 +229,18 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
             simulation_args.set_seed(seed)
 
             test_data_point_monitor = experiment_runner.run_experiment(
-                simulation_args.args, num_requests=NUM_TEST_REQUESTS, trainer=trainer, eval_mode=trainer.eval_mode)
+                simulation_args.args, num_requests=NUM_TEST_REQUESTS, utilization=utilization, trainer=trainer, eval_mode=trainer.eval_mode, duplication_rate=duplication_rate)
             test_plotter.add_data(test_data_point_monitor, simulation_args.args.selection_strategy, i_episode)
 
             if simulation_args.args.collect_data_points or i_episode == LAST_EPOCH:
                 test_data_analyzer.add_data(test_data_point_monitor, policy=policy, epoch_num=i_episode)
 
-            if policy in ['DQN', 'DQN_EXPLR']:
+            if policy in ['DQN', 'DQN_EXPLR', 'DQN_DUPL']:
                 # Print number of DQN decisions that matched ARS
                 experiment_runner.print_dqn_decision_equal_to_ars_ratio()
                 print(f'Exlore actions this episode: {trainer.explore_actions_episode}')
                 print(f'Exploit actions this episode: {trainer.exploit_actions_episode}')
                 trainer.reset_episode_counters()
-
-        # Reset hyperparameters to before values
-        trainer.EPS_START = simulation_args.args.eps_start
-        trainer.EPS_END = simulation_args.args.eps_end
-        trainer.eval_mode = False
 
     print('Finished')
     # test_data_analyzer.run_latency_lin_reg(epoch=LAST_EPOCH)
@@ -263,6 +277,9 @@ def main(input_args=None, setting="base") -> None:
         args = TimeVaryingServerArgs(input_args=input_args)
     else:
         raise Exception(f'Unknown setting {setting}')
+
+    last = rl_experiment_wrapper(args, input_args=input_args)
+    return
     # elif setting =="slow":
     #     args = SlowServerArgs(0.5,0.5, input_args=input_args)
     # elif setting =="uneven":
@@ -281,11 +298,11 @@ def main(input_args=None, setting="base") -> None:
 
     # Static slow server workloads
     args = StaticSlowServerArgs(input_args=input_args)
-    args.args.epochs = 200
-    args.args.num_requests = 3000
-    args.args.num_requests_test = 3000
-    args.args.eps_decay = 80000
-    args.args.lr_scheduler_step_size = 50
+    args.args.epochs = 300
+    args.args.num_requests = 8000
+    args.args.num_requests_test = 60000
+    args.args.eps_decay = 400000
+    args.args.lr_scheduler_step_size = 70
     for slow_server_slowness in [2.0, 3.0]:
         for dqn_explr in [0.1]:
             for utilization in [0.45, 0.7]:
@@ -295,22 +312,24 @@ def main(input_args=None, setting="base") -> None:
                 last = rl_experiment_wrapper(args, input_args=input_args)
 
     args = TimeVaryingServerArgs(input_args=input_args)
-    args.args.epochs = 200
-    args.args.num_requests = 3000
-    args.args.num_requests_test = 3000
-    args.args.eps_decay = 80000
+    args.args.epochs = 300
+    args.args.num_requests = 8000
+    args.args.num_requests_test = 60000
+    args.args.eps_decay = 400000
     args.args.interval_param = 2500
-    args.args.lr_scheduler_step_size = 50
+    args.args.lr_scheduler_step_size = 70
     for time_varying_drift in [2.0, 3.0]:
-        for dqn_explr in [0.1]:
-            for utilization in [0.45, 0.7]:
-                args.args.time_varying_drift = time_varying_drift
-                args.args.dqn_explr = dqn_explr
-                args.args.utilization = utilization
-                last = rl_experiment_wrapper(args, input_args=input_args)
+        for interval in [500, 2500, 50, 200]:
+            for dqn_explr in [0.1]:
+                for utilization in [0.45, 0.7]:
+                    args.args.interval_param = interval
+                    args.args.time_varying_drift = time_varying_drift
+                    args.args.dqn_explr = dqn_explr
+                    args.args.utilization = utilization
+                    last = rl_experiment_wrapper(args, input_args=input_args)
 
     return last
 
 
 if __name__ == '__main__':
-    main(setting="heterogenous_static_service_time_scenario")
+    main(setting="base")

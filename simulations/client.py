@@ -261,7 +261,7 @@ class Client:
                     if ((first_node_score - new_node_score) / first_node_score
                             > badness_threshold):
                         replica_set.sort(key=self.dsScores.get)
-        elif self.REPLICA_SELECTION_STRATEGY in ['DQN', 'DQN_EXPLR']:
+        elif self.REPLICA_SELECTION_STRATEGY in ['DQN', 'DQN_EXPLR', 'DQN_DUPL']:
             action = self.trainer.select_action(state)
 
             if self.REPLICA_SELECTION_STRATEGY == 'DQN':
@@ -341,7 +341,8 @@ class Client:
             # Send duplicate request to other replica than exploit request
             replica_set_duplicate_req = [
                 replica for replica in replica_set if replica.get_server_id() != replica_to_serve.get_server_id()]
-            duplicate_replica = self.simulation.random.shuffle(replica_set_duplicate_req)
+            self.simulation.random.shuffle(replica_set_duplicate_req)
+            duplicate_replica = replica_set_duplicate_req[0]
             duplicate_task = task.create_duplicate_task()
             self.taskArrivalTimeTracker[duplicate_task] = self.taskArrivalTimeTracker[task]
 
@@ -488,12 +489,12 @@ class ResponseHandler:
 
         is_faster_response = True
         if task.has_duplicate or task.is_duplicate:
-            with client.lock:
-                if task.original_id not in client.duplicated_tasks_latency_tracker:
-                    client.duplicated_tasks_latency_tracker[task.original_id] = latency
-                else:
-                    is_faster_response = False
-                    del client.duplicated_tasks_latency_tracker[task.original_id]
+            # with client.lock:
+            if task.original_id not in client.duplicated_tasks_latency_tracker:
+                client.duplicated_tasks_latency_tracker[task.original_id] = latency
+            else:
+                is_faster_response = False
+                del client.duplicated_tasks_latency_tracker[task.original_id]
 
         # Does not make sense to record shadow read latencies
         # as a latency measurement

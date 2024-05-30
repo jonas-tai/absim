@@ -7,7 +7,7 @@ import pandas as pd
 
 from simulations.plotting import ExperimentPlot
 
-for i in range(106, 107):
+for i in range(150, 163):
     mode = 'test'
     base_path = Path(f'/home/jonas/projects/absim/outputs/{i}/{mode}')
 
@@ -19,3 +19,4 @@ for i in range(106, 107):
     plotter.from_csv()
 
     plotter.generate_plots()
+    plotter.save_stats_to_file()

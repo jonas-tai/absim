@@ -29,7 +29,7 @@ class ExperimentRunner:
         ratio = self.clients[client_index].dqn_decision_equal_to_ars / self.clients[client_index].requests_handled
         print(f'DQN matched ARS for {ratio * 100}% of decisions')
 
-    def run_experiment(self, args, num_requests: int, trainer: Trainer = None, eval_mode=False) -> Monitor:
+    def run_experiment(self, args, num_requests: int, utilization: float, trainer: Trainer = None, duplication_rate: float = 0.0, eval_mode=False) -> Monitor:
         self.reset_stats()
 
         # Set the random seed
@@ -42,6 +42,7 @@ class ExperimentRunner:
         constants.NUMBER_OF_CLIENTS = args.num_clients
 
         assert args.exp_scenario != ""
+        assert utilization > 0
 
         service_rate_per_server = []
         if args.exp_scenario == "base" or args.exp_scenario == 'heterogenous_requests_scenario':
@@ -214,7 +215,7 @@ class ExperimentRunner:
                               rate_intervals=args.rate_intervals,
                               trainer=trainer,
                               simulation=simulation,
-                              duplication_rate=args.duplication_rateu)
+                              duplication_rate=duplication_rate)
             self.clients.append(c)
 
         # This is where we set the inter-arrival times based on

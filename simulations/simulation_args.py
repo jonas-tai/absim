@@ -170,7 +170,7 @@ class SimulationArgs:
                             type=float, default=0.5, help='Model trainer argument')
 
         parser.add_argument('--duplication_rate', nargs='?',
-                            type=float, default=0.0, help='Number of requests to duplicate')
+                            type=float, default=0.05, help='Number of requests to duplicate')
 
         self.parser = parser
         print(input_args)
