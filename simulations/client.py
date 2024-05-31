@@ -202,7 +202,12 @@ class Client:
             # Pick a random node for the request.
             # Represents SimpleSnitch + uniform request access.
             # Ignore scores and everything else.
-            self.simulation.random.shuffle(replica_set)
+            replica_id = self.simulation.random.randint(0, len(original_replica_set) - 1)
+            # self.simulation.random.shuffle(replica_set)
+            replica = next(server for server in replica_set if server.get_server_id() == replica_id)
+
+            # set the first replica to be the "action"
+            replica_set[0] = replica
         elif self.REPLICA_SELECTION_STRATEGY == "round_robin":
             replica_set[0] = replica_set[self.next_RR_replica]
             # Increase round robin counter
@@ -342,8 +347,13 @@ class Client:
             # Send duplicate request to other replica than exploit request
             replica_set_duplicate_req = [
                 replica for replica in replica_set if replica.get_server_id() != replica_to_serve.get_server_id()]
-            self.simulation.random.shuffle(replica_set_duplicate_req)
-            duplicate_replica = replica_set_duplicate_req[0]
+            # self.simulation.random.shuffle(replica_set_duplicate_req)
+
+            replica_id = self.simulation.random.randint(0, len(replica_set_duplicate_req) - 1)
+            # self.simulation.random.shuffle(replica_set)
+            duplicate_replica = next(
+                server for server in replica_set_duplicate_req if server.get_server_id() == replica_id)
+
             duplicate_task = task.create_duplicate_task()
             self.taskArrivalTimeTracker[duplicate_task] = self.taskArrivalTimeTracker[task]
 
