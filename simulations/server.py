@@ -43,18 +43,24 @@ class Server:
         # self.simulation.activate(executor, executor.run(), self.simulation.now)
 
     def get_service_time(self, is_long_task=False):
+        base_service_time = self.service_time
+
+        # Add service time if long task
+        if is_long_task:
+            base_service_time += self.long_task_added_service_time
+
         if self.service_time_model == "random.expovariate":
-            service_time = self.simulation.random.expovariate(1.0 / self.service_time)
+            service_time = self.simulation.random.expovariate(1.0 / base_service_time)
         elif self.service_time_model == "constant":
-            service_time = self.service_time
+            service_time = base_service_time
         elif self.service_time_model == "math.sin":
-            service_time = self.service_time + self.service_time * math.sin(1 + self.simulation.now / 100)
+            service_time = base_service_time + base_service_time * math.sin(1 + self.simulation.now / 100)
         else:
             print("Unknown service time model")
             sys.exit(-1)
         # Add service time if long task
-        if is_long_task:
-            service_time += self.long_task_added_service_time
+        # if is_long_task:
+        #     service_time += self.long_task_added_service_time
 
         # If server is slowed, multiply service time with factor
         service_time = service_time * self.SERVICE_TIME_FACTOR
