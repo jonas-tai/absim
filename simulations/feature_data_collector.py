@@ -8,6 +8,7 @@ from sklearn.linear_model import LinearRegression
 from simulations.monitor import Monitor
 from simulations.client import DataPoint
 from simulations.state import StateParser
+import simulations.constants as const
 
 
 @dataclass
@@ -22,14 +23,7 @@ class AnalysisData:
 class FeatureDataCollector:
     def __init__(self, out_folder: Path, state_parser: StateParser) -> None:
         self.data: List[AnalysisData] = []
-        self.policy_colors = {
-            "ARS": "C0",
-            "random": "C1",
-            "DQN": "C2",
-            "round_robin": "C3",
-            'DQN_EXPLR': "C4",
-            'DQN_DUPL': "C5",
-        }
+        self.policy_colors = const.POLICY_COLORS
         self.out_folder = out_folder
         self.state_parser = state_parser
 

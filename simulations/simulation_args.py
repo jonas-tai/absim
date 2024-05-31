@@ -44,6 +44,9 @@ class SimulationArgs:
 
         parser.add_argument('--exp_prefix', nargs='?',
                             type=str, default="7")
+        parser.add_argument('--exp_name', nargs='?',
+                            type=str, default="")
+
         parser.add_argument('--seed', nargs='?',
                             type=int, default=25072014)
         parser.add_argument('--simulation_duration', nargs='?',
@@ -88,7 +91,7 @@ class SimulationArgs:
         parser.add_argument('--server_concurrency', nargs='?',
                             type=int, default=2, help='Amount of resources per server.')
         parser.add_argument('--service_time', nargs='?',
-                            type=float, default=25, help='Mean? service time per server')
+                            type=float, default=4, help='Mean? service time per server')
         parser.add_argument('--service_time_model', nargs='?',
                             type=str, default="random.expovariate", help='Distribution of service time on server (random.expovariate | constant | math.sin')
         parser.add_argument('--utilization', nargs='?',
@@ -130,7 +133,7 @@ class SimulationArgs:
                             type=float, default=0.0, help='Fraction of tasks that are long tasks'
                             '(expScenario=heterogenous_static_nw_delay)')
         parser.add_argument('--long_task_added_service_time', nargs='?',
-                            type=float, default=200,
+                            type=float, default=35,
                             help='How many times slower than short tasks the long tasks take ')
 
         # RL Training

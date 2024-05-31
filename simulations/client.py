@@ -261,10 +261,11 @@ class Client:
                     if ((first_node_score - new_node_score) / first_node_score
                             > badness_threshold):
                         replica_set.sort(key=self.dsScores.get)
-        elif self.REPLICA_SELECTION_STRATEGY in ['DQN', 'DQN_EXPLR', 'DQN_DUPL']:
+        elif self.REPLICA_SELECTION_STRATEGY.startswith(
+                'DQN'):
             action = self.trainer.select_action(state)
 
-            if self.REPLICA_SELECTION_STRATEGY == 'DQN':
+            if not self.trainer.eval_mode:
                 self.trainer.record_state_and_action(task_id=task.id, state=state, action=action)
 
             # Map action back to server id
@@ -500,7 +501,8 @@ class ResponseHandler:
         # as a latency measurement
         if task.id != 'ShadowRead':
             # Task completed, we call the trainer to see if we can do a step
-            if client.REPLICA_SELECTION_STRATEGY == 'DQN' and not task.is_duplicate:
+            # TODO: Eventually remove this task.is_duplicate check once adapted RL algorithm
+            if not client.trainer.eval_mode and not task.is_duplicate:
                 client.trainer.execute_step_if_state_present(task_id=task.id, latency=latency)
 
             state = task.get_state()

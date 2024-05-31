@@ -48,12 +48,12 @@ class Trainer:
 
         # num servers
         self.n_actions = n_actions
-
-        n_observations = self.state_parser.get_state_size()
+        self.n_observations = self.state_parser.get_state_size()
+        self.model_structure = model_structure
 
         self.eval_mode = False
-        self.policy_net = DQN(n_observations, n_actions, model_structure=model_structure).to(self.device)
-        self.target_net = DQN(n_observations, n_actions, model_structure=model_structure).to(self.device)
+        self.policy_net = DQN(self.n_observations, n_actions, model_structure=model_structure).to(self.device)
+        self.target_net = DQN(self.n_observations, n_actions, model_structure=model_structure).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
@@ -65,6 +65,24 @@ class Trainer:
         self.actions_chosen = defaultdict(int)
 
         self.reward_stats = SummaryStats(1)
+
+    def save_models(self, model_folder: Path):
+        # TODO: Also export sumamry stats
+        torch.save(self.policy_net.state_dict(), model_folder / 'policy_model_weights.pth')
+        torch.save(self.policy_net.state_dict(), model_folder / 'target_model_weights.pth')
+
+    def load_models(self, model_folder: Path):
+        policy_net_summary_stats = self.policy_net.get_summary_stats()
+        policy_net = DQN(self.n_observations, self.n_actions, model_structure=self.model_structure,
+                         summary_stats=policy_net_summary_stats).to(self.device)
+        policy_net.load_state_dict(torch.load(model_folder / 'policy_model_weights.pth'))
+        self.policy_net = policy_net
+
+        target_net_summary_stats = self.target_net.get_summary_stats()
+        target_net = DQN(self.n_observations, self.n_actions, model_structure=self.model_structure,
+                         summary_stats=target_net_summary_stats).to(self.device)
+        target_net.load_state_dict(torch.load(model_folder / 'target_model_weights.pth'))
+        self.target_net = target_net
 
     def record_state_and_action(self, task_id: str, state: State, action: int) -> None:
         if self.eval_mode:

@@ -7,7 +7,7 @@ import pandas as pd
 
 from simulations.plotting import ExperimentPlot
 
-for i in range(150, 163):
+for i in range(199, 205):
     mode = 'test'
     base_path = Path(f'/home/jonas/projects/absim/outputs/{i}/{mode}')
 
