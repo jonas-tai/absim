@@ -20,11 +20,10 @@ StateAction = namedtuple('StateAction', ('state', 'action'))
 
 
 class Trainer:
-    def __init__(self, simulation: Simulation, state_parser: StateParser, model_structure: str, n_actions: int, batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2,
+    def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int, batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2,
                  eps_decay=1000, tau=0.005, lr=1e-4, tau_decay=10, lr_scheduler_step_size=50, lr_scheduler_gamma=0.5):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.state_parser = state_parser
-        self.simulation = simulation
 
         self.task_to_state_action: Dict[str, StateAction] = {}
         self.task_to_next_state: Dict[str, torch.Tensor] = {}
@@ -140,8 +139,8 @@ class Trainer:
         self.target_net.load_state_dict(target_net_state_dict)
         self.clean_up_after_step(task_id=task_id)
 
-    def select_action(self, state: State):
-        sample = self.simulation.random.random()
+    def select_action(self, state: State, simulation):
+        sample = simulation.random.random()
         eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(
             -1. * self.steps_done / self.EPS_DECAY)
 
@@ -156,7 +155,7 @@ class Trainer:
                 self.exploit_actions_episode += 1
         else:
             self.explore_actions_episode += 1
-            action_chosen = torch.tensor([[self.simulation.random.randint(0, self.n_actions - 1)]], device=self.device,
+            action_chosen = torch.tensor([[simulation.random.randint(0, self.n_actions - 1)]], device=self.device,
                                          dtype=torch.long)
 
         if not self.eval_mode:

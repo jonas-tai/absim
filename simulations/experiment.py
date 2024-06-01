@@ -50,12 +50,15 @@ def create_experiment_folders(simulation_args: SimulationArgs, state_parser: Sta
     experiment_num = 0
     if simulation_args.args.exp_name != "":
         out_path = Path('..', simulation_args.args.output_folder, simulation_args.args.exp_name, str(experiment_num))
+        while os.path.isdir(out_path):
+            experiment_num += 1
+            out_path = Path('..', simulation_args.args.output_folder,
+                            simulation_args.args.exp_name, str(experiment_num))
     else:
         out_path = Path('..', simulation_args.args.output_folder, str(experiment_num))
-
-    while os.path.isdir(out_path):
-        experiment_num += 1
-        out_path = Path('..', simulation_args.args.output_folder, str(experiment_num))
+        while os.path.isdir(out_path):
+            experiment_num += 1
+            out_path = Path('..', simulation_args.args.output_folder, str(experiment_num))
 
     simulation_args.args.exp_prefix = str(experiment_num)
     os.makedirs(out_path, exist_ok=True)

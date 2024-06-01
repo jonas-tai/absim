@@ -268,7 +268,7 @@ class Client:
                         replica_set.sort(key=self.dsScores.get)
         elif self.REPLICA_SELECTION_STRATEGY.startswith(
                 'DQN'):
-            action = self.trainer.select_action(state)
+            action = self.trainer.select_action(state=state, simulation=self.simulation)
 
             if not self.trainer.eval_mode:
                 self.trainer.record_state_and_action(task_id=task.id, state=state, action=action)
@@ -349,10 +349,11 @@ class Client:
                 replica for replica in replica_set if replica.get_server_id() != replica_to_serve.get_server_id()]
             # self.simulation.random.shuffle(replica_set_duplicate_req)
 
-            replica_id = self.simulation.random.randint(0, len(replica_set_duplicate_req) - 1)
+            replica_idx = self.simulation.random.randint(0, len(replica_set_duplicate_req) - 1)
             # self.simulation.random.shuffle(replica_set)
-            duplicate_replica = next(
-                server for server in replica_set_duplicate_req if server.get_server_id() == replica_id)
+            duplicate_replica = replica_set_duplicate_req[replica_idx]
+            # next(
+            #    server for server in replica_set_duplicate_req if server.get_server_id() == replica_id)
 
             duplicate_task = task.create_duplicate_task()
             self.taskArrivalTimeTracker[duplicate_task] = self.taskArrivalTimeTracker[task]
