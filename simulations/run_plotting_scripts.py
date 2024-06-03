@@ -7,9 +7,12 @@ import pandas as pd
 
 from simulations.plotting import ExperimentPlot
 
-for i in range(199, 205):
-    mode = 'test'
-    base_path = Path(f'/home/jonas/projects/absim/outputs/{i}/{mode}')
+
+MODE = 'test'
+EXPERIMENT = 'fixed_random'
+
+for i in range(0, 17):
+    base_path = Path(f'/home/jonas/projects/absim/outputs/{EXPERIMENT}/{i}/{MODE}')
 
     data_folder = base_path / 'data'
     plot_folder = base_path / 'plots'

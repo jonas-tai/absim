@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from typing import List, Tuple
 import matplotlib.pyplot as plt
@@ -21,6 +22,12 @@ class ExperimentPlot:
         self.use_log_scale: bool = use_log_scale
         self.policy_order: List[str] = const.POLICY_ORDER
         self.utilization = utilization
+
+        os.makedirs(plot_folder / 'cdf', exist_ok=True)
+        os.makedirs(plot_folder / 'pdfs/cdf', exist_ok=True)
+
+        os.makedirs(plot_folder / 'episode', exist_ok=True)
+        os.makedirs(plot_folder / 'pdfs/episode', exist_ok=True)
 
     def from_csv(self) -> None:
         self.df = pd.read_csv(self.data_folder / f'data.csv')
@@ -151,7 +158,7 @@ class ExperimentPlot:
         fig.legend(loc='lower center', ncols=3)
         plt.tight_layout(rect=[0, 0.08, 1, 1])
 
-        self.export_plots(file_name=f'output_{epoch}_epoch')
+        self.export_plots(file_name=f'episode/output_{epoch}_epoch')
         plt.close()
 
     def plot_policy_episode(self, epoch: int, policy: str):
@@ -163,7 +170,7 @@ class ExperimentPlot:
         axes.get_legend().remove()
 
         fig.legend(loc='lower center', ncols=3)
-        self.export_plots(file_name=f'request_distribution_{policy}_{epoch}_epoch')
+        self.export_plots(file_name=f'episode/request_distribution_{policy}_{epoch}_epoch')
 
         plt.close()
 
@@ -217,11 +224,46 @@ class ExperimentPlot:
                     palette=const.POLICY_COLORS, ax=axes, order=order)
         axes.set_title(
             f'Average {quantile*100:.1f}th Quantile Latency {title_request_types} at {self.utilization * 100}% utilization')
-        axes.set_xticklabels(axes.get_xticklabels(), rotation=45, ha='right')
+        plt.setp(axes.get_xticklabels(), rotation=45, ha='right')
 
         plt.tight_layout()
 
         self.export_plots(file_name=f'{file_prefix}bar_p_{int(quantile * 1000)}')
+        plt.close()
+
+    def plot_cdf_quantile(self, df: pd.DataFrame, quantile: float, title_request_types: str, file_prefix: str = ''):
+        plt.rcParams.update({'font.size': FONT_SIZE})
+
+        fig, axes = plt.subplots(figsize=(16, 8), dpi=200, nrows=1, ncols=1, sharex='all')
+
+        # Filter the DataFrame to only include latencies within the specified quantile
+        quantiles = df.groupby(['Policy', 'Epoch'])['Latency'].quantile(quantile).reset_index()
+        filtered_df = df[df.groupby(['Policy', 'Epoch'])[
+            'Latency'].transform(lambda x: x > x.quantile(quantile))]
+
+        # Calculate the CDF for each policy
+        cdfs = []
+        for policy in filtered_df['Policy'].unique():
+            policy_data = filtered_df[filtered_df['Policy'] == policy].sort_values(by='Latency')
+            policy_data['CDF'] = policy_data['Latency'].rank(method='first') / len(policy_data)
+            cdfs.append(policy_data)
+
+        cdf_df = pd.concat(cdfs)
+
+        # Plot the CDFs
+        sns.lineplot(data=cdf_df, x='Latency', y='CDF', hue='Policy', ax=axes)
+        plt.title(
+            f'Cumulative Distribution Function of {(100.0 - quantile*100):.2f}% slowest {title_request_types} at {self.utilization * 100}% utilization')
+
+        # if self.use_log_scale:
+        plt.xscale('log')
+
+        # Adjust legend position and layout
+        axes.get_legend().remove()
+        fig.legend(loc='lower center', ncols=3)
+        plt.tight_layout(rect=[0, 0.08, 1, 1])
+
+        self.export_plots(file_name=f'cdf/{file_prefix}p_{int(quantile * 100)}')
         plt.close()
 
     def plot_average_latency_bar_short_long_request(self, policies: List[str]) -> None:
@@ -250,7 +292,7 @@ class ExperimentPlot:
         sns.barplot(data=mean_quantile_latency, x='Policy', hue='Policy', y='Latency',
                     palette=const.POLICY_COLORS, ax=axes, order=order)
         axes.set_title(f'Average Latency {title_request_types} at {self.utilization * 100}% utilization')
-        axes.set_xticklabels(axes.get_xticklabels(), rotation=45, ha='right')
+        plt.setp(axes.get_xticklabels(), rotation=45, ha='right')
 
         plt.tight_layout()
 
@@ -258,7 +300,7 @@ class ExperimentPlot:
         plt.close()
 
     def generate_plots(self) -> None:
-        reduced_policies = ['ARS', 'DQN'] + const.DQN_EXPLR_SETTINGS + ['random']
+        reduced_policies = ['ARS', 'DQN', 'DQN_DUPL'] + const.DQN_EXPLR_SETTINGS + ['random']
         print('Before')
         print(len(self.df))
         self.df = self.df[self.df['Is_faster_response']]
@@ -281,3 +323,44 @@ class ExperimentPlot:
         self.plot_average_quantile_bar_short_long_requests(quantile=0.95, policies=reduced_policies)
         self.plot_average_quantile_bar_short_long_requests(quantile=0.99, policies=reduced_policies)
         self.plot_average_quantile_bar_short_long_requests(quantile=0.999, policies=reduced_policies)
+
+        cdf_policies = ['ARS', 'DQN', 'DQN_EXPLR_10']
+        df = self.df[self.df['Policy'].isin(cdf_policies)]
+        self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='all requests', file_prefix=f'all_req_')
+
+        df = self.df[self.df['Policy'].isin(cdf_policies) & self.df['Is_long_request']]
+        if len(df) > 0:
+            self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='long requests', file_prefix=f'long_req_')
+
+        if len(df) > 0:
+            df = self.df[self.df['Policy'].isin(cdf_policies) & (self.df['Is_long_request'] == False)]
+            self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='short requests',
+                                   file_prefix=f'short_req_')
+
+        cdf_policies = ['ARS', 'DQN', 'DQN_DUPL', 'DQN_EXPLR_10']
+        df = self.df[self.df['Policy'].isin(cdf_policies)]
+        self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='all requests', file_prefix=f'dupl_all_req_')
+
+        df = self.df[self.df['Policy'].isin(cdf_policies) & self.df['Is_long_request']]
+        if len(df) > 0:
+            self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='long requests',
+                                   file_prefix=f'dupl_long_req_')
+
+        if len(df) > 0:
+            df = self.df[self.df['Policy'].isin(cdf_policies) & (self.df['Is_long_request'] == False)]
+            self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='short requests',
+                                   file_prefix=f'dupl_short_req_')
+
+        cdf_policies = reduced_policies
+        df = self.df[self.df['Policy'].isin(cdf_policies)]
+        self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='all requests', file_prefix=f'explr_all_req_')
+
+        df = self.df[self.df['Policy'].isin(cdf_policies) & self.df['Is_long_request']]
+        if len(df) > 0:
+            self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='long requests',
+                                   file_prefix=f'explr_long_req_')
+
+        if len(df) > 0:
+            df = self.df[self.df['Policy'].isin(cdf_policies) & (self.df['Is_long_request'] == False)]
+            self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='short requests',
+                                   file_prefix=f'explr_short_req_')
