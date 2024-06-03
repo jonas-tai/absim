@@ -294,11 +294,11 @@ def main(input_args=None, setting="base") -> None:
     else:
         raise Exception(f'Unknown setting {setting}')
 
-    EXPERIMENT_NAME = 'adapted_service_time_model'
+    EXPERIMENT_NAME = 'fixed_random'
 
     args.set_policy('ARS')
     args.args.exp_name = EXPERIMENT_NAME
-    for utilization in [0.45, 0.7, 0.8, 0.9]:
+    for utilization in [0.2, 0.3, 0.45, 0.7, 0.9]:
         # args.args.duplication_rate = duplication_rate
         args.args.utilization = utilization
 
@@ -315,7 +315,7 @@ def main(input_args=None, setting="base") -> None:
     args.args.exp_name = EXPERIMENT_NAME
     for long_task_fraction in [0.2, 0.1, 0.4]:
         for duplication_rate in [0.1]:
-            for utilization in [0.45, 0.7]:
+            for utilization in [0.2, 0.3, 0.45, 0.7]:
                 args.args.duplication_rate = duplication_rate
                 args.args.long_tasks_fraction = long_task_fraction
                 args.args.utilization = utilization

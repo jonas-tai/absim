@@ -139,8 +139,9 @@ class Trainer:
         self.target_net.load_state_dict(target_net_state_dict)
         self.clean_up_after_step(task_id=task_id)
 
-    def select_action(self, state: State, simulation):
-        sample = simulation.random.random()
+    def select_action(self, state: State, simulation, random_decision: int):
+        # random_decision int handed in from outside to ensure its the same decision that ranom strategy would take
+        sample = simulation.random_exploration.random()
         eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(
             -1. * self.steps_done / self.EPS_DECAY)
 
@@ -155,7 +156,7 @@ class Trainer:
                 self.exploit_actions_episode += 1
         else:
             self.explore_actions_episode += 1
-            action_chosen = torch.tensor([[simulation.random.randint(0, self.n_actions - 1)]], device=self.device,
+            action_chosen = torch.tensor([[random_decision]], device=self.device,
                                          dtype=torch.long)
 
         if not self.eval_mode:

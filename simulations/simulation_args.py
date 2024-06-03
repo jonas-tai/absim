@@ -158,7 +158,7 @@ class SimulationArgs:
         parser.add_argument('--tau', nargs='?',
                             type=float, default=0.005, help='Model trainer argument')
         parser.add_argument('--eps_decay', nargs='?',
-                            type=int, default=20000, help='Model trainer argument')
+                            type=int, default=40000, help='Model trainer argument')
         parser.add_argument('--batch_size', nargs='?',
                             type=int, default=32, help='Model trainer argument')
         parser.add_argument('--tau_decay', nargs='?',
@@ -168,7 +168,7 @@ class SimulationArgs:
         parser.add_argument('--eps_end', nargs='?',
                             type=float, default=0.01, help='Model trainer argument')
         parser.add_argument('--lr_scheduler_step_size', nargs='?',
-                            type=int, default=100, help='Model trainer argument')
+                            type=int, default=70, help='Model trainer argument')
         parser.add_argument('--lr_scheduler_gamma', nargs='?',
                             type=float, default=0.5, help='Model trainer argument')
 
@@ -232,7 +232,7 @@ class TimeVaryingServerArgs(SimulationArgs):
 
 
 class HeterogeneousRequestsArgs(SimulationArgs):
-    def __init__(self, long_tasks_fraction: float = 0.2, long_task_added_service_time: int = 200, input_args=None) -> None:
+    def __init__(self, long_tasks_fraction: float = 0.2, long_task_added_service_time: int = 35, input_args=None) -> None:
         super().__init__(input_args=input_args)
         print('Initialized')
         self.args.exp_scenario = 'heterogenous_requests_scenario'

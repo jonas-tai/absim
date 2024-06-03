@@ -198,11 +198,13 @@ class Client:
 
         task.set_state(state=state)
 
+        random_relica_id = self.simulation.random_strategy.randint(0, len(original_replica_set) - 1)
+
         if self.REPLICA_SELECTION_STRATEGY == "random":
             # Pick a random node for the request.
             # Represents SimpleSnitch + uniform request access.
             # Ignore scores and everything else.
-            replica_id = self.simulation.random.randint(0, len(original_replica_set) - 1)
+            replica_id = random_relica_id
             # self.simulation.random.shuffle(replica_set)
             replica = next(server for server in replica_set if server.get_server_id() == replica_id)
 
@@ -268,7 +270,8 @@ class Client:
                         replica_set.sort(key=self.dsScores.get)
         elif self.REPLICA_SELECTION_STRATEGY.startswith(
                 'DQN'):
-            action = self.trainer.select_action(state=state, simulation=self.simulation)
+            action = self.trainer.select_action(
+                state=state, simulation=self.simulation, random_decision=random_relica_id)
 
             if not self.trainer.eval_mode:
                 self.trainer.record_state_and_action(task_id=task.id, state=state, action=action)
