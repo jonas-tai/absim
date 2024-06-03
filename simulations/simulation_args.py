@@ -115,11 +115,11 @@ class SimulationArgs:
 
         # Slow network setting parameters
         parser.add_argument('--nw_latency_base', nargs='?',
-                            type=float, default=1.0, help='Seems to be the time it takes to deliver requests?')
-        parser.add_argument('--nw_latency_mu', nargs='?',
                             type=float, default=0.25, help='Seems to be the time it takes to deliver requests?')
+        parser.add_argument('--nw_latency_mu', nargs='?',
+                            type=float, default=0.02, help='Seems to be the time it takes to deliver requests?')
         parser.add_argument('--nw_latency_sigma', nargs='?',
-                            type=float, default=0.15, help='Seems to be the time it takes to deliver requests?')
+                            type=float, default=0.01, help='Seems to be the time it takes to deliver requests?')
         parser.add_argument('--slow_nw_server_fraction', nargs='?',
                             type=float, default=0.4, help='Fraction of servers with slow network'
                                                           '(expScenario=heterogenous_static_nw_delay)')
