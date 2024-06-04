@@ -179,7 +179,7 @@ class Client:
 
         self.pendingXserviceMap[replica_to_serve] = \
             (1 + self.pendingRequestsMap[replica_to_serve]) \
-            * replica_to_serve.service_time
+            * replica_to_serve.mean_service_time
         self.pendingRequestsMonitor.observe(
             "%s %s" % (replica_to_serve.id,
                        self.pendingRequestsMap[replica_to_serve]))

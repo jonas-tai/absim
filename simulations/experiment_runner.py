@@ -221,18 +221,14 @@ class ExperimentRunner:
         # This is where we set the inter-arrival times based on
         # the required utilization level and the service time
         # of the overall server pool.
-        if len(service_rate_per_server) > 0:
-            print(service_rate_per_server)
-            arrival_rate = (args.utilization * args.server_concurrency * sum(service_rate_per_server))
-            inter_arrival_time = 1 / float(arrival_rate)
-        else:
-            average_service_time = args.service_time * (1 - args.long_tasks_fraction) + args.long_tasks_fraction * (
-                args.service_time + args.long_task_added_service_time)
-            arrival_rate = args.num_servers * \
-                (args.utilization * args.server_concurrency *
-                 1 / float(average_service_time))
-            inter_arrival_time = 1 / float(arrival_rate)
 
+        arrival_rate = args.utilization * \
+            sum([server.get_service_rate(long_task_fraction=args.long_task_fraction) for server in self.servers])
+        inter_arrival_time = 1 / float(arrival_rate)
+
+        # TODO: Use multiple workloads to simulate smoother shift to new workload?
+        # More than 1 workload currently not supported
+        assert args.num_wrokload == 1
         for i in range(args.num_workload):
             w = workload.Workload(i, data_point_monitor,
                                   self.clients,

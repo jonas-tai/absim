@@ -15,8 +15,9 @@ class Server:
                  nw_latency_sigma: float = constants.NW_LATENCY_SIGMA,
                  long_task_added_service_time: float = 0):
         self.id = id_
-        self.service_time = service_time
+        self.mean_service_time = service_time
         self.service_time_model = service_time_model
+        self.server_concurrency = resource_capacity
         self.queue_resource = simpy.Resource(capacity=resource_capacity, env=simulation)
         self.simulation = simulation
         self.NW_LATENCY_BASE = nw_latency_base
@@ -43,7 +44,7 @@ class Server:
         # self.simulation.activate(executor, executor.run(), self.simulation.now)
 
     def get_service_time(self, is_long_task=False):
-        base_service_time = self.service_time
+        base_service_time = self.mean_service_time
 
         # Add service time if long task
         if is_long_task:
@@ -65,6 +66,16 @@ class Server:
         # If server is slowed, multiply service time with factor
         service_time = service_time * self.SERVICE_TIME_FACTOR
         return service_time
+
+    def get_service_rate(self, long_task_fraction: float) -> float:
+        long_task_mean_service_time = self.mean_service_time + self.long_task_added_service_time
+        average_service_time_standard = self.mean_service_time * \
+            (1 - long_task_fraction) + long_task_mean_service_time * long_task_fraction
+        # Factor in service time factor
+        average_service_time = average_service_time_standard * self.SERVICE_TIME_FACTOR
+        service_rate_single_core = 1 / (average_service_time)
+        service_rate = self.server_concurrency * service_rate_single_core
+        return service_rate
 
 
 class Executor:
