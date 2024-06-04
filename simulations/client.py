@@ -468,7 +468,7 @@ class ResponseHandler:
             client.pending_short_requests[replica_that_served] -= 1
 
         client.pendingXserviceMap[replica_that_served] = (1 + client.pendingRequestsMap[
-            replica_that_served]) * replica_that_served.service_time
+            replica_that_served]) * replica_that_served.mean_service_time
 
         client.pendingRequestsMonitor.observe(
             "%s %s" % (replica_that_served.id, client.pendingRequestsMap[replica_that_served]))

@@ -144,7 +144,7 @@ class SimulationArgs:
         parser.add_argument('--num_requests_test', nargs='?',
                             type=int, default=60000, help='Number of requests for test epochs')
         parser.add_argument('--test_epochs', nargs='?',
-                            type=int, default=5, help='Number of test epochs')
+                            type=int, default=3, help='Number of test epochs')
         parser.add_argument('--dqn_explr', nargs='?',
                             type=float, default=0.1, help='Exploration used by DQN_EXPLR')
 

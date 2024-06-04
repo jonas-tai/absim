@@ -223,21 +223,34 @@ class ExperimentRunner:
         # of the overall server pool.
 
         arrival_rate = args.utilization * \
-            sum([server.get_service_rate(long_task_fraction=args.long_task_fraction) for server in self.servers])
+            sum([server.get_service_rate(long_task_fraction=args.long_tasks_fraction) for server in self.servers])
         inter_arrival_time = 1 / float(arrival_rate)
+
+        updated_arrival_rate = args.utilization * \
+            sum([server.get_service_rate(long_task_fraction=args.long_tasks_fraction + 0.4) for server in self.servers])
+        updated_inter_arrival_time = 1 / float(updated_arrival_rate)
 
         # TODO: Use multiple workloads to simulate smoother shift to new workload?
         # More than 1 workload currently not supported
-        assert args.num_wrokload == 1
+        assert args.num_workload == 1
         for i in range(args.num_workload):
-            w = workload.Workload(i, data_point_monitor,
-                                  self.clients,
-                                  args.workload_model,
-                                  inter_arrival_time * args.num_workload,
-                                  num_requests / args.num_workload,
-                                  simulation,
-                                  long_tasks_fraction=args.long_tasks_fraction
-                                  )
+            # w = workload.Workload(i, data_point_monitor,
+            #                       self.clients,
+            #                       args.workload_model,
+            #                       inter_arrival_time * args.num_workload,
+            #                       num_requests / args.num_workload,
+            #                       simulation,
+            #                       long_tasks_fraction=args.long_tasks_fraction
+            #                       )
+            # TODO: Change!
+            w = workload.VariableLongTaskFractionWorkload(i, 30000, updated_inter_arrival_time, data_point_monitor,
+                                                          self.clients,
+                                                          args.workload_model,
+                                                          inter_arrival_time * args.num_workload,
+                                                          num_requests / args.num_workload,
+                                                          simulation,
+                                                          long_tasks_fraction=args.long_tasks_fraction
+                                                          )
             simulation.process(w.run())
             self.workload_gens.append(w)
 

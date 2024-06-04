@@ -1,3 +1,4 @@
+import os
 import random
 import math
 from collections import namedtuple
@@ -38,6 +39,8 @@ class Trainer:
         self.TAU = tau
         self.TAU_DECAY = tau_decay
         self.LR = lr
+        self.lr_scheduler_step_size = lr_scheduler_step_size
+        self.lr_scheduler_gamma = lr_scheduler_gamma
 
         self.explore_actions_episode = 0
         self.exploit_actions_episode = 0
@@ -59,7 +62,7 @@ class Trainer:
 
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
         self.scheduler = optim.lr_scheduler.StepLR(
-            self.optimizer, step_size=lr_scheduler_step_size, gamma=lr_scheduler_gamma)
+            self.optimizer, step_size=self.lr_scheduler_step_size, gamma=self.lr_scheduler_gamma)
         self.memory = ReplayMemory(10000, self.policy_net.summary)
 
         self.steps_done = 0
@@ -84,6 +87,12 @@ class Trainer:
                          summary_stats=target_net_summary_stats).to(self.device)
         target_net.load_state_dict(torch.load(model_folder / 'target_model_weights.pth'))
         self.target_net = target_net
+
+        # Set optimizer to new model
+        self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
+        # Note: Learning rate scheduler is currently not called in test epochs!
+        self.scheduler = optim.lr_scheduler.StepLR(
+            self.optimizer, step_size=self.lr_scheduler_step_size, gamma=self.lr_scheduler_gamma)
 
     def record_state_and_action(self, task_id: str, state: State, action: int) -> None:
         if self.eval_mode:
@@ -231,29 +240,47 @@ class Trainer:
     def reset_episode_counters(self) -> None:
         self.explore_actions_episode = 0
         self.exploit_actions_episode = 0
+        self.task_to_state_action = {}
+        self.task_to_next_state = {}
+        self.task_to_reward = {}
+        self.last_task_id = None
 
-    def plot_grads_and_losses(self, plot_path: Path):
+    def reset_model_training_stats(self) -> None:
+        self.losses = []
+        self.grads = []
+        self.mean_value = []
+        self.reward_logs = []
+
+        self.steps_done = 0
+        self.actions_chosen = defaultdict(int)
+
+    def plot_grads_and_losses(self, plot_path: Path, file_prefix: str):
+        PLOT_OUT_FOLDER = 'model_stats'
+
+        os.makedirs(plot_path / PLOT_OUT_FOLDER, exist_ok=True)
+        os.makedirs(plot_path / f'pdfs' / PLOT_OUT_FOLDER, exist_ok=True)
+
         fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         plt.clf()
         plt.plot(range(len(self.losses)), self.losses)
-        plt.savefig(plot_path / 'pdfs/losses.pdf')
-        plt.savefig(plot_path / 'losses.jpg')
+        plt.savefig(plot_path / f'pdfs/{PLOT_OUT_FOLDER}/{file_prefix}_losses.pdf')
+        plt.savefig(plot_path / f'{PLOT_OUT_FOLDER}/{file_prefix}_losses.jpg')
 
         plt.clf()
         fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         plt.plot(range(len(self.grads)), self.grads)
-        plt.savefig(plot_path / 'pdfs/grads.pdf')
-        plt.savefig(plot_path / 'grads.jpg')
+        plt.savefig(plot_path / f'pdfs/{PLOT_OUT_FOLDER}/{file_prefix}_grads.pdf')
+        plt.savefig(plot_path / f'{PLOT_OUT_FOLDER}/{file_prefix}_grads.jpg')
 
         fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         plt.plot(range(len(self.reward_logs)), self.reward_logs)
-        plt.savefig(plot_path / 'pdfs/rewards.pdf')
-        plt.savefig(plot_path / 'rewards.jpg')
+        plt.savefig(plot_path / f'pdfs/{PLOT_OUT_FOLDER}/{file_prefix}_rewards.pdf')
+        plt.savefig(plot_path / f'{PLOT_OUT_FOLDER}/{file_prefix}_rewards.jpg')
 
         fig, ax = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         plt.plot(range(len(self.mean_value)), self.mean_value)
-        plt.savefig(plot_path / 'pdfs/mean_value.pdf')
-        plt.savefig(plot_path / 'mean_value.jpg')
+        plt.savefig(plot_path / f'pdfs/{PLOT_OUT_FOLDER}/{file_prefix}_mean_value.pdf')
+        plt.savefig(plot_path / f'{PLOT_OUT_FOLDER}/{file_prefix}_mean_value.jpg')
 
     def print_weights(self):
         self.policy_net.print_weights()

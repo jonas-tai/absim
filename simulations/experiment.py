@@ -162,7 +162,7 @@ def run_rl_training(simulation_args: SimulationArgs, trainer: Trainer, state_par
         train_data_analyzer.export_epoch_data(epoch=LAST_EPOCH)
         train_data_analyzer.export_training_data()
 
-    trainer.plot_grads_and_losses(plot_path=plot_path)
+    trainer.plot_grads_and_losses(plot_path=plot_path, file_prefix='train')
 
     plot_collected_data(plotter=train_plotter, epoch_to_plot=LAST_EPOCH, policies_to_plot=TRAIN_POLICIES_TO_RUN)
 
@@ -210,18 +210,20 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
 
         utilization = simulation_args.args.utilization
         if policy == 'DQN_EXPLR':
-            trainer.eval_mode = True
+            trainer.eval_mode = False
             print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
             trainer.EPS_END = simulation_args.args.dqn_explr
             trainer.EPS_START = simulation_args.args.dqn_explr
-            # trainer.LR = 1e-6
+            trainer.LR = 1e-6
+            trainer.reset_model_training_stats()
         elif policy.startswith('DQN_EXPLR_'):
-            trainer.eval_mode = True
+            trainer.eval_mode = False
             print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
             simulation_args.args.dqn_explr = DQN_EXPLR_MAPPING[policy]
             trainer.EPS_END = simulation_args.args.dqn_explr
             trainer.EPS_START = simulation_args.args.dqn_explr
-            # trainer.LR = 1e-6
+            trainer.LR = 1e-6
+            trainer.reset_model_training_stats()
         elif policy == 'DQN':
             trainer.EPS_END = 0
             trainer.EPS_START = 0
@@ -257,6 +259,10 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
                 print(f'Exlore actions this episode: {trainer.explore_actions_episode}')
                 print(f'Exploit actions this episode: {trainer.exploit_actions_episode}')
                 trainer.reset_episode_counters()
+
+                if policy.startswith('DQN_EXPLR'):
+                    file_prefix = f'{policy}_{i_episode}'
+                    trainer.plot_grads_and_losses(plot_path=plot_path, file_prefix=file_prefix)
 
     print('Finished')
     # test_data_analyzer.run_latency_lin_reg(epoch=LAST_EPOCH)
@@ -294,15 +300,15 @@ def main(input_args=None, setting="base") -> None:
     else:
         raise Exception(f'Unknown setting {setting}')
 
-    EXPERIMENT_NAME = 'fixed_random'
+    EXPERIMENT_NAME = 'var_long_tasks_fixed2'
 
     args.set_policy('ARS')
     args.args.exp_name = EXPERIMENT_NAME
-    for utilization in [0.2, 0.3, 0.45, 0.7, 0.9]:
-        # args.args.duplication_rate = duplication_rate
-        args.args.utilization = utilization
+    # for utilization in [0.2, 0.3, 0.45, 0.7, 0.9]:
+    #     # args.args.duplication_rate = duplication_rate
+    #     args.args.utilization = utilization
 
-        _ = rl_experiment_wrapper(args, input_args=input_args)
+    #     _ = rl_experiment_wrapper(args, input_args=input_args)
 
     # elif setting =="slow":
     #     args = SlowServerArgs(0.5,0.5, input_args=input_args)
@@ -313,9 +319,11 @@ def main(input_args=None, setting="base") -> None:
     # Heterogeneous requests workloads
     args = HeterogeneousRequestsArgs(input_args=input_args)
     args.args.exp_name = EXPERIMENT_NAME
+
+    args.args.num_requests_test = 100000
     for long_task_fraction in [0.2, 0.1, 0.4]:
         for duplication_rate in [0.1]:
-            for utilization in [0.2, 0.3, 0.45, 0.7]:
+            for utilization in [0.45, 0.7]:
                 args.args.duplication_rate = duplication_rate
                 args.args.long_tasks_fraction = long_task_fraction
                 args.args.utilization = utilization
