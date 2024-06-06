@@ -1,8 +1,6 @@
 from typing import List
 
 from monitor import Monitor
-import random
-import numpy
 import constants
 from simulations.model_trainer import Trainer
 from task import Task
@@ -286,6 +284,7 @@ class Client:
         else:
             print(self.REPLICA_SELECTION_STRATEGY)
             assert False, "REPLICA_SELECTION_STRATEGY isn't set or is invalid"
+
         self.requests_handled += 1
         return replica_set[0]
 

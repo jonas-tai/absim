@@ -100,7 +100,7 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
     to_print = False
 
     # TODO: Fix / workaround
-    utilization = workloads[0]['utilization']
+    utilization = workloads[0].utilization
 
     # Init directories
     experiment_folder = out_folder / 'train'
@@ -140,7 +140,7 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
             # TODO: Log workload configs used somewhere
 
             data_point_monitor = experiment_runner.run_experiment(
-                simulation_args.args, workload=workload, trainer=trainer, duplication_rate=duplication_rate)
+                simulation_args.args, service_time_model=simulation_args.args.service_time_model, workload=workload, trainer=trainer, duplication_rate=duplication_rate)
             train_plotter.add_data(data_point_monitor, policy, i_episode)
 
             if simulation_args.args.collect_data_points or i_episode == LAST_EPOCH:
@@ -249,7 +249,7 @@ def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_fol
             simulation_args.set_seed(seed)
 
             test_data_point_monitor = experiment_runner.run_experiment(
-                simulation_args.args, workload=workload, trainer=trainer, duplication_rate=duplication_rate)
+                simulation_args.args, service_time_model=simulation_args.args.test_service_time_model, workload=workload, trainer=trainer, duplication_rate=duplication_rate)
             test_plotter.add_data(test_data_point_monitor, simulation_args.args.selection_strategy, i_episode)
 
             if simulation_args.args.collect_data_points or i_episode == LAST_EPOCH:
@@ -329,10 +329,14 @@ def main(input_args=None, setting="base") -> None:
     args = HeterogeneousRequestsArgs(input_args=input_args)
     args.args.exp_name = EXPERIMENT_NAME
 
-    for duplication_rate in [0.1]:
-        args.args.duplication_rate = duplication_rate
-        last = rl_experiment_wrapper(args,
-                                     train_workloads=train_workloads, test_workloads=test_workloads)
+    for service_time_model in ['random.expovariate', 'pareto']:
+        for test_service_time_model in ['random.expovariate', 'pareto']:
+            for dqn_explr_lr in [1e-6, 1e-5]:
+                args.args.test_service_time_model = test_service_time_model
+                args.args.service_time_model = service_time_model
+                args.args.dqn_explr_lr = dqn_explr_lr
+                last = rl_experiment_wrapper(args,
+                                             train_workloads=train_workloads, test_workloads=test_workloads)
 
     return
     # Static slow server workloads

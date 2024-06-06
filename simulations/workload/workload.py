@@ -3,8 +3,9 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from simulations.client import Client
+from simulations.constants import ALPHA
 from simulations.server import Server
-from simulations.monitor import Monitor
+from scipy.stats import pareto
 import task
 
 WORKLOAD_CONFIG_FILE_NAME = 'workload_config'
@@ -32,11 +33,15 @@ class BaseWorkload:
         self.workload_type: str = 'base'
         # self.proc = self.simulation.process(self.run(), 'Workload' + str(id_))
 
+    def reset_workload(self):
+        self.executed_requests = 0
+        self.client_delay_mean = -1
+
     def to_file_name(self) -> str:
         return f'{self.workload_type}_{self.utilization * 100:.2f}_util_{self.long_tasks_fraction * 100:.2f}_long_tasks'
 
     @classmethod
-    def from_dict(cls, config: Dict[str, Any], id_, simulation, servers: List[Server], clients: List[Client]) -> 'BaseWorkload':
+    def from_dict(cls, config: Dict[str, Any], id_) -> 'BaseWorkload':
         num_requests = config['num_requests']
         long_tasks_fraction = config['long_tasks_fraction']
         arrival_model = config['arrival_model']
@@ -98,7 +103,12 @@ class BaseWorkload:
             if self.arrival_model == "constant":
                 yield simulation.timeout(self.client_delay_mean)
 
+            if self.arrival_model == "pareto":
+                scale = (self.client_delay_mean * (ALPHA - 1)) / ALPHA
+                yield simulation.timeout(pareto.rvs(ALPHA, scale=scale))
+
             self.executed_requests += 1
+        self.reset_workload()
 
     def weighted_choice(self, simulation, clients: List[Client]) -> Client:
         total = sum(client.demandWeight for client in clients)
@@ -122,7 +132,12 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
                          num_requests=num_requests, long_tasks_fraction=long_tasks_fraction, utilization=utilization)
         self.trigger_threshold = trigger_threshold
         self.updated_long_tasks_fraction = updated_long_tasks_fraction
+        self.original_long_tasks_fraction = self.long_tasks_fraction
         self.workload_type: str = 'variable_long_task_fraction'
+
+    def reset_workload(self):
+        super().reset_workload()
+        self.long_tasks_fraction = self.original_long_tasks_fraction
 
     def to_file_name(self) -> str:
         return f'{self.workload_type}_{self.updated_long_tasks_fraction * 100:.2f}_updated_long_tasks_{self.utilization * 100:.2f}_util_{self.long_tasks_fraction * 100:.2f}_long_tasks'

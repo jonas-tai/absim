@@ -29,7 +29,7 @@ class ExperimentRunner:
         ratio = self.clients[client_index].dqn_decision_equal_to_ars / self.clients[client_index].requests_handled
         print(f'DQN matched ARS for {ratio * 100}% of decisions')
 
-    def run_experiment(self, args, workload: BaseWorkload, trainer: Trainer = None, duplication_rate: float = 0.0) -> Monitor:
+    def run_experiment(self, args, workload: BaseWorkload, service_time_model: str, trainer: Trainer = None, duplication_rate: float = 0.0) -> Monitor:
         self.reset_stats()
 
         # Set the random seed
@@ -50,7 +50,7 @@ class ExperimentRunner:
                 serv = server.Server(i,
                                      resource_capacity=args.server_concurrency,
                                      service_time=(args.service_time),
-                                     service_time_model=args.service_time_model,
+                                     service_time_model=service_time_model,
                                      simulation=simulation,
                                      long_task_added_service_time=args.long_task_added_service_time)
                 self.servers.append(serv)
@@ -60,7 +60,7 @@ class ExperimentRunner:
                 serv = server.Server(i,
                                      resource_capacity=args.server_concurrency,
                                      service_time=((i + 1) * args.service_time),
-                                     service_time_model=args.service_time_model,
+                                     service_time_model=service_time_model,
                                      simulation=simulation,
                                      long_task_added_service_time=args.long_task_added_service_time)
                 self.servers.append(serv)
@@ -112,7 +112,7 @@ class ExperimentRunner:
                 serv = server.Server(i,
                                      resource_capacity=args.server_concurrency,
                                      service_time=service_time,
-                                     service_time_model=args.service_time_model,
+                                     service_time_model=service_time_model,
                                      simulation=simulation,
                                      long_task_added_service_time=args.long_task_added_service_time)
                 if server_slow_assignment[i]:
@@ -129,7 +129,7 @@ class ExperimentRunner:
                 serv = server.Server(i,
                                      resource_capacity=args.server_concurrency,
                                      service_time=args.service_time,
-                                     service_time_model=args.service_time_model,
+                                     service_time_model=service_time_model,
                                      simulation=simulation,
                                      long_task_added_service_time=args.long_task_added_service_time)
                 mup = mu_updater.MuUpdater(serv,
@@ -158,7 +158,7 @@ class ExperimentRunner:
                 serv = server.Server(i,
                                      resource_capacity=args.server_concurrency,
                                      service_time=args.service_time,
-                                     service_time_model=args.service_time_model,
+                                     service_time_model=service_time_model,
                                      simulation=simulation,
                                      nw_latency_base=nw_latency_bases[i],
                                      long_task_added_service_time=args.long_task_added_service_time)

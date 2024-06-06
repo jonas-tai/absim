@@ -94,7 +94,9 @@ class SimulationArgs:
         parser.add_argument('--service_time', nargs='?',
                             type=float, default=4, help='Mean? service time per server')
         parser.add_argument('--service_time_model', nargs='?',
-                            type=str, default="random.expovariate", help='Distribution of service time on server (random.expovariate | constant | math.sin')
+                            type=str, default="random.expovariate", help='Distribution of service time on server (random.expovariate | constant | math.sin | pareto')
+        parser.add_argument('--test_service_time_model', nargs='?',
+                            type=str, default="random.expovariate", help='Distribution of service time on server (random.expovariate | constant | math.sin | pareto')
 
         parser.add_argument('--exp_scenario', nargs='?',
                             type=str, default="base",

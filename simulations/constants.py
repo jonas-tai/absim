@@ -17,3 +17,6 @@ POLICY_COLORS = {
     'DQN_EXPLR': "C4",
     "DQN_DUPL": 'C5',
 } | {f'DQN_EXPLR_{i}': 'C4' for i in range(101)}
+
+# Pareto distribution alpha
+ALPHA = 1.1
