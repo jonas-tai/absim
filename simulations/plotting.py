@@ -300,7 +300,8 @@ class ExperimentPlot:
         plt.close()
 
     def generate_plots(self) -> None:
-        reduced_policies = ['ARS', 'DQN', 'DQN_DUPL'] + const.DQN_EXPLR_SETTINGS + ['random']
+        reduced_policies = ['ARS', 'DQN', 'DQN_DUPL'] + ['DQN_EXPLR_0', 'DQN_EXPLR_5',
+                                                         'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20', 'DQN_EXPLR_25', 'DQN_EXPLR_30']
         print('Before')
         print(len(self.df))
         self.df = self.df[self.df['Is_faster_response']]

@@ -1,0 +1,11 @@
+workload:
+  num_requests: 1000 # Number of requests per epoch
+  long_tasks_fraction: 0.2 # Fraction of tasks that are long tasks (expScenario=heterogenous_static_nw_delay)
+  utilization: 0.45 # Arrival rate of requests
+  client_model: "poisson" # Arrival model of requests from client (constant | poisson)
+  workload_type: "base"
+
+variable_long_task_fraction_workload:
+  trigger_threshold: 300
+  updated_long_tasks_fraction: 0.6
+  workload_type: "variable_long_task_fraction"

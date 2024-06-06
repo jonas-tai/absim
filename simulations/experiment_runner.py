@@ -1,12 +1,12 @@
-from typing import List
+from typing import Any, Dict, List
 import server
 import client
 from simulations.state import StateParser
+from simulations.workload.workload import BaseWorkload, VariableLongTaskFractionWorkload
 from simulator import Simulation
-import workload
 import constants
 import sys
-import simulations.mu_updater as mu_updater
+import simulations.workload.mu_updater as mu_updater
 from simulations.monitor import Monitor
 from pathlib import Path
 from model_trainer import Trainer
@@ -16,7 +16,7 @@ class ExperimentRunner:
     def __init__(self, state_parser: StateParser) -> None:
         self.servers: List[server.Server] = []
         self.clients: List[client.Client] = []
-        self.workload_gens: List[workload.Workload] = []
+        self.workload_gens: List[BaseWorkload] = []
         self.state_parser = state_parser
 
     def reset_stats(self) -> None:
@@ -29,7 +29,7 @@ class ExperimentRunner:
         ratio = self.clients[client_index].dqn_decision_equal_to_ars / self.clients[client_index].requests_handled
         print(f'DQN matched ARS for {ratio * 100}% of decisions')
 
-    def run_experiment(self, args, num_requests: int, utilization: float, trainer: Trainer = None, duplication_rate: float = 0.0, eval_mode=False) -> Monitor:
+    def run_experiment(self, args, workload_config: Dict[str, Any], trainer: Trainer = None, duplication_rate: float = 0.0) -> Monitor:
         self.reset_stats()
 
         # Set the random seed
@@ -42,7 +42,6 @@ class ExperimentRunner:
         constants.NUMBER_OF_CLIENTS = args.num_clients
 
         assert args.exp_scenario != ""
-        assert utilization > 0
 
         service_rate_per_server = []
         if args.exp_scenario == "base" or args.exp_scenario == 'heterogenous_requests_scenario':
@@ -73,7 +72,7 @@ class ExperimentRunner:
             assert not (args.slow_server_slowness == 0 and args.slow_server_fraction != 0)
             assert not (args.slow_server_slowness != 0 and args.slow_server_fraction == 0)
             # TODO: Fix this for heterogeneous requests
-            assert args.long_tasks_fraction == 0
+            assert workload_config['workload_type'] == 'base'
 
             if args.slow_server_fraction > 0.0:
                 '''
@@ -218,108 +217,24 @@ class ExperimentRunner:
                               duplication_rate=duplication_rate)
             self.clients.append(c)
 
-        # This is where we set the inter-arrival times based on
-        # the required utilization level and the service time
-        # of the overall server pool.
-
-        arrival_rate = args.utilization * \
-            sum([server.get_service_rate(long_task_fraction=args.long_tasks_fraction) for server in self.servers])
-        inter_arrival_time = 1 / float(arrival_rate)
-
-        updated_arrival_rate = args.utilization * \
-            sum([server.get_service_rate(long_task_fraction=args.long_tasks_fraction + 0.4) for server in self.servers])
-        updated_inter_arrival_time = 1 / float(updated_arrival_rate)
+        if workload_config['workload_type'] == 'base':
+            workload = BaseWorkload.from_dict(id_=1, config=workload_config, simulation=simulation,
+                                              data_point_monitor=data_point_monitor, servers=self.servers, clients=self.clients)
+        else:
+            workload = VariableLongTaskFractionWorkload.from_dict(
+                id_=1, config=workload_config, simulation=simulation, data_point_monitor=data_point_monitor, clients=self.clients, servers=self.servers)
 
         # TODO: Use multiple workloads to simulate smoother shift to new workload?
         # More than 1 workload currently not supported
         assert args.num_workload == 1
-        for i in range(args.num_workload):
-            # w = workload.Workload(i, data_point_monitor,
-            #                       self.clients,
-            #                       args.workload_model,
-            #                       inter_arrival_time * args.num_workload,
-            #                       num_requests / args.num_workload,
-            #                       simulation,
-            #                       long_tasks_fraction=args.long_tasks_fraction
-            #                       )
-            # TODO: Change!
-            w = workload.VariableLongTaskFractionWorkload(i, 30000, updated_inter_arrival_time, data_point_monitor,
-                                                          self.clients,
-                                                          args.workload_model,
-                                                          inter_arrival_time * args.num_workload,
-                                                          num_requests / args.num_workload,
-                                                          simulation,
-                                                          long_tasks_fraction=args.long_tasks_fraction
-                                                          )
-            simulation.process(w.run())
-            self.workload_gens.append(w)
+        simulation.process(workload.run())
+        self.workload_gens.append(workload)
 
         # Begin simulation
         simulation.run(until=args.simulation_duration)
 
-        #
-        # print(a bunch of timeseries)
-        #
-
-        # exp_prefix = f'{args.exp_prefix}_test' if eval_mode else args.exp_prefix
-        # exp_path = Path('..', args.log_folder, exp_prefix)
-
-        # if not exp_path.exists():
-        #     exp_path.mkdir(parents=True, exist_ok=True)
-
-        # pending_requests_fd = open("../%s/%s_PendingRequests" %
-        #                            (args.log_folder,
-        #                             exp_prefix), 'w')
-        # wait_mon_fd = open("../%s/%s_WaitMon" % (args.log_folder,
-        #                                          exp_prefix), 'w')
-        # act_mon_fd = open("../%s/%s_ActMon" % (args.log_folder,
-        #                                        exp_prefix), 'w')
-        # latency_fd = open("../%s/%s_Latency" % (args.log_folder,
-        #                                         exp_prefix), 'w')
-        # latency_tracker_fd = open("../%s/%s_LatencyTracker" %
-        #                           (args.log_folder, exp_prefix), 'w')
-        # rate_fd = open("../%s/%s_Rate" % (args.log_folder,
-        #                                   exp_prefix), 'w')
-        # token_fd = open("../%s/%s_Tokens" % (args.log_folder,
-        #                                      exp_prefix), 'w')
-        # receive_rate_fd = open("../%s/%s_ReceiveRate" % (args.log_folder,
-        #                                                  exp_prefix), 'w')
-        # ed_score_fd = open("../%s/%s_EdScore" % (args.log_folder,
-        #                                          exp_prefix), 'w')
-        # server_rrfd = open("../%s/%s_serverRR" % (args.log_folder,
-        #                                           exp_prefix), 'w')
-
-        # for clientNode in clients:
-        #     print_monitor_time_series_to_file(pending_requests_fd,
-        #                                       clientNode.id,
-        #                                       clientNode.pendingRequestsMonitor)
-        #     print_monitor_time_series_to_file(latency_tracker_fd,
-        #                                       clientNode.id,
-        #                                       clientNode.latencyTrackerMonitor)
-        #     print_monitor_time_series_to_file(rate_fd,
-        #                                       clientNode.id,
-        #                                       clientNode.rateMonitor)
-        #     print_monitor_time_series_to_file(token_fd,
-        #                                       clientNode.id,
-        #                                       clientNode.tokenMonitor)
-        #     print_monitor_time_series_to_file(receive_rate_fd,
-        #                                       clientNode.id,
-        #                                       clientNode.receiveRateMonitor)
-        #     print_monitor_time_series_to_file(ed_score_fd,
-        #                                       clientNode.id,
-        #                                       clientNode.edScoreMonitor)
-
         if args.print:
             for serv in self.servers:
-                #     print_monitor_time_series_to_file(wait_mon_fd,
-                #                                       serv.id,
-                #                                       serv.wait_monitor)
-                #     print_monitor_time_series_to_file(act_mon_fd,
-                #                                       serv.id,
-                #                                       serv.act_monitor)
-                #     print_monitor_time_series_to_file(server_rrfd,
-                #                                       serv.id,
-                #                                       serv.server_RR_monitor)
                 print("------- Server:%s %s ------" % (serv.id, "WaitMon"))
                 print("Mean:", serv.wait_monitor.mean())
 
@@ -333,6 +248,6 @@ class ExperimentRunner:
 
             # print_monitor_time_series_to_file(latency_fd, "0",
             #                                   data_point_monitor)
-            assert num_requests == len(data_point_monitor)
+            assert workload_config['num_requests'] == len(data_point_monitor)
 
         return data_point_monitor

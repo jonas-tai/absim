@@ -1,0 +1,11 @@
+workload:
+  num_requests: 60000
+  long_tasks_fraction: 0.2
+  utilization: 0.45
+  client_model: "poisson"
+  workload_type: "base"
+
+variable_long_task_fraction_workload:
+  trigger_threshold: 30000
+  updated_long_tasks_fraction: 0.6
+  workload_type: "variable_long_task_fraction"

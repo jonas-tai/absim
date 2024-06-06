@@ -54,6 +54,7 @@ class SimulationArgs:
                                                            'note that if this is too low and numRequests is too high, '
                                                            'it will error')
 
+        # Folders
         parser.add_argument('--data_folder', nargs='?', type=str, default="data")
         parser.add_argument('--plot_folder', nargs='?', type=str, default="plots")
         parser.add_argument('--output_folder',  nargs='?', type=str, default="outputs")
@@ -94,10 +95,7 @@ class SimulationArgs:
                             type=float, default=4, help='Mean? service time per server')
         parser.add_argument('--service_time_model', nargs='?',
                             type=str, default="random.expovariate", help='Distribution of service time on server (random.expovariate | constant | math.sin')
-        parser.add_argument('--utilization', nargs='?',
-                            type=float, default=0.7, help='Arrival rate of requests')
-        parser.add_argument('--num_requests', nargs='?',
-                            type=int, default=1000, help='Number of requests')
+
         parser.add_argument('--exp_scenario', nargs='?',
                             type=str, default="base",
                             help='Defines some scenarios for experiments such as \n'
@@ -109,9 +107,6 @@ class SimulationArgs:
                                  '[heterogenousStaticServiceTimeScenario] - '
                                  'fraction of servers are slower\n'
                                  '[time_varying_service_time_servers] - servers change service times')
-        parser.add_argument('--workload_model', nargs='?',
-                            type=str, default="poisson",
-                            help='Arrival model of requests from client (constant | poisson)')
 
         # Slow network setting parameters
         parser.add_argument('--nw_latency_base', nargs='?',
@@ -129,9 +124,6 @@ class SimulationArgs:
                                  '(expScenario=heterogenous_static_nw_delay)')
 
         # Heterogeneous Tasks workload
-        parser.add_argument('--long_tasks_fraction', nargs='?',
-                            type=float, default=0.0, help='Fraction of tasks that are long tasks'
-                            '(expScenario=heterogenous_static_nw_delay)')
         parser.add_argument('--long_task_added_service_time', nargs='?',
                             type=float, default=35,
                             help='How many times slower than short tasks the long tasks take ')
@@ -141,8 +133,6 @@ class SimulationArgs:
                             type=int, default=200, help='Number of training epochs')
 
         # RL Model evaluation
-        parser.add_argument('--num_requests_test', nargs='?',
-                            type=int, default=60000, help='Number of requests for test epochs')
         parser.add_argument('--test_epochs', nargs='?',
                             type=int, default=3, help='Number of test epochs')
         parser.add_argument('--dqn_explr', nargs='?',
@@ -232,22 +222,20 @@ class TimeVaryingServerArgs(SimulationArgs):
 
 
 class HeterogeneousRequestsArgs(SimulationArgs):
-    def __init__(self, long_tasks_fraction: float = 0.2, long_task_added_service_time: int = 35, input_args=None) -> None:
+    def __init__(self, long_task_added_service_time: int = 35, input_args=None) -> None:
         super().__init__(input_args=input_args)
         print('Initialized')
         self.args.exp_scenario = 'heterogenous_requests_scenario'
         self.args.long_task_added_service_time = long_task_added_service_time
-        self.args.long_tasks_fraction = long_tasks_fraction
 
     def to_string(self) -> str:
-        return f'heterogenous_requests_scenario_{self.args.long_tasks_fraction}_{self.args.long_task_added_service_time}'
+        return f'heterogenous_requests_scenario_{self.args.long_task_added_service_time}'
 
 
 class BaseArgs(SimulationArgs):
     def __init__(self, input_args=None) -> None:
         super().__init__(input_args=input_args)
         self.args.exp_scenario = 'base'
-        self.args.long_tasks_fraction = 0.0
 
     def to_string(self) -> str:
         return 'base'

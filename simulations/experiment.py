@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, List
+from typing import Any, Dict, List
 
 import torch
 
@@ -14,6 +14,7 @@ from simulations.monitor import Monitor
 from simulations.plotting import ExperimentPlot
 from experiment_runner import ExperimentRunner
 from simulations.state import StateParser
+from simulations.workload.workload_builder import WorkloadBuilder
 
 
 TRAIN_POLICIES_TO_RUN = [
@@ -25,7 +26,6 @@ TRAIN_POLICIES_TO_RUN = [
     'DQN'
 ]
 
-DQN_EXPLR_SETTINGS = [f'DQN_EXPLR_{i * 10}' for i in range(11)]
 
 EVAL_POLICIES_TO_RUN = [
     # 'round_robin',
@@ -34,9 +34,9 @@ EVAL_POLICIES_TO_RUN = [
     'random',
     # 'DQN_EXPLR',
     'DQN_DUPL'
-] + DQN_EXPLR_SETTINGS
+] + ['DQN_EXPLR_0', 'DQN_EXPLR_5', 'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20', 'DQN_EXPLR_25', 'DQN_EXPLR_30']
 
-DQN_EXPLR_MAPPING = {f'DQN_EXPLR_{i * 10}': (i / 10.0) for i in range(11)}
+DQN_EXPLR_MAPPING = {f'DQN_EXPLR_{i}': (i / 100.0) for i in range(101)}
 
 
 def print_monitor_time_series_to_file(file_desc, prefix, monitor) -> None:
@@ -66,9 +66,12 @@ def create_experiment_folders(simulation_args: SimulationArgs, state_parser: Sta
     return out_path
 
 
-def rl_experiment_wrapper(simulation_args: SimulationArgs, input_args: Any | None) -> float:
+def rl_experiment_wrapper(simulation_args: SimulationArgs, input_args: Any | None, train_workload_configs: List[Dict[str, Any]], test_workload_configs: List[Dict[str, Any]]) -> float:
+
+    # TODO: Fix
+    average_long_tasks_fraction = 1.0
     state_parser = StateParser(num_servers=simulation_args.args.num_servers,
-                               long_tasks_fraction=simulation_args.args.long_tasks_fraction,
+                               long_tasks_fraction=average_long_tasks_fraction,
                                num_request_rates=len(simulation_args.args.rate_intervals),
                                poly_feat_degree=simulation_args.args.poly_feat_degree)
 
@@ -82,26 +85,25 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, input_args: Any | Non
 
     out_path = create_experiment_folders(simulation_args=simulation_args, state_parser=state_parser)
 
-    run_rl_training(simulation_args=simulation_args, trainer=trainer, state_parser=state_parser, out_folder=out_path)
-    test_result_autotune = run_rl_test(simulation_args=simulation_args, out_folder=out_path,
-                                       experiment='test', trainer=trainer, state_parser=state_parser)
-    # additional_test_args = [HeterogeneousRequestsArgs(input_args=input_args, long_tasks_fraction=0.4,
-    #   long_task_added_service_time=200)]
-    additional_test_args = []
+    run_rl_training(simulation_args=simulation_args, workload_configs=train_workload_configs,
+                    trainer=trainer, state_parser=state_parser, out_folder=out_path)
 
-    for args in additional_test_args:
+    test_result = 0
+    for test_workload_config in test_workload_configs:
         print('Running with args:')
-        print(args)
-        run_rl_test(simulation_args=args, out_folder=out_path,
-                    experiment=args.to_string(), trainer=trainer, state_parser=state_parser)
-    return test_result_autotune
+        # TODO: Export workload config
+        test_result += run_rl_test(simulation_args=simulation_args, workload_config=test_workload_config,
+                                   out_folder=out_path, trainer=trainer, state_parser=state_parser)
+    return test_result / len(test_workload_configs)
 
 
-def run_rl_training(simulation_args: SimulationArgs, trainer: Trainer, state_parser: StateParser, out_folder: Path):
+def run_rl_training(simulation_args: SimulationArgs, workload_configs: List[Dict[str, Any]], trainer: Trainer, state_parser: StateParser, out_folder: Path):
     NUM_EPSIODES = simulation_args.args.epochs
     LAST_EPOCH = NUM_EPSIODES - 1
     to_print = False
-    utilization = simulation_args.args.utilization
+
+    # TODO: Fix / workaround
+    utilization = workload_configs[0]['utilization']
 
     # Init directories
     experiment_folder = out_folder / 'train'
@@ -129,14 +131,16 @@ def run_rl_training(simulation_args: SimulationArgs, trainer: Trainer, state_par
         #     simulation_args.set_print(True)
         for i_episode in range(NUM_EPSIODES):
             print(i_episode)
-
             random.seed(i_episode)
             np.random.seed(i_episode)
             torch.manual_seed(i_episode)
             simulation_args.set_seed(i_episode)
+            # randomly select one of the workload configs
+            workload_config = random.choice(workload_configs)
+            # TODO: Log workload configs used somewhere
 
             data_point_monitor = experiment_runner.run_experiment(
-                simulation_args.args, num_requests=simulation_args.args.num_requests, utilization=utilization, trainer=trainer, duplication_rate=duplication_rate)
+                simulation_args.args, workload_config=workload_config, trainer=trainer, duplication_rate=duplication_rate)
             train_plotter.add_data(data_point_monitor, policy, i_episode)
 
             if simulation_args.args.collect_data_points or i_episode == LAST_EPOCH:
@@ -167,7 +171,7 @@ def run_rl_training(simulation_args: SimulationArgs, trainer: Trainer, state_par
     plot_collected_data(plotter=train_plotter, epoch_to_plot=LAST_EPOCH, policies_to_plot=TRAIN_POLICIES_TO_RUN)
 
 
-def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: str, trainer: Trainer, state_parser: StateParser) -> float:
+def run_rl_test(simulation_args: SimulationArgs, workload_config: Dict[str, Any], out_folder: Path, trainer: Trainer, state_parser: StateParser) -> float:
     BASE_TEST_SEED = 1111111
 
     experiment_runner = ExperimentRunner(state_parser=state_parser)
@@ -176,11 +180,12 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
 
     NUM_TEST_EPSIODES = simulation_args.args.test_epochs
-    NUM_TEST_REQUESTS = simulation_args.args.num_requests_test
     LAST_EPOCH = NUM_TEST_EPSIODES - 1
     to_print = False
 
-    experiment_folder = out_folder / experiment
+    EXPERIMENT = f'{workload_config["workload_type"]}_{workload_config["long_tasks_fraction"]}_long_tasks_{workload_config["utilization"]}_util'
+
+    experiment_folder = out_folder / EXPERIMENT
     plot_path = experiment_folder / simulation_args.args.plot_folder
     data_folder = experiment_folder / simulation_args.args.data_folder
     model_folder = out_folder / 'train' / simulation_args.args.data_folder
@@ -189,7 +194,7 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
     os.makedirs(data_folder, exist_ok=True)
     os.makedirs(plot_path / 'pdfs', exist_ok=True)
 
-    utilization = simulation_args.args.utilization
+    utilization = workload_config['utilization']
 
     test_plotter = ExperimentPlot(plot_folder=plot_path, data_folder=data_folder, utilization=utilization)
     test_data_analyzer = FeatureDataCollector(out_folder=data_folder, state_parser=state_parser)
@@ -208,14 +213,12 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
 
         duplication_rate = 0.0
 
-        utilization = simulation_args.args.utilization
         if policy == 'DQN_EXPLR':
             trainer.eval_mode = False
             print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
             trainer.EPS_END = simulation_args.args.dqn_explr
             trainer.EPS_START = simulation_args.args.dqn_explr
             trainer.LR = 1e-6
-            trainer.reset_model_training_stats()
         elif policy.startswith('DQN_EXPLR_'):
             trainer.eval_mode = False
             print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
@@ -223,7 +226,6 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
             trainer.EPS_END = simulation_args.args.dqn_explr
             trainer.EPS_START = simulation_args.args.dqn_explr
             trainer.LR = 1e-6
-            trainer.reset_model_training_stats()
         elif policy == 'DQN':
             trainer.EPS_END = 0
             trainer.EPS_START = 0
@@ -233,10 +235,10 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
             trainer.EPS_END = 0
             trainer.EPS_START = 0
             trainer.eval_mode = True
-            # utilization -= duplication_rate
 
         for i_episode in range(NUM_TEST_EPSIODES):
             trainer.load_models(model_folder=model_folder)
+            trainer.reset_model_training_stats()
 
             seed = BASE_TEST_SEED + i_episode
 
@@ -247,7 +249,7 @@ def run_rl_test(simulation_args: SimulationArgs, out_folder: Path, experiment: s
             simulation_args.set_seed(seed)
 
             test_data_point_monitor = experiment_runner.run_experiment(
-                simulation_args.args, num_requests=NUM_TEST_REQUESTS, utilization=utilization, trainer=trainer, eval_mode=trainer.eval_mode, duplication_rate=duplication_rate)
+                simulation_args.args, workload_config=workload_config, trainer=trainer, duplication_rate=duplication_rate)
             test_plotter.add_data(test_data_point_monitor, simulation_args.args.selection_strategy, i_episode)
 
             if simulation_args.args.collect_data_points or i_episode == LAST_EPOCH:
@@ -300,7 +302,13 @@ def main(input_args=None, setting="base") -> None:
     else:
         raise Exception(f'Unknown setting {setting}')
 
-    EXPERIMENT_NAME = 'var_long_tasks_fixed2'
+    EXPERIMENT_NAME = 'new_workload_config'
+
+    config_folder = Path('..', 'configs')
+    workload_builder = WorkloadBuilder(config_folder=config_folder)
+
+    train_configs = workload_builder.create_train_base_configs(long_tasks_fractions=[0.2, 0.4, 0.6])
+    test_configs = workload_builder.create_test_base_configs(long_tasks_fractions=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
 
     args.set_policy('ARS')
     args.args.exp_name = EXPERIMENT_NAME
@@ -320,14 +328,10 @@ def main(input_args=None, setting="base") -> None:
     args = HeterogeneousRequestsArgs(input_args=input_args)
     args.args.exp_name = EXPERIMENT_NAME
 
-    args.args.num_requests_test = 100000
-    for long_task_fraction in [0.2, 0.1, 0.4]:
-        for duplication_rate in [0.1]:
-            for utilization in [0.45, 0.7]:
-                args.args.duplication_rate = duplication_rate
-                args.args.long_tasks_fraction = long_task_fraction
-                args.args.utilization = utilization
-                last = rl_experiment_wrapper(args, input_args=input_args)
+    for duplication_rate in [0.1]:
+        args.args.duplication_rate = duplication_rate
+        last = rl_experiment_wrapper(args, input_args=input_args,
+                                     train_workload_configs=train_configs, test_workload_configs=test_configs)
 
     return
     # Static slow server workloads
@@ -363,7 +367,6 @@ def main(input_args=None, setting="base") -> None:
                         args.args.interval_param = interval
                         args.args.time_varying_drift = time_varying_drift
                         args.args.dqn_explr = dqn_explr
-                        args.args.utilization = utilization
                         last = rl_experiment_wrapper(args, input_args=input_args)
 
     return last
