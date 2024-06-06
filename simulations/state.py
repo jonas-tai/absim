@@ -56,9 +56,8 @@ class State:
 
 
 class StateParser:
-    def __init__(self, num_servers: int, long_tasks_fraction: float, num_request_rates: int, poly_feat_degree: int) -> None:
+    def __init__(self, num_servers: int, num_request_rates: int, poly_feat_degree: int) -> None:
         self.num_servers = num_servers
-        self.long_tasks_fraction = long_tasks_fraction
         self.num_request_rates = num_request_rates
         self.poly_feat_degree = poly_feat_degree
 
@@ -69,16 +68,7 @@ class StateParser:
                             0 for _ in range(self.num_request_rates)], node_states=node_states)
         return dummy_state
 
-    # def get_node_state_size(self) -> int:
-    #     if self.long_tasks_fraction > 0:
-    #         return 7
-    #     return 5
-
     def get_state_size(self):
-        # num_other_features = 2 if self.long_tasks_fraction > 0 else 1
-        # state_size = self.num_servers * self.get_node_state_size(
-        #     long_tasks_fraction=self.long_tasks_fraction) + self.num_request_rates + num_other_features
-
         dummy_state = self.create_dummy_state()
         dummy_state_tensor = self.state_to_tensor(dummy_state)
         state_length = dummy_state_tensor.size(dim=1)
@@ -86,12 +76,9 @@ class StateParser:
 
     def node_state_to_tensor(self, node_state: NodeState) -> torch.Tensor:
         state_features = [node_state.queue_size, node_state.service_time,
-                          node_state.response_time, node_state.outstanding_requests]  # node_state.ars_score, node_state.wait_time,
+                          node_state.response_time, node_state.outstanding_requests, node_state.outstanding_long_requests, node_state.outstanding_short_requests]  # node_state.ars_score, node_state.wait_time,
         # state_features = [node_state.ars_score]
         # node_state.twice_network_latency
-
-        if self.long_tasks_fraction > 0:
-            state_features += [node_state.outstanding_long_requests, node_state.outstanding_short_requests]
 
         return torch.tensor([state_features], dtype=torch.float32)
 
@@ -99,10 +86,7 @@ class StateParser:
         node_state_tensor = torch.cat(
             [self.node_state_to_tensor(node_state) for node_state in state.node_states], 1)
 
-        general_state = state.request_trend + [state.time_since_last_req]
-        # general_state = []
-        if self.long_tasks_fraction > 0:
-            general_state += [int(state.is_long_request)]
+        general_state = state.request_trend + [state.time_since_last_req, int(state.is_long_request)]
         general_state_tensor = torch.tensor([general_state], dtype=torch.float32)
 
         state_tensor = torch.cat((general_state_tensor, node_state_tensor), 1)

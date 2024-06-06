@@ -2,7 +2,7 @@ workload:
   num_requests: 60000
   long_tasks_fraction: 0.2
   utilization: 0.45
-  client_model: "poisson"
+  arrival_model: "poisson"
   workload_type: "base"
 
 variable_long_task_fraction_workload:

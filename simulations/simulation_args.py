@@ -137,6 +137,8 @@ class SimulationArgs:
                             type=int, default=3, help='Number of test epochs')
         parser.add_argument('--dqn_explr', nargs='?',
                             type=float, default=0.1, help='Exploration used by DQN_EXPLR')
+        parser.add_argument('--dqn_explr_lr', nargs='?',
+                            type=float, default=1e-6, help='LR used by DQN_EXPLR')
 
         # RL Model parameters
         parser.add_argument('--model_structure', nargs='?',

@@ -3,6 +3,8 @@ from typing import Any, Dict, List
 
 import yaml
 
+from simulations.workload.workload import BaseWorkload, VariableLongTaskFractionWorkload
+
 
 class WorkloadBuilder:
     def __init__(self, config_folder: Path) -> None:
@@ -16,14 +18,14 @@ class WorkloadBuilder:
         with open(self.test_config_file, 'r') as file:
             self.test_config = yaml.safe_load(file)
 
-    def create_train_base_configs(self, utilizations: List[float] = [], long_tasks_fractions: List[float] = []) -> List[Dict[str, Any]]:
-        return self.create_base_workload_configs(base_config=self.train_config, utilizations=utilizations, long_tasks_fractions=long_tasks_fractions)
+    def create_train_base_workloads(self, utilizations: List[float] = [], long_tasks_fractions: List[float] = []) -> List[Dict[str, Any]]:
+        return self.create_base_workloads(base_config=self.train_config, utilizations=utilizations, long_tasks_fractions=long_tasks_fractions)
 
-    def create_test_base_configs(self, utilizations: List[float] = [], long_tasks_fractions: List[float] = []) -> List[Dict[str, Any]]:
-        return self.create_base_workload_configs(base_config=self.test_config, utilizations=utilizations, long_tasks_fractions=long_tasks_fractions)
+    def create_test_base_workloads(self, utilizations: List[float] = [], long_tasks_fractions: List[float] = []) -> List[Dict[str, Any]]:
+        return self.create_base_workloads(base_config=self.test_config, utilizations=utilizations, long_tasks_fractions=long_tasks_fractions)
 
-    def create_base_workload_configs(self, base_config: Dict[str, Any], utilizations: List[float], long_tasks_fractions: List[float]) -> List[Dict[str, Any]]:
-        workload_configs = []
+    def create_base_workloads(self, base_config: Dict[str, Any], utilizations: List[float], long_tasks_fractions: List[float]) -> List[BaseWorkload]:
+        workloads = []
         base_config = base_config['workload']
 
         if len(utilizations) == 0:
@@ -37,18 +39,19 @@ class WorkloadBuilder:
                 config = base_config.copy()
                 config['utilization'] = utilization
                 config['long_tasks_fraction'] = long_tasks_fraction
-                workload_configs.append(config)
+                workload = BaseWorkload.from_dict(id_=1, config=config)
+                workloads.append(workload)
 
-        return workload_configs
+        return workloads
 
-    def create_train_variable_configs(self, utilizations: List[float] = [], long_tasks_fractions: List[float] = []) -> List[Dict[str, Any]]:
+    def create_train_var_long_tasks_workloads(self, utilizations: List[float] = [], long_tasks_fractions: List[float] = []) -> List[Dict[str, Any]]:
         return self.create_variable_workloads(base_config=self.train_config, utilizations=utilizations, long_tasks_fractions=long_tasks_fractions)
 
-    def create_test_variable_configs(self, utilizations: List[float] = [], long_tasks_fractions: List[float] = []) -> List[Dict[str, Any]]:
+    def create_test_var_long_tasks_workloads(self, utilizations: List[float] = [], long_tasks_fractions: List[float] = []) -> List[Dict[str, Any]]:
         return self.create_variable_workloads(base_config=self.test_config, utilizations=utilizations, long_tasks_fractions=long_tasks_fractions)
 
-    def create_variable_workloads(self, base_config: Dict[str, Any], utilizations: List[float] = [], long_tasks_fractions: List[float] = [], updated_long_tasks_fractions: List[float] = []) -> List[Dict[str, Any]]:
-        workload_configs = []
+    def create_variable_workloads(self, base_config: Dict[str, Any], utilizations: List[float] = [], long_tasks_fractions: List[float] = [], updated_long_tasks_fractions: List[float] = []) -> List[VariableLongTaskFractionWorkload]:
+        workloads = []
         base_config = base_config['workload'] | base_config['variable_long_task_fraction_workload']
 
         if len(utilizations) == 0:
@@ -67,6 +70,8 @@ class WorkloadBuilder:
                     config['updated_long_tasks_fraction'] = updated_long_tasks_fraction
                     config['utilization'] = utilization
                     config['long_tasks_fraction'] = long_tasks_fraction
-                    workload_configs.append(config)
+                    workload = VariableLongTaskFractionWorkload.from_dict(id_=1, config=config)
 
-        return workload_configs
+                    workloads.append(workload)
+
+        return workloads

@@ -14,6 +14,7 @@ from simulations.monitor import Monitor
 from simulations.plotting import ExperimentPlot
 from experiment_runner import ExperimentRunner
 from simulations.state import StateParser
+from simulations.workload.workload import BaseWorkload
 from simulations.workload.workload_builder import WorkloadBuilder
 
 
@@ -66,12 +67,8 @@ def create_experiment_folders(simulation_args: SimulationArgs, state_parser: Sta
     return out_path
 
 
-def rl_experiment_wrapper(simulation_args: SimulationArgs, input_args: Any | None, train_workload_configs: List[Dict[str, Any]], test_workload_configs: List[Dict[str, Any]]) -> float:
-
-    # TODO: Fix
-    average_long_tasks_fraction = 1.0
+def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List[BaseWorkload], test_workloads: List[BaseWorkload]) -> float:
     state_parser = StateParser(num_servers=simulation_args.args.num_servers,
-                               long_tasks_fraction=average_long_tasks_fraction,
                                num_request_rates=len(simulation_args.args.rate_intervals),
                                poly_feat_degree=simulation_args.args.poly_feat_degree)
 
@@ -85,25 +82,25 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, input_args: Any | Non
 
     out_path = create_experiment_folders(simulation_args=simulation_args, state_parser=state_parser)
 
-    run_rl_training(simulation_args=simulation_args, workload_configs=train_workload_configs,
+    run_rl_training(simulation_args=simulation_args, workloads=train_workloads,
                     trainer=trainer, state_parser=state_parser, out_folder=out_path)
 
     test_result = 0
-    for test_workload_config in test_workload_configs:
+    for test_workload in test_workloads:
         print('Running with args:')
         # TODO: Export workload config
-        test_result += run_rl_test(simulation_args=simulation_args, workload_config=test_workload_config,
+        test_result += run_rl_test(simulation_args=simulation_args, workload=test_workload,
                                    out_folder=out_path, trainer=trainer, state_parser=state_parser)
-    return test_result / len(test_workload_configs)
+    return test_result / len(test_workloads)
 
 
-def run_rl_training(simulation_args: SimulationArgs, workload_configs: List[Dict[str, Any]], trainer: Trainer, state_parser: StateParser, out_folder: Path):
+def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkload], trainer: Trainer, state_parser: StateParser, out_folder: Path):
     NUM_EPSIODES = simulation_args.args.epochs
     LAST_EPOCH = NUM_EPSIODES - 1
     to_print = False
 
     # TODO: Fix / workaround
-    utilization = workload_configs[0]['utilization']
+    utilization = workloads[0]['utilization']
 
     # Init directories
     experiment_folder = out_folder / 'train'
@@ -120,7 +117,10 @@ def run_rl_training(simulation_args: SimulationArgs, workload_configs: List[Dict
 
     simulation_args.set_print(to_print)
 
+    # Log arguments and workload config
     log_arguments(experiment_folder, simulation_args)
+    for i, workload in enumerate(workloads):
+        workload.to_json_file(out_folder=experiment_folder, prefix=f'{i}_')
 
     duplication_rate = 0.0
 
@@ -136,11 +136,11 @@ def run_rl_training(simulation_args: SimulationArgs, workload_configs: List[Dict
             torch.manual_seed(i_episode)
             simulation_args.set_seed(i_episode)
             # randomly select one of the workload configs
-            workload_config = random.choice(workload_configs)
+            workload = random.choice(workloads)
             # TODO: Log workload configs used somewhere
 
             data_point_monitor = experiment_runner.run_experiment(
-                simulation_args.args, workload_config=workload_config, trainer=trainer, duplication_rate=duplication_rate)
+                simulation_args.args, workload=workload, trainer=trainer, duplication_rate=duplication_rate)
             train_plotter.add_data(data_point_monitor, policy, i_episode)
 
             if simulation_args.args.collect_data_points or i_episode == LAST_EPOCH:
@@ -171,7 +171,7 @@ def run_rl_training(simulation_args: SimulationArgs, workload_configs: List[Dict
     plot_collected_data(plotter=train_plotter, epoch_to_plot=LAST_EPOCH, policies_to_plot=TRAIN_POLICIES_TO_RUN)
 
 
-def run_rl_test(simulation_args: SimulationArgs, workload_config: Dict[str, Any], out_folder: Path, trainer: Trainer, state_parser: StateParser) -> float:
+def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_folder: Path, trainer: Trainer, state_parser: StateParser) -> float:
     BASE_TEST_SEED = 1111111
 
     experiment_runner = ExperimentRunner(state_parser=state_parser)
@@ -183,7 +183,7 @@ def run_rl_test(simulation_args: SimulationArgs, workload_config: Dict[str, Any]
     LAST_EPOCH = NUM_TEST_EPSIODES - 1
     to_print = False
 
-    EXPERIMENT = f'{workload_config["workload_type"]}_{workload_config["long_tasks_fraction"]}_long_tasks_{workload_config["utilization"]}_util'
+    EXPERIMENT = workload.to_file_name()
 
     experiment_folder = out_folder / EXPERIMENT
     plot_path = experiment_folder / simulation_args.args.plot_folder
@@ -194,7 +194,7 @@ def run_rl_test(simulation_args: SimulationArgs, workload_config: Dict[str, Any]
     os.makedirs(data_folder, exist_ok=True)
     os.makedirs(plot_path / 'pdfs', exist_ok=True)
 
-    utilization = workload_config['utilization']
+    utilization = workload.utilization
 
     test_plotter = ExperimentPlot(plot_folder=plot_path, data_folder=data_folder, utilization=utilization)
     test_data_analyzer = FeatureDataCollector(out_folder=data_folder, state_parser=state_parser)
@@ -202,6 +202,7 @@ def run_rl_test(simulation_args: SimulationArgs, workload_config: Dict[str, Any]
     simulation_args.set_print(to_print)
 
     log_arguments(experiment_folder, simulation_args)
+    workload.to_json_file(out_folder=experiment_folder)
 
     for policy in EVAL_POLICIES_TO_RUN:
         simulation_args.set_policy(policy)
@@ -218,14 +219,13 @@ def run_rl_test(simulation_args: SimulationArgs, workload_config: Dict[str, Any]
             print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
             trainer.EPS_END = simulation_args.args.dqn_explr
             trainer.EPS_START = simulation_args.args.dqn_explr
-            trainer.LR = 1e-6
+            trainer.LR = simulation_args.args.dqn_explr_lr
         elif policy.startswith('DQN_EXPLR_'):
             trainer.eval_mode = False
             print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
-            simulation_args.args.dqn_explr = DQN_EXPLR_MAPPING[policy]
-            trainer.EPS_END = simulation_args.args.dqn_explr
-            trainer.EPS_START = simulation_args.args.dqn_explr
-            trainer.LR = 1e-6
+            trainer.EPS_END = DQN_EXPLR_MAPPING[policy]
+            trainer.EPS_START = DQN_EXPLR_MAPPING[policy]
+            trainer.LR = simulation_args.args.dqn_explr_lr
         elif policy == 'DQN':
             trainer.EPS_END = 0
             trainer.EPS_START = 0
@@ -249,7 +249,7 @@ def run_rl_test(simulation_args: SimulationArgs, workload_config: Dict[str, Any]
             simulation_args.set_seed(seed)
 
             test_data_point_monitor = experiment_runner.run_experiment(
-                simulation_args.args, workload_config=workload_config, trainer=trainer, duplication_rate=duplication_rate)
+                simulation_args.args, workload=workload, trainer=trainer, duplication_rate=duplication_rate)
             test_plotter.add_data(test_data_point_monitor, simulation_args.args.selection_strategy, i_episode)
 
             if simulation_args.args.collect_data_points or i_episode == LAST_EPOCH:
@@ -307,8 +307,9 @@ def main(input_args=None, setting="base") -> None:
     config_folder = Path('..', 'configs')
     workload_builder = WorkloadBuilder(config_folder=config_folder)
 
-    train_configs = workload_builder.create_train_base_configs(long_tasks_fractions=[0.2, 0.4, 0.6])
-    test_configs = workload_builder.create_test_base_configs(long_tasks_fractions=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
+    train_workloads = workload_builder.create_train_base_workloads(long_tasks_fractions=[0.2, 0.4, 0.6])
+    test_workloads = workload_builder.create_test_base_workloads(
+        long_tasks_fractions=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
 
     args.set_policy('ARS')
     args.args.exp_name = EXPERIMENT_NAME
@@ -316,7 +317,7 @@ def main(input_args=None, setting="base") -> None:
     #     # args.args.duplication_rate = duplication_rate
     #     args.args.utilization = utilization
 
-    #     _ = rl_experiment_wrapper(args, input_args=input_args)
+    #     _ = rl_experiment_wrapper(args)
 
     # elif setting =="slow":
     #     args = SlowServerArgs(0.5,0.5, input_args=input_args)
@@ -330,8 +331,8 @@ def main(input_args=None, setting="base") -> None:
 
     for duplication_rate in [0.1]:
         args.args.duplication_rate = duplication_rate
-        last = rl_experiment_wrapper(args, input_args=input_args,
-                                     train_workload_configs=train_configs, test_workload_configs=test_configs)
+        last = rl_experiment_wrapper(args,
+                                     train_workloads=train_workloads, test_workloads=test_workloads)
 
     return
     # Static slow server workloads
@@ -348,7 +349,7 @@ def main(input_args=None, setting="base") -> None:
     #             args.args.slow_server_slowness = slow_server_slowness
     #             args.args.dqn_explr = dqn_explr
     #             args.args.utilization = utilization
-    #             last = rl_experiment_wrapper(args, input_args=input_args)
+    #             last = rl_experiment_wrapper(args)
 
     args = TimeVaryingServerArgs(input_args=input_args)
     args.args.exp_name = EXPERIMENT_NAME

@@ -29,7 +29,7 @@ class ExperimentRunner:
         ratio = self.clients[client_index].dqn_decision_equal_to_ars / self.clients[client_index].requests_handled
         print(f'DQN matched ARS for {ratio * 100}% of decisions')
 
-    def run_experiment(self, args, workload_config: Dict[str, Any], trainer: Trainer = None, duplication_rate: float = 0.0) -> Monitor:
+    def run_experiment(self, args, workload: BaseWorkload, trainer: Trainer = None, duplication_rate: float = 0.0) -> Monitor:
         self.reset_stats()
 
         # Set the random seed
@@ -72,7 +72,7 @@ class ExperimentRunner:
             assert not (args.slow_server_slowness == 0 and args.slow_server_fraction != 0)
             assert not (args.slow_server_slowness != 0 and args.slow_server_fraction == 0)
             # TODO: Fix this for heterogeneous requests
-            assert workload_config['workload_type'] == 'base'
+            assert workload.workload_type == 'base'
 
             if args.slow_server_fraction > 0.0:
                 '''
@@ -217,17 +217,10 @@ class ExperimentRunner:
                               duplication_rate=duplication_rate)
             self.clients.append(c)
 
-        if workload_config['workload_type'] == 'base':
-            workload = BaseWorkload.from_dict(id_=1, config=workload_config, simulation=simulation,
-                                              data_point_monitor=data_point_monitor, servers=self.servers, clients=self.clients)
-        else:
-            workload = VariableLongTaskFractionWorkload.from_dict(
-                id_=1, config=workload_config, simulation=simulation, data_point_monitor=data_point_monitor, clients=self.clients, servers=self.servers)
-
         # TODO: Use multiple workloads to simulate smoother shift to new workload?
         # More than 1 workload currently not supported
         assert args.num_workload == 1
-        simulation.process(workload.run())
+        simulation.process(workload.run(servers=self.servers, clients=self.clients, simulation=simulation))
         self.workload_gens.append(workload)
 
         # Begin simulation
@@ -248,6 +241,6 @@ class ExperimentRunner:
 
             # print_monitor_time_series_to_file(latency_fd, "0",
             #                                   data_point_monitor)
-            assert workload_config['num_requests'] == len(data_point_monitor)
+            assert workload.num_requests == len(data_point_monitor)
 
         return data_point_monitor

@@ -20,7 +20,6 @@ def supervised_learning_wrapper(simulation_args: SimulationArgs):
     np.random.seed(1)
     torch.manual_seed(1)
     state_parser = StateParser(num_servers=simulation_args.args.num_servers,
-                               long_tasks_fraction=simulation_args.args.long_tasks_fraction,
                                num_request_rates=len(simulation_args.args.rate_intervals),
                                poly_feat_degree=simulation_args.args.poly_feat_degree)
 
