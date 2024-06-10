@@ -8,7 +8,7 @@ from simulations.server import Server
 from scipy.stats import pareto
 import task
 
-WORKLOAD_CONFIG_FILE_NAME = 'workload_config'
+WORKLOAD_CONFIG_FILE_NAME = 'workload_config.json'
 
 
 def calculate_client_delay_mean(servers: List[Server], utilization: float, long_tasks_fraction: float):

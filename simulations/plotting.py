@@ -50,6 +50,7 @@ class ExperimentPlot:
             "Is_long_request": data_point.state.is_long_request,
             "Is_faster_response": data_point.is_faster_response,
             "Is_duplicate": data_point.is_duplicate,
+            "Task_time_sent": data_point.task_time_sent,
             "Epoch": epoch_num,
             "Policy": policy
         } for (data_point, time) in data_point_time_tuples]

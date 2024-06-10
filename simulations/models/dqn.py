@@ -1,3 +1,4 @@
+import json
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
@@ -7,7 +8,7 @@ import torch
 
 class SummaryStats:
     # https://dsp.stackexchange.com/questions/811/determining-the-mean-and-standard-deviation-in-real-time
-    def __init__(self, size):
+    def __init__(self, size=1):
         self.means = torch.zeros(size)
         self.S = torch.ones(size)
         self.n = 0
@@ -27,9 +28,35 @@ class SummaryStats:
     def inv_sqrt_sd(self):
         return torch.rsqrt(self.S / self.n)
 
+    def to_dict(self):
+        # Convert tensors to lists for JSON serialization
+        return {
+            'means': self.means.tolist(),
+            'S': self.S.tolist(),
+            'n': self.n
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        # Initialize an instance with the specified size
+        obj = cls()
+        # Load data from the dictionary
+        obj.means = torch.tensor(data['means'])
+        obj.S = torch.tensor(data['S'])
+        obj.n = data['n']
+        return obj
+
+    def to_json(self):
+        return json.dumps(self.to_dict())
+
+    @classmethod
+    def from_json(cls, json_str):
+        data = json.loads(json_str)
+        return cls.from_dict(data)
+
 
 class DQN(nn.Module):
-    def __init__(self, n_observations: int, n_actions: int, n_hidden: int = 128, model_structure: str = "linear", summary_stats: SummaryStats = None):
+    def __init__(self, n_observations: int, n_actions: int, summary_stats: SummaryStats, n_hidden: int = 128, model_structure: str = "linear"):
         super(DQN, self).__init__()
         self.model_structure = model_structure
         if self.model_structure == 'three_layers':
@@ -40,7 +67,7 @@ class DQN(nn.Module):
             self.layer3 = nn.Linear(n_observations, n_actions)
         else:
             raise Exception(f'Unknown model structure {self.model_structure}')
-        self.summary = SummaryStats(n_observations) if summary_stats is None else summary_stats
+        self.summary = summary_stats
 
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).

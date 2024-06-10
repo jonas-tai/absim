@@ -34,6 +34,8 @@ class FeatureDataCollector:
             "Latency": data_point.latency,
             "Replica": data_point.replica_id,
             "Time": time,
+            "Task_time_sent": data_point.task_time_sent,
+            "Q_values": data_point.q_values
         } for (data_point, time) in data_point_time_tuples]
         )
 
@@ -59,7 +61,7 @@ class FeatureDataCollector:
             combined_df.reset_index(drop=True, inplace=True)
             train_data_df = pd.concat([train_data_df, combined_df], ignore_index=True)
 
-        train_data_df.to_csv(self.out_folder, index=False)
+        train_data_df.to_csv(self.out_folder / 'feature_data.csv', index=False)
 
     def run_latency_lin_reg(self, epoch: int) -> None:
         prefix = 'train' if self.is_train_data else 'test'

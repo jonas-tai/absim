@@ -32,25 +32,3 @@ class Classifier(nn.Module):
         # Print or inspect the weights and bias
         print(f"Layer 3 Weights: {layer3_weights}")
         print(f"\nLayer 3 Bias: {layer3_bias}")
-
-
-class SummaryStats:
-    # https://dsp.stackexchange.com/questions/811/determining-the-mean-and-standard-deviation-in-real-time
-    def __init__(self, size):
-        self.means = torch.zeros(size)
-        self.S = torch.ones(size)
-        self.n = 0
-
-    def add(self, x):
-        # stop adding new stats after 10000
-        if self.n >= 1000:
-            return
-
-        x = x.flatten()
-        prev_mean = self.means
-        self.n += 1
-        self.means += (x - self.means) / self.n
-        self.S += (x - self.means) * (x - prev_mean)
-
-    def inv_sqrt_sd(self):
-        return torch.rsqrt(self.S / self.n)

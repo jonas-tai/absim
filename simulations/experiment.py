@@ -143,7 +143,8 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
                 simulation_args.args, service_time_model=simulation_args.args.service_time_model, workload=workload, trainer=trainer, duplication_rate=duplication_rate)
             train_plotter.add_data(data_point_monitor, policy, i_episode)
 
-            if simulation_args.args.collect_data_points or i_episode == LAST_EPOCH:
+            # TODO: recomment
+            if i_episode == LAST_EPOCH:  # simulation_args.args.collect_data_points
                 train_data_analyzer.add_data(data_point_monitor, policy=policy, epoch_num=i_episode)
 
             if policy == 'DQN':
@@ -158,13 +159,13 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
 
     print('Finished')
     # train_data_analyzer.run_latency_lin_reg(epoch=LAST_EPOCH)
-    trainer.save_models(model_folder=data_folder)
+    trainer.save_models_and_stats(model_folder=data_folder)
 
     train_plotter.export_data()
 
     if simulation_args.args.collect_data_points:
         train_data_analyzer.export_epoch_data(epoch=LAST_EPOCH)
-        train_data_analyzer.export_training_data()
+        # train_data_analyzer.export_training_data()
 
     trainer.plot_grads_and_losses(plot_path=plot_path, file_prefix='train')
 
@@ -238,6 +239,7 @@ def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_fol
 
         for i_episode in range(NUM_TEST_EPSIODES):
             trainer.load_models(model_folder=model_folder)
+            # Also reset model steps and stats
             trainer.reset_model_training_stats()
 
             seed = BASE_TEST_SEED + i_episode
@@ -250,12 +252,17 @@ def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_fol
 
             test_data_point_monitor = experiment_runner.run_experiment(
                 simulation_args.args, service_time_model=simulation_args.args.test_service_time_model, workload=workload, trainer=trainer, duplication_rate=duplication_rate)
+
             test_plotter.add_data(test_data_point_monitor, simulation_args.args.selection_strategy, i_episode)
 
             if simulation_args.args.collect_data_points or i_episode == LAST_EPOCH:
                 test_data_analyzer.add_data(test_data_point_monitor, policy=policy, epoch_num=i_episode)
 
             if policy.startswith('DQN'):
+                model_folder = data_folder / f'{policy}_{i_episode}'
+                os.makedirs(model_folder, exist_ok=True)
+                trainer.save_models_and_stats(model_folder=model_folder)
+
                 # Print number of DQN decisions that matched ARS
                 experiment_runner.print_dqn_decision_equal_to_ars_ratio()
                 print(f'Exlore actions this episode: {trainer.explore_actions_episode}')
@@ -273,7 +280,7 @@ def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_fol
     test_plotter.export_data()
     if simulation_args.args.collect_data_points:
         test_data_analyzer.export_epoch_data(epoch=LAST_EPOCH)
-        test_data_analyzer.export_training_data()
+        # test_data_analyzer.export_training_data()
 
     plot_collected_data(plotter=test_plotter, epoch_to_plot=LAST_EPOCH, policies_to_plot=EVAL_POLICIES_TO_RUN)
 
@@ -302,14 +309,15 @@ def main(input_args=None, setting="base") -> None:
     else:
         raise Exception(f'Unknown setting {setting}')
 
-    EXPERIMENT_NAME = 'new_workload_config'
+    EXPERIMENT_NAME = 'data_collection_2'
 
     config_folder = Path('..', 'configs')
     workload_builder = WorkloadBuilder(config_folder=config_folder)
 
-    train_workloads = workload_builder.create_train_base_workloads(long_tasks_fractions=[0.2, 0.4, 0.6])
+    train_workloads = workload_builder.create_train_base_workloads(
+        long_tasks_fractions=[0.2, 0.4, 0.6])
     test_workloads = workload_builder.create_test_base_workloads(
-        long_tasks_fractions=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
+        long_tasks_fractions=[0.0, 0.1, 0.2, 0.3, 0.4])
 
     args.set_policy('ARS')
     args.args.exp_name = EXPERIMENT_NAME
@@ -329,8 +337,25 @@ def main(input_args=None, setting="base") -> None:
     args = HeterogeneousRequestsArgs(input_args=input_args)
     args.args.exp_name = EXPERIMENT_NAME
 
-    for service_time_model in ['random.expovariate', 'pareto']:
-        for test_service_time_model in ['random.expovariate', 'pareto']:
+    for service_time_model in ['random.expovariate']:  # 'pareto'
+        for test_service_time_model in ['random.expovariate']:
+            for dqn_explr_lr in [1e-6, 1e-5]:
+                args.args.test_service_time_model = test_service_time_model
+                args.args.service_time_model = service_time_model
+                args.args.dqn_explr_lr = dqn_explr_lr
+                last = rl_experiment_wrapper(args,
+                                             train_workloads=train_workloads, test_workloads=test_workloads)
+
+    train_workloads = workload_builder.create_train_base_workloads(
+        long_tasks_fractions=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
+    test_workloads = workload_builder.create_test_base_workloads(
+        long_tasks_fractions=[0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75])
+
+    args = HeterogeneousRequestsArgs(input_args=input_args)
+    args.args.exp_name = EXPERIMENT_NAME
+
+    for service_time_model in ['random.expovariate']:  # 'pareto'
+        for test_service_time_model in ['random.expovariate']:
             for dqn_explr_lr in [1e-6, 1e-5]:
                 args.args.test_service_time_model = test_service_time_model
                 args.args.service_time_model = service_time_model

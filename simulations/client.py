@@ -13,7 +13,8 @@ from simulations.server import Server
 from simulations.state import NodeState, State, StateParser
 from collections import defaultdict, namedtuple
 
-DataPoint = namedtuple('DataPoint', ('state', 'latency', 'replica_id', 'is_duplicate', 'is_faster_response'))
+DataPoint = namedtuple('DataPoint', ('state', 'task_time_sent', 'q_values', 'latency',
+                       'replica_id', 'is_duplicate', 'is_faster_response'))
 
 
 class Client:
@@ -269,7 +270,7 @@ class Client:
         elif self.REPLICA_SELECTION_STRATEGY.startswith(
                 'DQN'):
             action = self.trainer.select_action(
-                state=state, simulation=self.simulation, random_decision=random_relica_id)
+                state=state, simulation=self.simulation, random_decision=random_relica_id, task=task)
 
             if not self.trainer.eval_mode:
                 self.trainer.record_state_and_action(task_id=task.id, state=state, action=action)
@@ -473,8 +474,9 @@ class ResponseHandler:
             "%s %s" % (replica_that_served.id, client.pendingRequestsMap[replica_that_served]))
 
         task_finished = self.simulation.now
+        task_time_sent = client.taskSentTimeTracker[task]
 
-        client.responseTimesMap[replica_that_served] = task_finished - client.taskSentTimeTracker[task]
+        client.responseTimesMap[replica_that_served] = task_finished - task_time_sent
         client.latencyTrackerMonitor.observe("%s %s" % (replica_that_served.id,
                                                         task_finished - client.taskSentTimeTracker[task]))
         metric_map = task.completion_event.value
@@ -521,7 +523,7 @@ class ResponseHandler:
             state = task.get_state()
 
             replica_id = replica_that_served.id
-            client.data_point_monitor.observe(DataPoint(state=state, latency=latency,
+            client.data_point_monitor.observe(DataPoint(state=state, q_values=task.q_values, task_time_sent=task_time_sent, latency=latency,
                                               replica_id=replica_id, is_duplicate=task.is_duplicate, is_faster_response=is_faster_response))
 
 

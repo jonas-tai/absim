@@ -16,6 +16,10 @@ class Task:
         self.state_at_arrival_time: State | None = None
         self.is_duplicate = is_duplicate
         self.has_duplicate = False
+        self.q_values = None
+
+    def set_q_values(self, q_values):
+        self.q_values = q_values
 
     def create_duplicate_task(self):
         duplicate_id = f'duplicate_{self.id}'

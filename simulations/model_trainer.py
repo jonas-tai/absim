@@ -1,3 +1,4 @@
+import json
 import os
 import random
 import math
@@ -17,7 +18,10 @@ from simulations.simulator import Simulation
 from simulations.state import State, StateParser
 from collections import defaultdict
 
+from simulations.task import Task
+
 StateAction = namedtuple('StateAction', ('state', 'action'))
+MODEL_TRAINER_JSON = 'model_trainer.json'
 
 
 class Trainer:
@@ -56,8 +60,11 @@ class Trainer:
         self.model_structure = model_structure
 
         self.eval_mode = False
-        self.policy_net = DQN(self.n_observations, n_actions, model_structure=model_structure).to(self.device)
-        self.target_net = DQN(self.n_observations, n_actions, model_structure=model_structure).to(self.device)
+        self.summary_stats = SummaryStats(self.n_observations)
+        self.policy_net = DQN(self.n_observations, n_actions, model_structure=model_structure,
+                              summary_stats=self.summary_stats).to(self.device)
+        self.target_net = DQN(self.n_observations, n_actions, model_structure=model_structure,
+                              summary_stats=self.summary_stats).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
@@ -70,21 +77,44 @@ class Trainer:
 
         self.reward_stats = SummaryStats(1)
 
-    def save_models(self, model_folder: Path):
-        # TODO: Also export sumamry stats
+    def save_model_trainer_stats(self, data_folder: Path):
+        feature_stats_json = self.summary_stats.to_dict()
+        reward_stats_json = self.reward_stats.to_dict()
+
+        model_trainer_json = {
+            "steps_done": self.steps_done,
+            "feature_summary_stats": feature_stats_json,
+            "reward_summary_stats": reward_stats_json
+        }
+
+        # To get the final JSON string
+        with open(data_folder / MODEL_TRAINER_JSON, 'w') as f:
+            json.dump(model_trainer_json, f)
+
+    def load_stats_from_file(self, file_path):
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+
+        self.steps_done = data['steps_done']
+        self.summary_stats = SummaryStats.from_dict(data=data['feature_summary_stats'])
+        self.reward_stats = SummaryStats.from_dict(data=data['reward_summary_stats'])
+
+    def save_models_and_stats(self, model_folder: Path):
         torch.save(self.policy_net.state_dict(), model_folder / 'policy_model_weights.pth')
         torch.save(self.policy_net.state_dict(), model_folder / 'target_model_weights.pth')
 
+        self.save_model_trainer_stats(model_folder)
+
     def load_models(self, model_folder: Path):
-        policy_net_summary_stats = self.policy_net.get_summary_stats()
+        self.load_stats_from_file(model_folder)
+
         policy_net = DQN(self.n_observations, self.n_actions, model_structure=self.model_structure,
-                         summary_stats=policy_net_summary_stats).to(self.device)
+                         summary_stats=self.summary_stats).to(self.device)
         policy_net.load_state_dict(torch.load(model_folder / 'policy_model_weights.pth'))
         self.policy_net = policy_net
 
-        target_net_summary_stats = self.target_net.get_summary_stats()
         target_net = DQN(self.n_observations, self.n_actions, model_structure=self.model_structure,
-                         summary_stats=target_net_summary_stats).to(self.device)
+                         summary_stats=self.summary_stats).to(self.device)
         target_net.load_state_dict(torch.load(model_folder / 'target_model_weights.pth'))
         self.target_net = target_net
 
@@ -148,7 +178,7 @@ class Trainer:
         self.target_net.load_state_dict(target_net_state_dict)
         self.clean_up_after_step(task_id=task_id)
 
-    def select_action(self, state: State, simulation, random_decision: int):
+    def select_action(self, state: State, simulation, random_decision: int, task: Task):
         # random_decision int handed in from outside to ensure its the same decision that ranom strategy would take
         sample = simulation.random_exploration.random()
         eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(
@@ -161,6 +191,7 @@ class Trainer:
                 # found, so we pick action with the larger expected reward.
                 q_values = self.policy_net(self.state_parser.state_to_tensor(state=state))
                 # print(q_values)
+                task.set_q_values(q_values=q_values)
                 action_chosen = q_values.max(1).indices.view(1, 1)
                 self.exploit_actions_episode += 1
         else:
@@ -172,6 +203,20 @@ class Trainer:
             self.steps_done += 1
             self.actions_chosen[action_chosen.item()] += 1
         return action_chosen
+
+    def select_action_debug(self, state_tensor: torch.Tensor):
+        # random_decision int handed in from outside to ensure its the same decision that ranom strategy would take
+
+        with torch.no_grad():
+            # t.max(1) will return the largest column value of each row.
+            # second column on max result is index of where max element was
+            # found, so we pick action with the larger expected reward.
+            q_values = self.policy_net(state_tensor)
+            action_chosen = q_values.max(1).indices.view(1, 1)
+            self.exploit_actions_episode += 1
+            print(f'Action chosen: {action_chosen}')
+
+        return q_values
 
     def optimize_model(self):
         if len(self.memory) < self.BATCH_SIZE:
