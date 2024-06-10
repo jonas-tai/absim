@@ -8,7 +8,8 @@ import torch
 
 class SummaryStats:
     # https://dsp.stackexchange.com/questions/811/determining-the-mean-and-standard-deviation-in-real-time
-    def __init__(self, size=1):
+    def __init__(self,  max_size: int, size=1):
+        self.max_size = max_size
         self.means = torch.zeros(size)
         self.S = torch.ones(size)
         self.n = 0
@@ -16,7 +17,7 @@ class SummaryStats:
     def add(self, x):
         # stop adding new stats after 1000
         # TODO: Tune this parameter
-        if self.n >= 1000:
+        if self.n >= self.max_size:
             return
 
         x = x.flatten()
@@ -33,13 +34,15 @@ class SummaryStats:
         return {
             'means': self.means.tolist(),
             'S': self.S.tolist(),
-            'n': self.n
+            'n': self.n,
+            'max_size': self.max_size
         }
 
     @classmethod
     def from_dict(cls, data):
         # Initialize an instance with the specified size
-        obj = cls()
+        max_size = data['max_size']
+        obj = cls(max_size=max_size)
         # Load data from the dictionary
         obj.means = torch.tensor(data['means'])
         obj.S = torch.tensor(data['S'])

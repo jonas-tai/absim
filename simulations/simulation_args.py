@@ -165,6 +165,8 @@ class SimulationArgs:
                             type=int, default=70, help='Model trainer argument')
         parser.add_argument('--lr_scheduler_gamma', nargs='?',
                             type=float, default=0.5, help='Model trainer argument')
+        parser.add_argument('--summary_stats_max_size', nargs='?',
+                            type=int, default=1000, help='Number of stats collected for normalizing')
 
         parser.add_argument('--duplication_rate', nargs='?',
                             type=float, default=0.1, help='Number of requests to duplicate')

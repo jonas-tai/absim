@@ -25,7 +25,7 @@ MODEL_TRAINER_JSON = 'model_trainer.json'
 
 
 class Trainer:
-    def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int, batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2,
+    def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int, summary_stats_max_size: int, batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2,
                  eps_decay=1000, tau=0.005, lr=1e-4, tau_decay=10, lr_scheduler_step_size=50, lr_scheduler_gamma=0.5):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.state_parser = state_parser
@@ -60,7 +60,7 @@ class Trainer:
         self.model_structure = model_structure
 
         self.eval_mode = False
-        self.summary_stats = SummaryStats(self.n_observations)
+        self.summary_stats = SummaryStats(max_size=summary_stats_max_size, size=self.n_observations)
         self.policy_net = DQN(self.n_observations, n_actions, model_structure=model_structure,
                               summary_stats=self.summary_stats).to(self.device)
         self.target_net = DQN(self.n_observations, n_actions, model_structure=model_structure,
@@ -75,7 +75,7 @@ class Trainer:
         self.steps_done = 0
         self.actions_chosen = defaultdict(int)
 
-        self.reward_stats = SummaryStats(1)
+        self.reward_stats = SummaryStats(max_size=summary_stats_max_size, size=1)
 
     def save_model_trainer_stats(self, data_folder: Path):
         feature_stats_json = self.summary_stats.to_dict()
@@ -91,8 +91,8 @@ class Trainer:
         with open(data_folder / MODEL_TRAINER_JSON, 'w') as f:
             json.dump(model_trainer_json, f)
 
-    def load_stats_from_file(self, file_path):
-        with open(file_path, 'r') as f:
+    def load_stats_from_file(self, data_folder: Path):
+        with open(data_folder / MODEL_TRAINER_JSON, 'r') as f:
             data = json.load(f)
 
         self.steps_done = data['steps_done']
