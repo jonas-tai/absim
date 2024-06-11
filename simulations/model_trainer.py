@@ -34,6 +34,7 @@ class Trainer:
         self.task_to_next_state: Dict[str, torch.Tensor] = {}
         self.task_to_reward: Dict[str, torch.Tensor] = {}
         self.last_task_id: str = None
+        self.summary_stats_max_size = summary_stats_max_size
 
         self.BATCH_SIZE = batch_size
         self.GAMMA = gamma
@@ -60,11 +61,12 @@ class Trainer:
         self.model_structure = model_structure
 
         self.eval_mode = False
-        self.summary_stats = SummaryStats(max_size=summary_stats_max_size, size=self.n_observations)
+        self.feature_stats = SummaryStats(max_size=summary_stats_max_size, size=self.n_observations)
+
         self.policy_net = DQN(self.n_observations, n_actions, model_structure=model_structure,
-                              summary_stats=self.summary_stats).to(self.device)
+                              summary_stats=self.feature_stats).to(self.device)
         self.target_net = DQN(self.n_observations, n_actions, model_structure=model_structure,
-                              summary_stats=self.summary_stats).to(self.device)
+                              summary_stats=SummaryStats(max_size=summary_stats_max_size, size=self.n_observations)).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
@@ -78,7 +80,7 @@ class Trainer:
         self.reward_stats = SummaryStats(max_size=summary_stats_max_size, size=1)
 
     def save_model_trainer_stats(self, data_folder: Path):
-        feature_stats_json = self.summary_stats.to_dict()
+        feature_stats_json = self.feature_stats.to_dict()
         reward_stats_json = self.reward_stats.to_dict()
 
         model_trainer_json = {
@@ -96,7 +98,7 @@ class Trainer:
             data = json.load(f)
 
         self.steps_done = data['steps_done']
-        self.summary_stats = SummaryStats.from_dict(data=data['feature_summary_stats'])
+        self.feature_stats = SummaryStats.from_dict(data=data['feature_summary_stats'])
         self.reward_stats = SummaryStats.from_dict(data=data['reward_summary_stats'])
 
     def save_models_and_stats(self, model_folder: Path):
@@ -109,12 +111,13 @@ class Trainer:
         self.load_stats_from_file(model_folder)
 
         policy_net = DQN(self.n_observations, self.n_actions, model_structure=self.model_structure,
-                         summary_stats=self.summary_stats).to(self.device)
+                         summary_stats=self.feature_stats).to(self.device)
         policy_net.load_state_dict(torch.load(model_folder / 'policy_model_weights.pth'))
         self.policy_net = policy_net
 
+        # Target net gts normalized values so should not normalize!
         target_net = DQN(self.n_observations, self.n_actions, model_structure=self.model_structure,
-                         summary_stats=self.summary_stats).to(self.device)
+                         summary_stats=SummaryStats(max_size=self.summary_stats_max_size, size=self.n_observations)).to(self.device)
         target_net.load_state_dict(torch.load(model_folder / 'target_model_weights.pth'))
         self.target_net = target_net
 

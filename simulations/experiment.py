@@ -316,7 +316,7 @@ def main(input_args=None, setting="base") -> None:
     workload_builder = WorkloadBuilder(config_folder=config_folder)
 
     train_workloads = workload_builder.create_train_base_workloads(
-        long_tasks_fractions=[0.2, 0.4, 0.6])
+        long_tasks_fractions=[0.2])
     test_workloads = workload_builder.create_test_base_workloads(
         long_tasks_fractions=[0.0, 0.1, 0.2, 0.3, 0.4])
 
@@ -348,12 +348,15 @@ def main(input_args=None, setting="base") -> None:
                                              train_workloads=train_workloads, test_workloads=test_workloads)
 
     train_workloads = workload_builder.create_train_base_workloads(
-        long_tasks_fractions=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
+        long_tasks_fractions=[0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6],
+        utilizations=[0.45, 0.7, 1.2])
     test_workloads = workload_builder.create_test_base_workloads(
-        long_tasks_fractions=[0.05, 0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75])
+        long_tasks_fractions=[0.0, 0.1, 0.2, 0.4, 0.7, 0.8])
 
     args = HeterogeneousRequestsArgs(input_args=input_args)
     args.args.exp_name = EXPERIMENT_NAME
+    args.args.epochs = 500
+    args.args.eps_decay = 120000
 
     for service_time_model in ['random.expovariate']:  # 'pareto'
         for test_service_time_model in ['random.expovariate']:
