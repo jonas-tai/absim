@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import random
 from typing import Any, Dict, List
 
 from simulations.client import Client
@@ -127,11 +128,11 @@ class BaseWorkload:
 
 # Workload that changes the fraction of long tasks after some threshold
 class VariableLongTaskFractionWorkload(BaseWorkload):
-    def __init__(self, id_, trigger_threshold: int, updated_long_tasks_fraction: float, arrival_model: str, utilization: float, num_requests: int, long_tasks_fraction: float = 0, ):
+    def __init__(self, id_, trigger_threshold: int, updated_long_tasks_fractions: List[float], arrival_model: str, utilization: float, num_requests: int, long_tasks_fraction: float = 0, ):
         super().__init__(id_=id_, arrival_model=arrival_model,
                          num_requests=num_requests, long_tasks_fraction=long_tasks_fraction, utilization=utilization)
         self.trigger_threshold = trigger_threshold
-        self.updated_long_tasks_fraction = updated_long_tasks_fraction
+        self.updated_long_tasks_fractions = updated_long_tasks_fractions
         self.original_long_tasks_fraction = self.long_tasks_fraction
         self.workload_type: str = 'variable_long_task_fraction'
 
@@ -140,18 +141,19 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
         self.long_tasks_fraction = self.original_long_tasks_fraction
 
     def to_file_name(self) -> str:
-        return f'{self.workload_type}_{self.updated_long_tasks_fraction * 100:.2f}_updated_long_tasks_{self.utilization * 100:.2f}_util_{self.long_tasks_fraction * 100:.2f}_long_tasks'
+        return f'{self.workload_type}_updated_long_tasks_{self.utilization * 100:.2f}_util_{self.long_tasks_fraction * 100:.2f}_long_tasks'
 
     def before_task_creation(self, servers: List[Server]):
-        if self.executed_requests == self.trigger_threshold:
+        if self.executed_requests > 0 and self.executed_requests % self.trigger_threshold == 0:
             print(f'Trigger activated, changing long task fraction')
             print(self.executed_requests)
+            new_long_task_fraction = random.choice(self.updated_long_tasks_fractions)
 
             updated_client_delay_mean = calculate_client_delay_mean(
-                servers=servers, utilization=self.utilization, long_tasks_fraction=self.updated_long_tasks_fraction)
+                servers=servers, utilization=self.utilization, long_tasks_fraction=new_long_task_fraction)
 
             print(f'Changing client delay from {self.client_delay_mean} to {updated_client_delay_mean}')
-            self.long_tasks_fraction = self.updated_long_tasks_fraction
+            self.long_tasks_fraction = new_long_task_fraction
             self.client_delay_mean = updated_client_delay_mean
 
     @classmethod
@@ -159,14 +161,14 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
         num_requests = config['num_requests']
         long_tasks_fraction = config['long_tasks_fraction']
         trigger_threshold = config['trigger_threshold']
-        updated_long_tasks_fraction = config['updated_long_tasks_fraction']
+        updated_long_tasks_fractions = config['updated_long_tasks_fractions']
         arrival_model = config['arrival_model']
 
         # Create a VariableLongTaskFractionWorkload instance
         return cls(
             id_=id_,  # You can set a proper id here
             trigger_threshold=trigger_threshold,
-            updated_long_tasks_fraction=updated_long_tasks_fraction,
+            updated_long_tasks_fractions=updated_long_tasks_fractions,
             arrival_model=arrival_model,
             num_requests=num_requests,
             long_tasks_fraction=long_tasks_fraction,
@@ -177,7 +179,7 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
         additional_data = {
             'trigger_threshold': self.trigger_threshold,
             'updated_client_delay_mean': self.updated_client_delay_mean,
-            'updated_long_tasks_fraction': self.updated_long_tasks_fraction,
+            'updated_long_tasks_fractions': self.updated_long_tasks_fractions,
         }
         base_data.update(additional_data)
         return json.dumps(base_data, indent=4)
