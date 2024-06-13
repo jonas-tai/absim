@@ -10,6 +10,9 @@ Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
 
+random.seed(42)
+
+
 class ReplayMemory(object):
     def __init__(self, max_size, summary) -> None:
         self.memory = [None] * max_size

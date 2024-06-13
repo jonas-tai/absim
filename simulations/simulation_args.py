@@ -58,6 +58,7 @@ class SimulationArgs:
         parser.add_argument('--data_folder', nargs='?', type=str, default="data")
         parser.add_argument('--plot_folder', nargs='?', type=str, default="plots")
         parser.add_argument('--output_folder',  nargs='?', type=str, default="outputs")
+        parser.add_argument('--model_folder', nargs='?', type=str, default="")
 
         parser.add_argument('--demand_skew', nargs='?',
                             type=float, default=0, help='Skews clients such that some clients send many'
@@ -88,7 +89,7 @@ class SimulationArgs:
         parser.add_argument('--poly_feat_degree', nargs='?',
                             type=float, default=2, help='Degree of created polynomial and interaction features')
         parser.add_argument('--collect_data_points', action='store_true',
-                            default=True, help='Collect and export data points for training of supervised model')
+                            default=False, help='Collect and export data points for training of supervised model')
         parser.add_argument('--server_concurrency', nargs='?',
                             type=int, default=2, help='Amount of resources per server.')
         parser.add_argument('--service_time', nargs='?',

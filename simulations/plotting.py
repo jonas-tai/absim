@@ -11,17 +11,16 @@ from simulations.client import DataPoint
 
 FONT_SIZE = 10
 
-# TODO: Add plotting for work duplication
-
 
 class ExperimentPlot:
-    def __init__(self, plot_folder: Path, data_folder: Path, utilization: int | None = None, use_log_scale: bool = False) -> None:
+    def __init__(self, plot_folder: Path, data_folder: Path, long_tasks_fraction: float = None, utilization: float | None = None, use_log_scale: bool = False) -> None:
         self.df = None
         self.plot_folder: Path = plot_folder
         self.data_folder: Path = data_folder
         self.use_log_scale: bool = use_log_scale
         self.policy_order: List[str] = const.POLICY_ORDER
         self.utilization = utilization
+        self.long_tasks_fraction = long_tasks_fraction
 
         os.makedirs(plot_folder / 'cdf', exist_ok=True)
         os.makedirs(plot_folder / 'pdfs/cdf', exist_ok=True)
@@ -35,11 +34,16 @@ class ExperimentPlot:
 
         # Get the value for utilization
         base_folder = self.data_folder.parent
-        args_file = base_folder / 'arguments.json'
+        args_file = base_folder / 'workload_config.json'
         with open(args_file, 'r') as file:
             args_data = json.load(file)
 
         self.utilization = args_data['utilization']
+        self.long_tasks_fraction = args_data['long_tasks_fraction']
+
+    def add_data_from_df(self, additional_data: pd.DataFrame) -> None:
+        self.df = pd.concat((self.df, additional_data), axis=0)
+        self.policy_order = [policy for policy in const.POLICY_ORDER if policy in self.df['Policy'].unique()]
 
     def add_data(self, monitor: Monitor, policy: str, epoch_num: int):
         data_point_time_tuples: List[Tuple[DataPoint, float]] = monitor.get_data()
@@ -138,7 +142,8 @@ class ExperimentPlot:
 
         if self.use_log_scale:
             plt.yscale('log')
-        axes.set_title(f'Latency Distribution {self.utilization * 100}% utilization')
+        axes.set_title(
+            f'Latency Distribution {self.utilization * 100}% utilization with {self.long_tasks_fraction * 100}% long tasks')
 
         fig.legend(loc='lower center', ncols=3)
         plt.tight_layout(rect=[0, 0.08, 1, 1])
@@ -224,7 +229,7 @@ class ExperimentPlot:
         sns.barplot(data=mean_quantile_latency, x='Policy', hue='Policy', y='Latency',
                     palette=const.POLICY_COLORS, ax=axes, order=order)
         axes.set_title(
-            f'Average {quantile*100:.1f}th Quantile Latency {title_request_types} at {self.utilization * 100}% utilization')
+            f'Average {quantile*100:.1f}th Quantile Latency {title_request_types} at {self.utilization * 100}% utilization with {self.long_tasks_fraction * 100}% long tasks')
         plt.setp(axes.get_xticklabels(), rotation=45, ha='right')
 
         plt.tight_layout()
@@ -254,7 +259,7 @@ class ExperimentPlot:
         # Plot the CDFs
         sns.lineplot(data=cdf_df, x='Latency', y='CDF', hue='Policy', ax=axes)
         plt.title(
-            f'Cumulative Distribution Function of {(100.0 - quantile*100):.2f}% slowest {title_request_types} at {self.utilization * 100}% utilization')
+            f'Cumulative Distribution Function of {(100.0 - quantile*100):.2f}% slowest {title_request_types} at {self.utilization * 100}% utilization with {self.long_tasks_fraction * 100}% long tasks')
 
         # if self.use_log_scale:
         plt.xscale('log')
@@ -292,7 +297,8 @@ class ExperimentPlot:
         # Create bar plot
         sns.barplot(data=mean_quantile_latency, x='Policy', hue='Policy', y='Latency',
                     palette=const.POLICY_COLORS, ax=axes, order=order)
-        axes.set_title(f'Average Latency {title_request_types} at {self.utilization * 100}% utilization')
+        axes.set_title(
+            f'Average Latency {title_request_types} at {self.utilization * 100}% utilization with {self.long_tasks_fraction * 100}% long tasks')
         plt.setp(axes.get_xticklabels(), rotation=45, ha='right')
 
         plt.tight_layout()
@@ -301,8 +307,10 @@ class ExperimentPlot:
         plt.close()
 
     def generate_plots(self) -> None:
-        reduced_policies = ['ARS', 'DQN', 'DQN_DUPL'] + ['DQN_EXPLR_0', 'DQN_EXPLR_5',
-                                                         'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20', 'DQN_EXPLR_25', 'DQN_EXPLR_30']
+        # reduced_policies = ['ARS', 'DQN', 'DQN_DUPL'] + ['DQN_EXPLR_0',
+        #                                                 'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20', 'DQN_EXPLR_25']
+        reduced_policies = [policy for policy in self.policy_order if policy not in ['random', 'DQN_DUPL']]
+
         print('Before')
         print(len(self.df))
         self.df = self.df[self.df['Is_faster_response']]

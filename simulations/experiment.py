@@ -16,26 +16,7 @@ from experiment_runner import ExperimentRunner
 from simulations.state import StateParser
 from simulations.workload.workload import BaseWorkload
 from simulations.workload.workload_builder import WorkloadBuilder
-
-
-TRAIN_POLICIES_TO_RUN = [
-    # 'round_robin',
-    'ARS',
-    # 'response_time',
-    # 'weighted_response_time',
-    # 'random',
-    'DQN'
-]
-
-
-EVAL_POLICIES_TO_RUN = [
-    # 'round_robin',
-    'ARS',
-    'DQN',
-    'random',
-    # 'DQN_EXPLR',
-    'DQN_DUPL'
-] + ['DQN_EXPLR_0', 'DQN_EXPLR_5', 'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20', 'DQN_EXPLR_25', 'DQN_EXPLR_30']
+import constants as const
 
 DQN_EXPLR_MAPPING = {f'DQN_EXPLR_{i}': (i / 100.0) for i in range(101)}
 
@@ -72,6 +53,13 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
                                num_request_rates=len(simulation_args.args.rate_intervals),
                                poly_feat_degree=simulation_args.args.poly_feat_degree)
 
+    random.seed(simulation_args.args.seed)
+    np.random.seed(simulation_args.args.seed)
+    torch.manual_seed(simulation_args.args.seed)
+
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True)
+
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
     trainer = Trainer(state_parser=state_parser, model_structure=simulation_args.args.model_structure, n_actions=simulation_args.args.num_servers,
@@ -83,15 +71,19 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
 
     out_path = create_experiment_folders(simulation_args=simulation_args, state_parser=state_parser)
 
-    run_rl_training(simulation_args=simulation_args, workloads=train_workloads,
-                    trainer=trainer, state_parser=state_parser, out_folder=out_path)
+    if simulation_args.args.model_folder == '':
+        run_rl_training(simulation_args=simulation_args, workloads=train_workloads,
+                        trainer=trainer, state_parser=state_parser, out_folder=out_path)
+        model_folder = out_path / 'train' / simulation_args.args.data_folder
+    else:
+        model_folder = Path(simulation_args.args.model_folder)
 
     test_result = 0
     for test_workload in test_workloads:
         print('Running with args:')
         # TODO: Export workload config
         test_result += run_rl_test(simulation_args=simulation_args, workload=test_workload,
-                                   out_folder=out_path, trainer=trainer, state_parser=state_parser)
+                                   out_folder=out_path, model_folder=model_folder, trainer=trainer, state_parser=state_parser)
     return test_result / len(test_workloads)
 
 
@@ -102,6 +94,7 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
 
     # TODO: Fix / workaround
     utilization = workloads[0].utilization
+    long_tasks_fraction = workloads[0].long_tasks_fraction
 
     # Init directories
     experiment_folder = out_folder / 'train'
@@ -113,7 +106,8 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
 
     experiment_runner = ExperimentRunner(state_parser=state_parser)
 
-    train_plotter = ExperimentPlot(plot_folder=plot_path, data_folder=data_folder, utilization=utilization)
+    train_plotter = ExperimentPlot(plot_folder=plot_path, data_folder=data_folder,
+                                   utilization=utilization, long_tasks_fraction=long_tasks_fraction)
     train_data_analyzer = FeatureDataCollector(out_folder=data_folder, state_parser=state_parser)
 
     simulation_args.set_print(to_print)
@@ -126,7 +120,7 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
     duplication_rate = 0.0
 
     print('Starting experiments')
-    for policy in TRAIN_POLICIES_TO_RUN:
+    for policy in const.TRAIN_POLICIES_TO_RUN:
         simulation_args.set_policy(policy)
         # if policy == 'DQN':
         #     simulation_args.set_print(True)
@@ -170,11 +164,12 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
 
     trainer.plot_grads_and_losses(plot_path=plot_path, file_prefix='train')
 
-    plot_collected_data(plotter=train_plotter, epoch_to_plot=LAST_EPOCH, policies_to_plot=TRAIN_POLICIES_TO_RUN)
+    plot_collected_data(plotter=train_plotter, epoch_to_plot=LAST_EPOCH, policies_to_plot=const.TRAIN_POLICIES_TO_RUN)
 
 
-def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_folder: Path, trainer: Trainer, state_parser: StateParser) -> float:
+def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_folder: Path, model_folder: Path, trainer: Trainer, state_parser: StateParser) -> float:
     BASE_TEST_SEED = 1111111
+    BASE_TEST_EXPLR_SEED = 2222222
 
     experiment_runner = ExperimentRunner(state_parser=state_parser)
 
@@ -190,7 +185,7 @@ def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_fol
     experiment_folder = out_folder / EXPERIMENT
     plot_path = experiment_folder / simulation_args.args.plot_folder
     data_folder = experiment_folder / simulation_args.args.data_folder
-    model_folder = out_folder / 'train' / simulation_args.args.data_folder
+    # model_folder = out_folder / 'train' / simulation_args.args.data_folder
 
     os.makedirs(plot_path, exist_ok=True)
     os.makedirs(data_folder, exist_ok=True)
@@ -198,7 +193,8 @@ def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_fol
 
     utilization = workload.utilization
 
-    test_plotter = ExperimentPlot(plot_folder=plot_path, data_folder=data_folder, utilization=utilization)
+    test_plotter = ExperimentPlot(plot_folder=plot_path, data_folder=data_folder,
+                                  utilization=utilization, long_tasks_fraction=workload.long_tasks_fraction)
     test_data_analyzer = FeatureDataCollector(out_folder=data_folder, state_parser=state_parser)
 
     simulation_args.set_print(to_print)
@@ -206,29 +202,17 @@ def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_fol
     log_arguments(experiment_folder, simulation_args)
     workload.to_json_file(out_folder=experiment_folder)
 
-    for policy in EVAL_POLICIES_TO_RUN:
+    for policy in const.EVAL_POLICIES_TO_RUN:
         simulation_args.set_policy(policy)
         print(f'Starting Test Sequence for {policy}')
         # Reset hyperparameters
         trainer.EPS_START = simulation_args.args.eps_start
         trainer.EPS_END = simulation_args.args.eps_end
-        trainer.eval_mode = False
+        trainer.eval_mode = True
 
         duplication_rate = 0.0
 
-        if policy == 'DQN_EXPLR':
-            trainer.eval_mode = False
-            print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
-            trainer.EPS_END = simulation_args.args.dqn_explr
-            trainer.EPS_START = simulation_args.args.dqn_explr
-            trainer.LR = simulation_args.args.dqn_explr_lr
-        elif policy.startswith('DQN_EXPLR_'):
-            trainer.eval_mode = False
-            print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
-            trainer.EPS_END = DQN_EXPLR_MAPPING[policy]
-            trainer.EPS_START = DQN_EXPLR_MAPPING[policy]
-            trainer.LR = simulation_args.args.dqn_explr_lr
-        elif policy == 'DQN':
+        if policy == 'DQN':
             trainer.EPS_END = 0
             trainer.EPS_START = 0
             trainer.eval_mode = True
@@ -239,16 +223,60 @@ def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_fol
             trainer.eval_mode = True
 
         for i_episode in range(NUM_TEST_EPSIODES):
+            seed = BASE_TEST_EXPLR_SEED + i_episode
+
+            random.seed(seed)
+            np.random.seed(seed)
+            torch.manual_seed(seed)
+            simulation_args.set_seed(seed)
+
             trainer.load_models(model_folder=model_folder)
             # Also reset model steps and stats
             trainer.reset_model_training_stats()
+            print(i_episode)
+
+            if policy.startswith('DQN_EXPLR'):
+                if policy == 'DQN_EXPLR':
+                    trainer.eval_mode = False
+                    print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
+                    trainer.EPS_END = simulation_args.args.dqn_explr
+                    trainer.EPS_START = simulation_args.args.dqn_explr
+                    trainer.LR = simulation_args.args.dqn_explr_lr
+                else:
+                    trainer.eval_mode = False
+                    print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
+                    trainer.EPS_END = DQN_EXPLR_MAPPING[policy]
+                    trainer.EPS_START = DQN_EXPLR_MAPPING[policy]
+                    trainer.LR = simulation_args.args.dqn_explr_lr
+
+                test_data_point_monitor = experiment_runner.run_experiment(
+                    simulation_args.args, service_time_model=simulation_args.args.test_service_time_model, workload=workload, trainer=trainer, duplication_rate=duplication_rate)
+
+                test_plotter.add_data(test_data_point_monitor, policy=f'{policy}_TRAIN', epoch_num=i_episode)
+
+                model_folder = data_folder / f'{policy}_{i_episode}'
+                os.makedirs(model_folder, exist_ok=True)
+                trainer.save_models_and_stats(model_folder=model_folder)
+
+                # Print number of DQN decisions that matched ARS
+                experiment_runner.print_dqn_decision_equal_to_ars_ratio()
+                print(f'Exlore actions this episode: {trainer.explore_actions_episode}')
+                print(f'Exploit actions this episode: {trainer.exploit_actions_episode}')
+                trainer.reset_episode_counters()
+
+                file_prefix = f'{policy}_{i_episode}'
+                trainer.plot_grads_and_losses(plot_path=plot_path, file_prefix=file_prefix)
+
+                # Turn off exploration and enter eval mode
+                trainer.EPS_END = 0
+                trainer.EPS_START = 0
+                trainer.eval_mode = True
 
             seed = BASE_TEST_SEED + i_episode
 
             random.seed(seed)
             np.random.seed(seed)
             torch.manual_seed(seed)
-            print(i_episode)
             simulation_args.set_seed(seed)
 
             test_data_point_monitor = experiment_runner.run_experiment(
@@ -260,19 +288,11 @@ def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_fol
                 test_data_analyzer.add_data(test_data_point_monitor, policy=policy, epoch_num=i_episode)
 
             if policy.startswith('DQN'):
-                model_folder = data_folder / f'{policy}_{i_episode}'
-                os.makedirs(model_folder, exist_ok=True)
-                trainer.save_models_and_stats(model_folder=model_folder)
-
                 # Print number of DQN decisions that matched ARS
                 experiment_runner.print_dqn_decision_equal_to_ars_ratio()
                 print(f'Exlore actions this episode: {trainer.explore_actions_episode}')
                 print(f'Exploit actions this episode: {trainer.exploit_actions_episode}')
                 trainer.reset_episode_counters()
-
-                if policy.startswith('DQN_EXPLR'):
-                    file_prefix = f'{policy}_{i_episode}'
-                    trainer.plot_grads_and_losses(plot_path=plot_path, file_prefix=file_prefix)
 
     print('Finished')
     # test_data_analyzer.run_latency_lin_reg(epoch=LAST_EPOCH)
@@ -283,7 +303,7 @@ def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_fol
         test_data_analyzer.export_epoch_data(epoch=LAST_EPOCH)
         # test_data_analyzer.export_training_data()
 
-    plot_collected_data(plotter=test_plotter, epoch_to_plot=LAST_EPOCH, policies_to_plot=EVAL_POLICIES_TO_RUN)
+    plot_collected_data(plotter=test_plotter, epoch_to_plot=LAST_EPOCH, policies_to_plot=const.EVAL_POLICIES_TO_RUN)
 
     return test_plotter.get_autotuner_objective()
 
@@ -310,37 +330,203 @@ def main(input_args=None, setting="base") -> None:
     else:
         raise Exception(f'Unknown setting {setting}')
 
-    EXPERIMENT_NAME = 'data_collection_2'
+    EXPERIMENT_NAME = 'fixed_rate_intervals'
+    SEED = args.args.seed
 
     config_folder = Path('..', 'configs')
     workload_builder = WorkloadBuilder(config_folder=config_folder)
 
-    train_workloads = workload_builder.create_train_base_workloads(
-        long_tasks_fractions=[0.2])
-    test_workloads = workload_builder.create_test_base_workloads(
-        long_tasks_fractions=[0.0, 0.1, 0.2, 0.3, 0.4])
-
     args.set_policy('ARS')
     args.args.exp_name = EXPERIMENT_NAME
-    # for utilization in [0.2, 0.3, 0.45, 0.7, 0.9]:
-    #     # args.args.duplication_rate = duplication_rate
-    #     args.args.utilization = utilization
-
-    #     _ = rl_experiment_wrapper(args)
-
-    # elif setting =="slow":
-    #     args = SlowServerArgs(0.5,0.5, input_args=input_args)
-    # elif setting =="uneven":
-    #     args = SlowServerArgs(0.5,0.1, input_args=input_args)
 
     last = 0.0
-    # Heterogeneous requests workloads
+
+    train_workloads = workload_builder.create_train_base_workloads(
+        long_tasks_fractions=[0.3, 0.35, 0.4],
+        utilizations=[0.45])
+    test_workloads = workload_builder.create_test_base_workloads(
+        long_tasks_fractions=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+
     args = HeterogeneousRequestsArgs(input_args=input_args)
     args.args.exp_name = EXPERIMENT_NAME
+    args.args.epochs = 100
+    args.args.num_requests = 8000
+    args.args.num_requests_test = 8000
+    args.args.eps_decay = 180000
+    args.args.lr_scheduler_step_size = 30
+    args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_rate_intervals/0/train/data'
 
     for service_time_model in ['random.expovariate']:  # 'pareto'
-        for test_service_time_model in ['random.expovariate']:
-            for dqn_explr_lr in [1e-6, 1e-5]:
+        for test_service_time_model in ['random.expovariate']:  # 'random.expovariate',
+            for dqn_explr_lr in [1e-5, 1e-6]:
+                args.args.seed = SEED
+                args.args.test_service_time_model = test_service_time_model
+                args.args.service_time_model = service_time_model
+                args.args.dqn_explr_lr = dqn_explr_lr
+                last = rl_experiment_wrapper(args,
+                                             train_workloads=train_workloads, test_workloads=test_workloads)
+
+    test_workloads = workload_builder.create_test_base_workloads(long_tasks_fractions=[0.0, 0.2, 0.4, 0.6, 0.8])
+
+    args.args.model_folder = ''
+
+    for service_time_model in ['pareto']:  # 'pareto'
+        for test_service_time_model in ['pareto', 'random.expovariate']:  # 'random.expovariate',
+            for dqn_explr_lr in [1e-6]:
+                args.args.seed = SEED
+                args.args.test_service_time_model = test_service_time_model
+                args.args.service_time_model = service_time_model
+                args.args.dqn_explr_lr = dqn_explr_lr
+                last = rl_experiment_wrapper(args,
+                                             train_workloads=train_workloads, test_workloads=test_workloads)
+                args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_rate_intervals/4/train/data'
+
+    EXPERIMENT_NAME = 'different_utilization'
+
+    train_workloads = workload_builder.create_train_base_workloads(
+        long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.45])
+    test_workloads = workload_builder.create_test_base_workloads(
+        long_tasks_fractions=[0.0, 0.2, 0.3, 0.4, 0.6, 0.8], utilizations=[0.7])
+
+    args = HeterogeneousRequestsArgs(input_args=input_args)
+    args.args.exp_name = EXPERIMENT_NAME
+    args.args.epochs = 100
+    args.args.num_requests = 8000
+    args.args.num_requests_test = 8000
+    args.args.eps_decay = 180000
+    args.args.lr_scheduler_step_size = 30
+    args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_rate_intervals/0/train/data'
+
+    for service_time_model in ['random.expovariate']:  # 'pareto'
+        for test_service_time_model in ['random.expovariate']:  # 'random.expovariate',
+            for dqn_explr_lr in [1e-5, 1e-6]:
+                args.args.seed = SEED
+                args.args.test_service_time_model = test_service_time_model
+                args.args.service_time_model = service_time_model
+                args.args.dqn_explr_lr = dqn_explr_lr
+                last = rl_experiment_wrapper(args,
+                                             train_workloads=train_workloads, test_workloads=test_workloads)
+
+    EXPERIMENT_NAME = 'new_benchmarks'
+
+    args = HeterogeneousRequestsArgs(input_args=input_args)
+    args.args.exp_name = EXPERIMENT_NAME
+    args.args.epochs = 50
+    args.args.num_requests = 8000
+    args.args.num_requests_test = 8000
+    args.args.eps_decay = 90000
+    args.args.lr_scheduler_step_size = 20
+    args.args.model_folder = ''
+
+    const.EVAL_POLICIES_TO_RUN = EVAL_POLICIES_TO_RUN = [
+        # 'round_robin',
+        'ARS',
+        'DQN',
+        'random',
+        'DQN_DUPL'
+    ]
+
+    for service_time_model in ['random.expovariate', 'pareto']:  # 'pareto'
+        for test_service_time_model in ['pareto', 'random.expovariate']:  # 'random.expovariate',
+            for long_tasks_fraction in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
+                train_workloads = workload_builder.create_train_base_workloads(
+                    long_tasks_fractions=[long_tasks_fraction],
+                    utilizations=[0.45])
+                test_workloads = workload_builder.create_test_base_workloads(long_tasks_fractions=[long_tasks_fraction])
+                args.args.seed = SEED
+                args.args.test_service_time_model = test_service_time_model
+                args.args.service_time_model = service_time_model
+                args.args.dqn_explr_lr = dqn_explr_lr
+                last = rl_experiment_wrapper(args,
+                                             train_workloads=train_workloads, test_workloads=test_workloads)
+
+    EXPERIMENT_NAME = 'variable_workload'
+
+    const.EVAL_POLICIES_TO_RUN = [
+        # 'round_robin',
+        'ARS',
+        'DQN',
+        'random',
+        'DQN_DUPL'
+    ] + ['DQN_EXPLR_0', 'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20', 'DQN_EXPLR_25']
+
+    train_workloads = workload_builder.create_train_base_workloads(
+        long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.45])
+
+    test_workloads = workload_builder.create_test_var_long_tasks_workloads(
+        num_requests=40000)
+
+    args = HeterogeneousRequestsArgs(input_args=input_args)
+    args.args.exp_name = EXPERIMENT_NAME
+    args.args.epochs = 100
+    args.args.num_requests = 8000
+    args.args.num_requests_test = 8000
+    args.args.eps_decay = 180000
+    args.args.lr_scheduler_step_size = 30
+    args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_rate_intervals/0/train/data'
+
+    for service_time_model in ['random.expovariate']:  # 'pareto'
+        for test_service_time_model in ['random.expovariate', 'pareto']:  # 'random.expovariate',
+            for dqn_explr_lr in [1e-5, 1e-6]:
+                args.args.seed = SEED
+                args.args.test_service_time_model = test_service_time_model
+                args.args.service_time_model = service_time_model
+                args.args.dqn_explr_lr = dqn_explr_lr
+                last = rl_experiment_wrapper(args,
+                                             train_workloads=train_workloads, test_workloads=test_workloads)
+
+    EXPERIMENT_NAME = 'shorter_train'
+
+    train_workloads = workload_builder.create_train_base_workloads(
+        long_tasks_fractions=[0.3, 0.35, 0.4],
+        utilizations=[0.45])
+    test_workloads = workload_builder.create_test_base_workloads(
+        long_tasks_fractions=[0.0, 0.2, 0.4, 0.6, 0.8])
+
+    args = HeterogeneousRequestsArgs(input_args=input_args)
+    args.args.exp_name = EXPERIMENT_NAME
+    args.args.epochs = 50
+    args.args.num_requests = 8000
+    args.args.num_requests_test = 8000
+    args.args.eps_decay = 90000
+    args.args.lr_scheduler_step_size = 20
+    args.args.model_folder = ''
+
+    for service_time_model in ['random.expovariate']:  # 'pareto'
+        for test_service_time_model in ['pareto', 'random.expovariate']:  # 'random.expovariate',
+            for dqn_explr_lr in [1e-6]:
+                # for _ in [1, 2, 3]:
+                args.args.seed = SEED
+                args.args.test_service_time_model = test_service_time_model
+                args.args.service_time_model = service_time_model
+                args.args.dqn_explr_lr = dqn_explr_lr
+                last = rl_experiment_wrapper(args,
+                                             train_workloads=train_workloads, test_workloads=test_workloads)
+
+    return
+
+    train_workloads = workload_builder.create_train_base_workloads(
+        long_tasks_fractions=[0.3, 0.35, 0.4],
+        utilizations=[0.45, 0.6, 0.7])
+    test_workloads = workload_builder.create_test_base_workloads(
+        long_tasks_fractions=[0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.8])
+
+    EXPERIMENT_NAME = 'slightly_varied_training_shorter_test'
+
+    args = HeterogeneousRequestsArgs(input_args=input_args)
+    args.args.exp_name = EXPERIMENT_NAME
+    args.args.epochs = 700
+    args.args.num_requests = 2000
+    args.args.num_requests_test = 8000
+    args.args.eps_decay = 300000
+    args.args.lr_scheduler_step_size = 150
+    args.args.model_folder = ''
+
+    for service_time_model in ['random.expovariate']:  # 'pareto'
+        for test_service_time_model in ['random.expovariate', 'pareto']:
+            for dqn_explr_lr in [1e-6]:
+                # for _ in [1, 2, 3]:
+                args.args.seed = SEED
                 args.args.test_service_time_model = test_service_time_model
                 args.args.service_time_model = service_time_model
                 args.args.dqn_explr_lr = dqn_explr_lr
@@ -348,19 +534,26 @@ def main(input_args=None, setting="base") -> None:
                                              train_workloads=train_workloads, test_workloads=test_workloads)
 
     train_workloads = workload_builder.create_train_base_workloads(
-        long_tasks_fractions=[0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6],
+        long_tasks_fractions=[0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6],
         utilizations=[0.45, 0.7, 1.2])
     test_workloads = workload_builder.create_test_base_workloads(
-        long_tasks_fractions=[0.0, 0.1, 0.2, 0.4, 0.7, 0.8])
+        long_tasks_fractions=[0.2, 0.3, 0.4, 0.5, 0.7, 0.8, 0.9])
 
+    EXPERIMENT_NAME = 'pareto_repeat'
+
+    # TODO: Run same experiments for pareto
     args = HeterogeneousRequestsArgs(input_args=input_args)
     args.args.exp_name = EXPERIMENT_NAME
-    args.args.epochs = 500
-    args.args.eps_decay = 120000
+    args.args.epochs = 700
+    args.args.num_requests = 2000
+    args.args.eps_decay = 300000
+    args.args.model_folder = ''
 
-    for service_time_model in ['random.expovariate']:  # 'pareto'
-        for test_service_time_model in ['random.expovariate']:
-            for dqn_explr_lr in [1e-6, 1e-5]:
+    for service_time_model in ['pareto']:  # 'pareto'
+        for test_service_time_model in ['pareto']:
+            for dqn_explr_lr in [1e-6]:
+                # for _ in [1, 2, 3]:
+                args.args.seed = SEED
                 args.args.test_service_time_model = test_service_time_model
                 args.args.service_time_model = service_time_model
                 args.args.dqn_explr_lr = dqn_explr_lr
@@ -379,6 +572,7 @@ def main(input_args=None, setting="base") -> None:
     # for slow_server_slowness in [2.0, 3.0]:
     #     for dqn_explr in [0.1]:
     #         for utilization in [0.45, 0.7]:
+    #            args.args.seed = SEED
     #             args.args.slow_server_slowness = slow_server_slowness
     #             args.args.dqn_explr = dqn_explr
     #             args.args.utilization = utilization
@@ -397,6 +591,7 @@ def main(input_args=None, setting="base") -> None:
             for dqn_explr in [0.1]:
                 for utilization in [0.45, 0.7]:
                     for duplication_rate in [0.05, 0.1]:
+                        args.args.seed = SEED
                         args.args.duplication_rate = duplication_rate
                         args.args.interval_param = interval
                         args.args.time_varying_drift = time_varying_drift
