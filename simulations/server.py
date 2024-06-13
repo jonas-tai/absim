@@ -58,7 +58,7 @@ class Server:
             service_time = base_service_time + base_service_time * math.sin(1 + self.simulation.now / 100)
         elif self.service_time_model == "pareto":
             scale = (base_service_time * (constants.ALPHA - 1)) / constants.ALPHA
-            service_time = pareto.rvs(constants.ALPHA, scale=scale)
+            service_time = min(pareto.rvs(constants.ALPHA, scale=scale), 1000)
         else:
             print("Unknown service time model")
             sys.exit(-1)
