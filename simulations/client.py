@@ -543,6 +543,7 @@ class RequestRateMonitor:
         last_index = len(self.request_times)
         max_interval_boundary_reached = False
         # iterate through requests, new requests are at the back of the list
+
         for index, start_time in enumerate(reversed(self.request_times)):
             if max_interval_boundary_reached:
                 break
@@ -550,12 +551,12 @@ class RequestRateMonitor:
             for interval in self.rate_intervals:
                 if start_time >= (now - interval):
                     last_index = index
-                    max_interval_boundary_reached = True
+                    max_interval_boundary_reached = False
                     rates[interval] += 1
         # Remove requests that are not part of any interval anymore
-        self.request_times = self.request_times[(len(self.request_times) - last_index):]
-
-        return [rates[interval] for interval in self.rate_intervals]
+        self.request_times = self.request_times[(len(self.request_times) - last_index - 1):]
+        request_rates = [rates[interval] for interval in self.rate_intervals]
+        return request_rates
 
 
 class BackpressureScheduler:
