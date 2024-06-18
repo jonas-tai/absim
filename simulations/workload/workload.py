@@ -3,6 +3,8 @@ from pathlib import Path
 import random
 from typing import Any, Dict, List
 
+import numpy as np
+
 from simulations.client import Client
 from simulations.constants import ALPHA
 from simulations.server import Server
@@ -33,6 +35,8 @@ class BaseWorkload:
         self.long_tasks_fraction = long_tasks_fraction
         self.workload_type: str = 'base'
         # self.proc = self.simulation.process(self.run(), 'Workload' + str(id_))
+        self.random = random.Random()
+        self.np_random = np.random.default_rng()
 
     def reset_workload(self):
         self.executed_requests = 0
@@ -73,21 +77,25 @@ class BaseWorkload:
             file.write(json_data)
 
     # Need to pin workload to a client
-    def run(self, clients: List[Client], servers: List[Server], simulation):
+    def run(self, clients: List[Client], servers: List[Server], seed: int, simulation):
         # print(self.model_param)
 
         task_counter = 0
         self.client_delay_mean = calculate_client_delay_mean(
             servers=servers, utilization=self.utilization, long_tasks_fraction=self.long_tasks_fraction)
 
+        # TODO: Make this use separate randomState generators instead of reseeding the library
+        self.random = random.Random(seed)
+        self.np_random = np.random.default_rng(seed)
+
         while self.executed_requests < self.num_requests:
             yield simulation.timeout(0)
             assert self.client_delay_mean > 0
 
             self.before_task_creation(servers=servers)
-            is_long_task = False if simulation.random.random() >= self.long_tasks_fraction else True
+            is_long_task = False if self.random.random() >= self.long_tasks_fraction else True
             task_to_schedule = task.Task("Task" + str(task_counter),
-                                         simulation=simulation, is_long_task=is_long_task)
+                                         simulation=simulation, is_long_task=is_long_task, utilization=self.utilization, long_tasks_fraction=self.long_tasks_fraction)
             task_counter += 1
 
             # Push out a task...
@@ -97,7 +105,7 @@ class BaseWorkload:
             client_node.schedule(task_to_schedule)
             # Simulate client delay
             if self.arrival_model == "poisson":
-                yield simulation.timeout(simulation.np_random.poisson(self.client_delay_mean))
+                yield simulation.timeout(self.np_random.poisson(self.client_delay_mean))
 
             # If model is gaussian, add gaussian delay
             # If model is constant, add fixed delay
@@ -106,14 +114,14 @@ class BaseWorkload:
 
             if self.arrival_model == "pareto":
                 scale = (self.client_delay_mean * (ALPHA - 1)) / ALPHA
-                yield simulation.timeout(pareto.rvs(ALPHA, scale=scale))
+                yield simulation.timeout(self.np_random.pareto(ALPHA) * scale)
 
             self.executed_requests += 1
         self.reset_workload()
 
     def weighted_choice(self, simulation, clients: List[Client]) -> Client:
         total = sum(client.demandWeight for client in clients)
-        r = simulation.random.uniform(0, total)
+        r = self.random.uniform(0, total)
         upto = 0
         for client in clients:
             if upto + client.demandWeight > r:
@@ -145,15 +153,21 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
 
     def before_task_creation(self, servers: List[Server]):
         if self.executed_requests > 0 and self.executed_requests % self.trigger_threshold == 0:
-            print(f'Trigger activated, changing long task fraction')
-            print(self.executed_requests)
-            new_long_task_fraction = random.choice(self.updated_long_tasks_fractions)
 
+            new_long_task_fraction = self.random.choice(self.updated_long_tasks_fractions)
+            print(
+                f'Trigger activated, changing long task fraction from {self.long_tasks_fraction} to {new_long_task_fraction}')
+            # TODO: Parameterize if keep
+            new_utilization = self.random.choice([0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
+            print(
+                f'Changing utilization from {self.utilization} to {new_utilization}')
+            print(self.executed_requests)
             updated_client_delay_mean = calculate_client_delay_mean(
                 servers=servers, utilization=self.utilization, long_tasks_fraction=new_long_task_fraction)
 
             print(f'Changing client delay from {self.client_delay_mean} to {updated_client_delay_mean}')
             self.long_tasks_fraction = new_long_task_fraction
+            self.utilization = new_utilization
             self.client_delay_mean = updated_client_delay_mean
 
     @classmethod
@@ -163,6 +177,7 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
         trigger_threshold = config['trigger_threshold']
         updated_long_tasks_fractions = config['updated_long_tasks_fractions']
         arrival_model = config['arrival_model']
+        utilization = config['utilization']
 
         # Create a VariableLongTaskFractionWorkload instance
         return cls(
@@ -172,19 +187,19 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
             arrival_model=arrival_model,
             num_requests=num_requests,
             long_tasks_fraction=long_tasks_fraction,
+            utilization=utilization
         )
 
     def to_json(self) -> str:
         base_data = json.loads(super().to_json())
         additional_data = {
             'trigger_threshold': self.trigger_threshold,
-            'updated_client_delay_mean': self.updated_client_delay_mean,
             'updated_long_tasks_fractions': self.updated_long_tasks_fractions,
         }
         base_data.update(additional_data)
         return json.dumps(base_data, indent=4)
 
-    def to_json_file(self, folder_path: Path, prefix: str = ''):
+    def to_json_file(self, out_folder: Path, prefix: str = ''):
         json_data = self.to_json()
-        with open(folder_path / f'{prefix}{WORKLOAD_CONFIG_FILE_NAME}', 'w') as file:
+        with open(out_folder / f'{prefix}{WORKLOAD_CONFIG_FILE_NAME}', 'w') as file:
             file.write(json_data)

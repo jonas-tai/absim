@@ -220,7 +220,9 @@ class ExperimentRunner:
         # TODO: Use multiple workloads to simulate smoother shift to new workload?
         # More than 1 workload currently not supported
         assert args.num_workload == 1
-        simulation.process(workload.run(servers=self.servers, clients=self.clients, simulation=simulation))
+        print(f'Running with seed {args.seed}')
+        simulation.process(workload.run(servers=self.servers, clients=self.clients,
+                           seed=args.seed, simulation=simulation))
         self.workload_gens.append(workload)
 
         # Begin simulation

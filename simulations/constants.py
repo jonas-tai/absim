@@ -6,7 +6,8 @@ NUMBER_OF_CLIENTS = 1
 
 DQN_EXPLR_SETTINGS = [item for i in range(101) for item in [f'DQN_EXPLR_{i}_TRAIN', f'DQN_EXPLR_{i}']]
 
-POLICY_ORDER = ["DQN", 'DQN_OPTIMIZED', "DQN_DUPL", "DQN_EXPLR"] + DQN_EXPLR_SETTINGS + ["random", "ARS", "round_robin"]
+POLICY_ORDER = ["DQN", 'DQN_OPTIMIZED', "DQN_DUPL_TRAIN", "DQN_DUPL",
+                "DQN_EXPLR"] + DQN_EXPLR_SETTINGS + ["random", "ARS", "round_robin"]
 
 POLICY_COLORS = {
     "ARS": "C0",
@@ -16,6 +17,7 @@ POLICY_COLORS = {
     "round_robin": "C3",
     'DQN_EXPLR': "C4",
     "DQN_DUPL": 'C5',
+    "DQN_DUPL_TRAIN": 'C5',
 } | {f'DQN_EXPLR_{i}': 'C4' for i in range(101)} | {f'DQN_EXPLR_{i}_TRAIN': 'C4' for i in range(101)}
 
 # Pareto distribution alpha

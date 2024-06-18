@@ -1,5 +1,7 @@
 from typing import List
 
+import torch
+
 from monitor import Monitor
 import constants
 from simulations.model_trainer import Trainer
@@ -14,7 +16,7 @@ from simulations.state import NodeState, State, StateParser
 from collections import defaultdict, namedtuple
 
 DataPoint = namedtuple('DataPoint', ('state', 'task_time_sent', 'q_values', 'latency',
-                       'replica_id', 'is_duplicate', 'is_faster_response'))
+                       'replica_id', 'is_duplicate', 'is_faster_response', 'utilization', 'long_tasks_fraction'))
 
 
 class Client:
@@ -148,7 +150,7 @@ class Client:
         # make sure replicas are sorted by replica id
         replica_set.sort(key=lambda x: x.id)
         if self.backpressure is False:
-            replica_to_serve = self.sort(task, replica_set)
+            replica_to_serve = self.sort_replicas(task, replica_set)
             self.send_request(task, replica_to_serve)
             # TODO: Make this copies to avoid potential race conditions?
             self.maybe_send_duplicate_request(task=task, replica_to_serve=replica_to_serve, replica_set=replica_set)
@@ -184,7 +186,7 @@ class Client:
                        self.pendingRequestsMap[replica_to_serve]))
         self.taskSentTimeTracker[task] = self.simulation.now
 
-    def sort(self, task: Task, original_replica_set: List[Server]) -> List[Server]:
+    def sort_replicas(self, task: Task, original_replica_set: List[Server]) -> List[Server]:
         replica_set = original_replica_set[0:].copy()
 
         ars_replica_ranking = self.get_ars_ranking(original_replica_set)
@@ -267,13 +269,12 @@ class Client:
                     if ((first_node_score - new_node_score) / first_node_score
                             > badness_threshold):
                         replica_set.sort(key=self.dsScores.get)
-        elif self.REPLICA_SELECTION_STRATEGY.startswith(
-                'DQN'):
+        elif self.REPLICA_SELECTION_STRATEGY.startswith('DQN'):
             action = self.trainer.select_action(
                 state=state, simulation=self.simulation, random_decision=random_relica_id, task=task)
 
             if not self.trainer.eval_mode:
-                self.trainer.record_state_and_action(task_id=task.id, state=state, action=action)
+                self.trainer.record_state_and_action(task=task, action=action)
 
             # Map action back to server id
             replica = next(server for server in replica_set if server.get_server_id() == action)
@@ -354,12 +355,16 @@ class Client:
 
             replica_idx = self.simulation.random.randint(0, len(replica_set_duplicate_req) - 1)
             # self.simulation.random.shuffle(replica_set)
-            duplicate_replica = replica_set_duplicate_req[replica_idx]
+            duplicate_replica: Server = replica_set_duplicate_req[replica_idx]
             # next(
             #    server for server in replica_set_duplicate_req if server.get_server_id() == replica_id)
 
             duplicate_task = task.create_duplicate_task()
             self.taskArrivalTimeTracker[duplicate_task] = self.taskArrivalTimeTracker[task]
+
+            if not self.trainer.eval_mode:
+                action = duplicate_replica.id
+                self.trainer.record_state_and_action(task=duplicate_task, action=action)
 
             self.send_request(task=duplicate_task, replica_to_serve=duplicate_replica)
 
@@ -367,7 +372,8 @@ class Client:
         if self.simulation.random.uniform(0, 1.0) < self.shadow_read_ratio:
             for replica in replica_set:
                 if replica is not replica_to_serve:
-                    shadow_read_task = Task("ShadowRead", None, self.simulation)
+                    raise Exception('Shadow Tasks not implemented')
+                    shadow_read_task = Task("ShadowRead", None, self.simulation, utilization=-1, long_tasks_fraction=-1)
                     self.taskArrivalTimeTracker[shadow_read_task] = self.simulation.now
                     self.send_request(shadow_read_task, replica)
                     self.rateLimiters[replica].forceUpdates()
@@ -511,20 +517,24 @@ class ResponseHandler:
             else:
                 is_faster_response = False
                 del client.duplicated_tasks_latency_tracker[task.original_id]
+        task.is_faster_response = is_faster_response
 
         # Does not make sense to record shadow read latencies
         # as a latency measurement
         if task.id != 'ShadowRead':
             # Task completed, we call the trainer to see if we can do a step
-            # TODO: Eventually remove this task.is_duplicate check once adapted RL algorithm
-            if not client.trainer.eval_mode and not task.is_duplicate:
-                client.trainer.execute_step_if_state_present(task_id=task.id, latency=latency)
+            if not client.trainer.eval_mode:
+                client.trainer.execute_step_if_state_present(task=task, latency=latency)
 
             state = task.get_state()
 
             replica_id = replica_that_served.id
-            client.data_point_monitor.observe(DataPoint(state=state, q_values=task.q_values, task_time_sent=task_time_sent, latency=latency,
-                                              replica_id=replica_id, is_duplicate=task.is_duplicate, is_faster_response=is_faster_response))
+            client.data_point_monitor.observe(DataPoint(state=state, q_values=task.q_values,
+                                                        task_time_sent=task_time_sent, latency=latency,
+                                                        replica_id=replica_id, is_duplicate=task.is_duplicate,
+                                                        is_faster_response=is_faster_response,
+                                                        utilization=task.utilization,
+                                                        long_tasks_fraction=task.long_tasks_fraction))
 
 
 class RequestRateMonitor:

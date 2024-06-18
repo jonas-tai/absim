@@ -20,7 +20,6 @@ from collections import defaultdict
 
 from simulations.task import Task
 
-StateAction = namedtuple('StateAction', ('state', 'action'))
 MODEL_TRAINER_JSON = 'model_trainer.json'
 
 
@@ -30,10 +29,10 @@ class Trainer:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.state_parser = state_parser
 
-        self.task_to_state_action: Dict[str, StateAction] = {}
-        self.task_to_next_state: Dict[str, torch.Tensor] = {}
-        self.task_to_reward: Dict[str, torch.Tensor] = {}
-        self.last_task_id: str = None
+        self.task_id_to_action: Dict[str, torch.Tensor] = {}
+        self.task_id_to_next_state: Dict[str, torch.Tensor] = {}
+        self.task_id_to_rewards: Dict[str, torch.Tensor] = {}
+        self.last_task: Task = None
         self.summary_stats_max_size = summary_stats_max_size
 
         self.BATCH_SIZE = batch_size
@@ -127,45 +126,53 @@ class Trainer:
         self.scheduler = optim.lr_scheduler.StepLR(
             self.optimizer, step_size=self.lr_scheduler_step_size, gamma=self.lr_scheduler_gamma)
 
-    def record_state_and_action(self, task_id: str, state: State, action: int) -> None:
+    def record_state_and_action(self, task: Task, action: int | torch.Tensor) -> None:
         if self.eval_mode:
             return
         action = torch.tensor([[action]], device=self.device)
-        state = self.state_parser.state_to_tensor(state=state)
-        self.task_to_state_action[task_id] = StateAction(state, action)
+        state = self.state_parser.state_to_tensor(state=task.get_state())
+        self.task_id_to_action[task.id] = action
 
-        if self.last_task_id is not None:
-            self.task_to_next_state[self.last_task_id] = state
-            if self.last_task_id in self.task_to_reward:
-                # Reward (latency) of last task already present and not pushed to memory yet
-                self.training_step(task_id=self.last_task_id)
-        self.last_task_id = task_id
+        # Only do this if this is not the first task of the epoch and not a duplicate task
+        if (self.last_task is not None) and (not task.is_duplicate):
+            self.task_id_to_next_state[self.last_task.id] = state
 
-    def execute_step_if_state_present(self, task_id: str, latency: int) -> None:
+            if self.last_task.has_duplicate:
+                self.task_id_to_next_state[self.last_task.duplicate_task.id] = state
+
+            # Check if reward (latency) of last task already present and not pushed to memory yet
+            if self.last_task.id in self.task_id_to_rewards:
+                self.training_step(task=self.last_task)
+            if self.last_task.has_duplicate and self.last_task.duplicate_task.id in self.task_id_to_rewards:
+                self.training_step(task=self.last_task.duplicate_task)
+        if not task.is_duplicate:
+            self.last_task = task
+
+    def execute_step_if_state_present(self, task: Task, latency: int) -> None:
         if self.eval_mode:
             return
-        self.task_to_reward[task_id] = torch.tensor([[- latency]], device=self.device, dtype=torch.float32)
-        if task_id not in self.task_to_next_state:
+        self.task_id_to_rewards[task.id] = torch.tensor([[- latency]], device=self.device, dtype=torch.float32)
+        if task.id not in self.task_id_to_next_state:
             # Next state not present because request finished before next request arrived
             return
-        self.training_step(task_id)
+        self.training_step(task=task)
 
-    def push_to_memory(self, task_id: str) -> None:
-        state_action = self.task_to_state_action[task_id]
-        next_state = self.task_to_next_state[task_id]
-        reward = self.task_to_reward[task_id]
+    def push_to_memory(self, task: Task) -> None:
+        state = self.state_parser.state_to_tensor(state=task.get_state())
+        action = self.task_id_to_action[task.id]
+        next_state = self.task_id_to_next_state[task.id]
+        reward = self.task_id_to_rewards[task.id]
         self.reward_stats.add(reward)
-        self.memory.push(state_action.state, state_action.action, next_state, reward)
+        self.memory.push(state, action, next_state, reward)
 
-    def clean_up_after_step(self, task_id: str) -> None:
-        del self.task_to_state_action[task_id]
-        del self.task_to_next_state[task_id]
-        del self.task_to_reward[task_id]
+    def clean_up_after_step(self, task: Task) -> None:
+        del self.task_id_to_action[task.id]
+        del self.task_id_to_rewards[task.id]
+        del self.task_id_to_next_state[task.id]
 
-    def training_step(self, task_id: str):
-
+    def training_step(self, task: Task):
         # Store the transition in memory
-        self.push_to_memory(task_id)
+        self.push_to_memory(task=task)
 
         # Perform one step of the optimization (on the policy network)
         self.optimize_model()
@@ -179,9 +186,9 @@ class Trainer:
         for key in policy_net_state_dict:
             target_net_state_dict[key] = policy_net_state_dict[key] * tau + target_net_state_dict[key] * (1 - tau)
         self.target_net.load_state_dict(target_net_state_dict)
-        self.clean_up_after_step(task_id=task_id)
+        self.clean_up_after_step(task=task)
 
-    def select_action(self, state: State, simulation, random_decision: int, task: Task):
+    def select_action(self, state: State, simulation, random_decision: int, task: Task) -> torch.Tensor:
         # random_decision int handed in from outside to ensure its the same decision that ranom strategy would take
         sample = simulation.random_exploration.random()
         eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(
@@ -288,10 +295,10 @@ class Trainer:
     def reset_episode_counters(self) -> None:
         self.explore_actions_episode = 0
         self.exploit_actions_episode = 0
-        self.task_to_state_action = {}
-        self.task_to_next_state = {}
-        self.task_to_reward = {}
-        self.last_task_id = None
+        self.task_id_to_action = {}
+        self.task_id_to_next_state = {}
+        self.task_id_to_rewards = {}
+        self.last_task = None
 
     def reset_model_training_stats(self) -> None:
         self.losses = []
