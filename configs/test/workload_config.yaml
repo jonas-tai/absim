@@ -6,7 +6,7 @@ workload:
   workload_type: "base"
 
 variable_long_task_fraction_workload:
-  trigger_threshold: 8000
+  trigger_threshold: 32000
   updated_long_tasks_fractions: 
     - 0.0
     - 0.05
