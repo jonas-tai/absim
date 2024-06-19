@@ -19,6 +19,7 @@ from simulations.workload.workload_builder import WorkloadBuilder
 import constants as const
 
 DQN_EXPLR_MAPPING = {f'DQN_EXPLR_{i}': (i / 100.0) for i in range(101)}
+DQN_DUPL_MAPPING = {f'DQN_DUPL_{i}': (i / 100.0) for i in range(101)}
 
 
 def print_monitor_time_series_to_file(file_desc, prefix, monitor) -> None:
@@ -249,6 +250,11 @@ def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_fol
                     print(f'DQN_EXPLR_MAPPING: {DQN_EXPLR_MAPPING[policy]}')
                     trainer.EPS_END = DQN_EXPLR_MAPPING[policy]
                     trainer.EPS_START = DQN_EXPLR_MAPPING[policy]
+                elif policy.startswith('DQN_DUPL_'):
+                    print(f'DQN_DUPL_MAPPING: {DQN_DUPL_MAPPING[policy]}')
+                    duplication_rate = DQN_DUPL_MAPPING[policy]
+                    trainer.EPS_END = 0
+                    trainer.EPS_START = 0
                 else:
                     raise Exception(f'Invalid policy for adapting: {policy}')
 
@@ -445,15 +451,7 @@ def main(input_args=None, setting="base") -> None:
     #             last = rl_experiment_wrapper(args,
     #                                          train_workloads=train_workloads, test_workloads=test_workloads)
 
-    EXPERIMENT_NAME = 'var_workload_32000_with_util'
-
-    const.EVAL_POLICIES_TO_RUN = [
-        # 'round_robin',
-        'ARS',
-        'DQN',
-        'random',
-        'DQN_DUPL'
-    ] + ['DQN_EXPLR_0', 'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20']
+    EXPERIMENT_NAME = 'dupl_experiments'
 
     train_workloads = workload_builder.create_train_base_workloads(
         long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.45])
@@ -478,75 +476,75 @@ def main(input_args=None, setting="base") -> None:
                 last = rl_experiment_wrapper(args,
                                              train_workloads=train_workloads, test_workloads=test_workloads)
 
-    EXPERIMENT_NAME = 'var_workload_32000_with_util_less_trained_model'
+    # EXPERIMENT_NAME = 'var_workload_32000_with_util_less_trained_model'
 
-    const.EVAL_POLICIES_TO_RUN = [
-        # 'round_robin',
-        'ARS',
-        'DQN',
-        'random',
-        'DQN_DUPL'
-    ] + ['DQN_EXPLR_0', 'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20']
+    # const.EVAL_POLICIES_TO_RUN = [
+    #     # 'round_robin',
+    #     'ARS',
+    #     'DQN',
+    #     'random',
+    #     'DQN_DUPL'
+    # ] + ['DQN_EXPLR_0', 'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20']
 
-    train_workloads = workload_builder.create_train_base_workloads(
-        long_tasks_fractions=[0.3], utilizations=[0.45])
+    # train_workloads = workload_builder.create_train_base_workloads(
+    #     long_tasks_fractions=[0.3], utilizations=[0.45])
 
-    test_workloads = workload_builder.create_test_var_long_tasks_workloads(
-        num_requests=128000)
+    # test_workloads = workload_builder.create_test_var_long_tasks_workloads(
+    #     num_requests=128000)
 
-    args = HeterogeneousRequestsArgs(input_args=input_args)
-    args.args.exp_name = EXPERIMENT_NAME
-    args.args.epochs = 100
-    args.args.eps_decay = 180000
-    args.args.lr_scheduler_step_size = 30
-    args.args.model_folder = ''
+    # args = HeterogeneousRequestsArgs(input_args=input_args)
+    # args.args.exp_name = EXPERIMENT_NAME
+    # args.args.epochs = 100
+    # args.args.eps_decay = 180000
+    # args.args.lr_scheduler_step_size = 30
+    # args.args.model_folder = ''
 
-    for service_time_model in ['random.expovariate']:  # 'pareto'
-        for test_service_time_model in ['random.expovariate', 'pareto']:  # 'random.expovariate',
-            for dqn_explr_lr in [1e-5, 1e-6]:
-                args.args.seed = SEED
-                args.args.test_service_time_model = test_service_time_model
-                args.args.service_time_model = service_time_model
-                args.args.dqn_explr_lr = dqn_explr_lr
-                last = rl_experiment_wrapper(args,
-                                             train_workloads=train_workloads, test_workloads=test_workloads)
-                if args.args.model_folder == '':
-                    args.args.model_folder = '/home/jonas/projects/absim/outputs/var_workload_32000_with_util_less_trained_model/0/train/data'
+    # for service_time_model in ['random.expovariate']:  # 'pareto'
+    #     for test_service_time_model in ['random.expovariate', 'pareto']:  # 'random.expovariate',
+    #         for dqn_explr_lr in [1e-5, 1e-6]:
+    #             args.args.seed = SEED
+    #             args.args.test_service_time_model = test_service_time_model
+    #             args.args.service_time_model = service_time_model
+    #             args.args.dqn_explr_lr = dqn_explr_lr
+    #             last = rl_experiment_wrapper(args,
+    #                                          train_workloads=train_workloads, test_workloads=test_workloads)
+    #             if args.args.model_folder == '':
+    #                 args.args.model_folder = '/home/jonas/projects/absim/outputs/var_workload_32000_with_util_less_trained_model/0/train/data'
 
-    EXPERIMENT_NAME = 'var_workload_32000_with_util_alternate_start'
+    # EXPERIMENT_NAME = 'var_workload_32000_with_util_alternate_start'
 
-    const.EVAL_POLICIES_TO_RUN = [
-        # 'round_robin',
-        'ARS',
-        'DQN',
-        'random',
-        'DQN_DUPL'
-    ] + ['DQN_EXPLR_0', 'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20']
+    # const.EVAL_POLICIES_TO_RUN = [
+    #     # 'round_robin',
+    #     'ARS',
+    #     'DQN',
+    #     'random',
+    #     'DQN_DUPL'
+    # ] + ['DQN_EXPLR_0', 'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20']
 
-    train_workloads = workload_builder.create_train_base_workloads(
-        long_tasks_fractions=[0.5, 0.55], utilizations=[0.55])
+    # train_workloads = workload_builder.create_train_base_workloads(
+    #     long_tasks_fractions=[0.5, 0.55], utilizations=[0.55])
 
-    test_workloads = workload_builder.create_test_var_long_tasks_workloads(
-        num_requests=128000)
+    # test_workloads = workload_builder.create_test_var_long_tasks_workloads(
+    #     num_requests=128000)
 
-    args = HeterogeneousRequestsArgs(input_args=input_args)
-    args.args.exp_name = EXPERIMENT_NAME
-    args.args.epochs = 100
-    args.args.eps_decay = 180000
-    args.args.lr_scheduler_step_size = 30
-    args.args.model_folder = ''
+    # args = HeterogeneousRequestsArgs(input_args=input_args)
+    # args.args.exp_name = EXPERIMENT_NAME
+    # args.args.epochs = 100
+    # args.args.eps_decay = 180000
+    # args.args.lr_scheduler_step_size = 30
+    # args.args.model_folder = ''
 
-    for service_time_model in ['random.expovariate']:  # 'pareto'
-        for test_service_time_model in ['random.expovariate', 'pareto']:  # 'random.expovariate',
-            for dqn_explr_lr in [1e-5, 1e-6]:
-                args.args.seed = SEED
-                args.args.test_service_time_model = test_service_time_model
-                args.args.service_time_model = service_time_model
-                args.args.dqn_explr_lr = dqn_explr_lr
-                last = rl_experiment_wrapper(args,
-                                             train_workloads=train_workloads, test_workloads=test_workloads)
-                if args.args.model_folder == '':
-                    args.args.model_folder = '/home/jonas/projects/absim/outputs/var_workload_32000_with_util_alternate_start/0/train/data'
+    # for service_time_model in ['random.expovariate']:  # 'pareto'
+    #     for test_service_time_model in ['random.expovariate', 'pareto']:  # 'random.expovariate',
+    #         for dqn_explr_lr in [1e-5, 1e-6]:
+    #             args.args.seed = SEED
+    #             args.args.test_service_time_model = test_service_time_model
+    #             args.args.service_time_model = service_time_model
+    #             args.args.dqn_explr_lr = dqn_explr_lr
+    #             last = rl_experiment_wrapper(args,
+    #                                          train_workloads=train_workloads, test_workloads=test_workloads)
+    #             if args.args.model_folder == '':
+    #                 args.args.model_folder = '/home/jonas/projects/absim/outputs/var_workload_32000_with_util_alternate_start/0/train/data'
 
     return
 

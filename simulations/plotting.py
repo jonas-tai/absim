@@ -312,7 +312,8 @@ class ExperimentPlot:
         self.plot_latency_over_time(df, title_request_types='short requests',
                                     file_prefix=f'short_req_', order=policies)
 
-    def plot_latency_over_time(self, df: pd.DataFrame, order: List[str], title_request_types: staticmethod = 'all requests', file_prefix='all_'):
+    def plot_latency_over_time(self, df: pd.DataFrame, order: List[str], title_request_types: staticmethod = 'all requests', file_prefix='all_', quantile=0.99):
+        percentile = quantile * 100
         df = df[df['Is_faster_response']]
         for epoch in df['Epoch'].unique():
             print(epoch)
@@ -347,7 +348,7 @@ class ExperimentPlot:
             aggregated = epoch_df.groupby(['Policy', 'Aggregated_num_requests']).agg(
                 Start_Time=('Task_time_sent', 'min'),
                 End_Time=('Task_time_sent', 'max'),
-                Latency=('Latency', lambda x: np.percentile(x, 99)),
+                Latency=('Latency', lambda x: np.percentile(x, percentile)),
             ).reset_index()
 
             # Plot latency over time for each policy
@@ -378,11 +379,11 @@ class ExperimentPlot:
             # cbar = plt.colorbar(sm, orientation='horizontal', pad=0.1, ax=axes)
             # cbar.set_label('Utilization and Long Tasks Fraction')
 
-            plt.xlabel('Time (s)')
+            plt.xlabel('Number of requests')
             plt.ylabel('Latency (ms)')
             plt.yscale('log')
 
-            axes.set_title(f'Average Latency {title_request_types}')
+            axes.set_title(f'P{percentile} latency for {title_request_types}')
             handles, labels = axes.get_legend_handles_labels()
             # Add the color bar as a patch in the legend
             # cbar_patch = Patch(facecolor=color_map(norm(np.mean(long_tasks_fractions))), edgecolor='black')
