@@ -7,12 +7,12 @@ import random
 import numpy as np
 from simulation_args import SimulationArgs, log_arguments
 from pathlib import Path
-from model_trainer import Trainer
+from simulations.training.model_trainer import Trainer
 from simulations.feature_data_collector import FeatureDataCollector
 from simulations.plotting import ExperimentPlot
 from experiment_runner import ExperimentRunner
 from simulations.state import StateParser
-from simulations.supervised_model_trainer import SupervisedModelTrainer
+from simulations.training.supervised_model_trainer import SupervisedModelTrainer
 
 
 def supervised_learning_wrapper(simulation_args: SimulationArgs):

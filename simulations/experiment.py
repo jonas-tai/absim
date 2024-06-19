@@ -8,7 +8,7 @@ import random
 import numpy as np
 from simulation_args import BaseArgs, HeterogeneousRequestsArgs, SimulationArgs, StaticSlowServerArgs, TimeVaryingServerArgs, log_arguments
 from pathlib import Path
-from model_trainer import Trainer
+from simulations.training.model_trainer import Trainer
 from simulations.feature_data_collector import FeatureDataCollector
 from simulations.monitor import Monitor
 from simulations.plotting import ExperimentPlot
@@ -429,14 +429,6 @@ def main(input_args=None, setting="base") -> None:
     # args.args.lr_scheduler_step_size = 20
     # args.args.model_folder = ''
 
-    # const.EVAL_POLICIES_TO_RUN = EVAL_POLICIES_TO_RUN = [
-    #     # 'round_robin',
-    #     'ARS',
-    #     'DQN',
-    #     'random',
-    #     'DQN_DUPL'
-    # ]
-
     # for service_time_model in ['random.expovariate', 'pareto']:  # 'pareto'
     #     for test_service_time_model in ['pareto', 'random.expovariate']:  # 'random.expovariate',
     #         for long_tasks_fraction in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
@@ -458,6 +450,8 @@ def main(input_args=None, setting="base") -> None:
 
     test_workloads = workload_builder.create_test_var_long_tasks_workloads(
         num_requests=128000)
+
+    const.EVAL_POLICIES_TO_RUN = ['DQN_DUPL_30', 'DQN_DUPL_35', 'DQN_DUPL_40', 'DQN_DUPL_45']
 
     args = HeterogeneousRequestsArgs(input_args=input_args)
     args.args.exp_name = EXPERIMENT_NAME

@@ -12,9 +12,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 from matplotlib import pyplot as plt
 
-from replay_memory import ReplayMemory, Transition
+from simulations.training.replay_memory import ReplayMemory, Transition
 from simulations.models.dqn import DQN, SummaryStats
-from simulations.simulator import Simulation
 from simulations.state import State, StateParser
 from collections import defaultdict
 

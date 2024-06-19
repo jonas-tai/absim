@@ -353,7 +353,7 @@ class ExperimentPlot:
 
             # Plot latency over time for each policy
             sns.lineplot(data=aggregated, x='Aggregated_num_requests', y='Latency',
-                         hue='Policy', palette=const.POLICY_COLORS, style='Policy')
+                         hue='Policy', style='Policy')  # palette=const.POLICY_COLORS,
 
             # Adding color indicators for long_tasks_fraction
             workload_keys = workload_change_df['Workload_key'].values

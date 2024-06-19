@@ -9,7 +9,7 @@ import sys
 import simulations.workload.mu_updater as mu_updater
 from simulations.monitor import Monitor
 from pathlib import Path
-from model_trainer import Trainer
+from simulations.training.model_trainer import Trainer
 
 
 class ExperimentRunner:

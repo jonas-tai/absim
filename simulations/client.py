@@ -4,7 +4,7 @@ import torch
 
 from monitor import Monitor
 import constants
-from simulations.model_trainer import Trainer
+from simulations.training.model_trainer import Trainer
 from task import Task
 import math
 import threading
