@@ -8,6 +8,9 @@ import pandas as pd
 import simulations.constants as const
 from simulations.monitor import Monitor
 from simulations.client import DataPoint
+import numpy as np
+from matplotlib.patches import Patch
+
 
 FONT_SIZE = 10
 
@@ -56,7 +59,9 @@ class ExperimentPlot:
             "Is_duplicate": data_point.is_duplicate,
             "Task_time_sent": data_point.task_time_sent,
             "Epoch": epoch_num,
-            "Policy": policy
+            "Policy": policy,
+            'Utilization': data_point.utilization,
+            'Long_tasks_fraction': data_point.long_tasks_fraction
         } for (data_point, time) in data_point_time_tuples]
 
         df = pd.DataFrame(df_entries)
@@ -78,6 +83,7 @@ class ExperimentPlot:
     def export_plots(self, file_name: str) -> None:
         plt.savefig(self.plot_folder / f'pdfs/{file_name}.pdf')
         plt.savefig(self.plot_folder / f'{file_name}.jpg')
+        plt.close()
 
     def write_df_stats(self, df, file) -> None:
         file.write('Mean and median latency\n')
@@ -130,7 +136,6 @@ class ExperimentPlot:
         plt.tight_layout(rect=[0, 0.08, 1, 1])
 
         self.export_plots(file_name=f'latency_line')
-        plt.close()
 
     def boxplot_latency(self) -> None:
         plt.rcParams.update({'font.size': FONT_SIZE})
@@ -149,7 +154,6 @@ class ExperimentPlot:
         plt.tight_layout(rect=[0, 0.08, 1, 1])
 
         self.export_plots(file_name=f'latency_boxplot')
-        plt.close()
 
     def plot_episode(self, epoch: int):
         # Plots the specified epoch of all policies
@@ -165,7 +169,6 @@ class ExperimentPlot:
         plt.tight_layout(rect=[0, 0.08, 1, 1])
 
         self.export_plots(file_name=f'episode/output_{epoch}_epoch')
-        plt.close()
 
     def plot_policy_episode(self, epoch: int, policy: str):
         plt.rcParams.update({'font.size': FONT_SIZE})
@@ -177,8 +180,6 @@ class ExperimentPlot:
 
         fig.legend(loc='lower center', ncols=3)
         self.export_plots(file_name=f'episode/request_distribution_{policy}_{epoch}_epoch')
-
-        plt.close()
 
     def plot_quantile(self, quantile: float):
         plt.rcParams.update({'font.size': FONT_SIZE})
@@ -197,7 +198,6 @@ class ExperimentPlot:
         plt.tight_layout(rect=[0, 0.08, 1, 1])
 
         self.export_plots(file_name=f'p_{int(quantile * 100)}')
-        plt.close()
 
     def plot_average_quantile_bar_short_long_requests(self, quantile: float, policies: List[str]) -> None:
         df = self.df[self.df['Policy'].isin(policies) & self.df['Is_long_request']]
@@ -235,7 +235,6 @@ class ExperimentPlot:
         plt.tight_layout()
 
         self.export_plots(file_name=f'{file_prefix}bar_p_{int(quantile * 1000)}')
-        plt.close()
 
     def plot_cdf_quantile(self, df: pd.DataFrame, quantile: float, title_request_types: str, file_prefix: str = ''):
         plt.rcParams.update({'font.size': FONT_SIZE})
@@ -270,7 +269,6 @@ class ExperimentPlot:
         plt.tight_layout(rect=[0, 0.08, 1, 1])
 
         self.export_plots(file_name=f'cdf/{file_prefix}p_{int(quantile * 100)}')
-        plt.close()
 
     def plot_average_latency_bar_short_long_request(self, policies: List[str]) -> None:
         df = self.df[self.df['Policy'].isin(policies) & self.df['Is_long_request']]
@@ -303,8 +301,106 @@ class ExperimentPlot:
 
         plt.tight_layout()
 
-        self.export_plots(file_name=f'{file_prefix}bar_mean.pdf')
-        plt.close()
+        self.export_plots(file_name=f'{file_prefix}bar_mean')
+
+    def plot_latency_over_time_short_long_request(self, policies: List[str]) -> None:
+        df = self.df[self.df['Policy'].isin(policies) & self.df['Is_long_request']]
+        self.plot_latency_over_time(df, title_request_types='long requests',
+                                    file_prefix=f'long_req_', order=policies)
+
+        df = self.df[self.df['Policy'].isin(policies) & (self.df['Is_long_request'] == False)]
+        self.plot_latency_over_time(df, title_request_types='short requests',
+                                    file_prefix=f'short_req_', order=policies)
+
+    def plot_latency_over_time(self, df: pd.DataFrame, order: List[str], title_request_types: staticmethod = 'all requests', file_prefix='all_'):
+        df = df[df['Is_faster_response']]
+        for epoch in df['Epoch'].unique():
+            print(epoch)
+            epoch_df = df[df['Epoch'] == epoch]
+            AGGREGATION_FACTOR = 4000  # Define your aggregation factor
+
+            fig, axes = plt.subplots(figsize=(14, 8), dpi=200)
+
+            epoch_df = epoch_df.sort_values(by=['Policy', 'Task_time_sent']).reset_index(drop=True)
+            epoch_df['Num_request'] = epoch_df.groupby('Policy').cumcount()
+            epoch_df['Aggregated_num_requests'] = (epoch_df['Num_request'] // AGGREGATION_FACTOR) * AGGREGATION_FACTOR
+            epoch_df['Aggregated_num_requests'] += AGGREGATION_FACTOR
+
+            # Adjust the last group to reflect the actual number of requests
+            max_num_request = epoch_df.groupby('Policy')['Num_request'].transform('max')
+            epoch_df.loc[epoch_df['Aggregated_num_requests'] == (AGGREGATION_FACTOR + (
+                max_num_request // AGGREGATION_FACTOR) * AGGREGATION_FACTOR), 'Aggregated_num_requests'] = max_num_request
+
+            # Combine Utilization and Long_tasks_fraction into a single feature
+            epoch_df['Workload_key'] = list(zip(epoch_df['Utilization'], epoch_df['Long_tasks_fraction']))
+
+            # Collect the workload changes
+            workload_change_df = epoch_df.groupby(['Policy', 'Workload_key']).agg(
+                Start_req=('Num_request', 'min'),
+                End_req=('Num_request', 'max')
+            ).reset_index()
+
+            workload_changes = list(zip(workload_change_df['Workload_key'],
+                                    workload_change_df['Start_req'], workload_change_df['End_req']))
+
+            # Aggregate latency over groups of data points per policy
+            aggregated = epoch_df.groupby(['Policy', 'Aggregated_num_requests']).agg(
+                Start_Time=('Task_time_sent', 'min'),
+                End_Time=('Task_time_sent', 'max'),
+                Latency=('Latency', lambda x: np.percentile(x, 99)),
+            ).reset_index()
+
+            # Plot latency over time for each policy
+            sns.lineplot(data=aggregated, x='Aggregated_num_requests', y='Latency',
+                         hue='Policy', palette=const.POLICY_COLORS, style='Policy')
+
+            # Adding color indicators for long_tasks_fraction
+            workload_keys = workload_change_df['Workload_key'].values
+
+            # Create a colormap to represent the combined Utilization and Long_tasks_fraction
+            unique_combinations = list(set(workload_keys))
+            color_map = plt.cm.get_cmap('crest', len(unique_combinations))
+            norm = plt.Normalize(vmin=0, vmax=len(unique_combinations) - 1)
+
+            # Map each unique combination to a color
+            combination_to_color = {combination: color_map(norm(i))
+                                    for i, combination in enumerate(unique_combinations)}
+
+            previous_utl_ltf = workload_keys[0]
+            for (workload_key, start, end) in workload_changes:
+                # Add a vertical line at the change point
+                plt.axvline(x=end, color='grey', linestyle='--', alpha=0.7)
+                color = combination_to_color[workload_key]
+                plt.axvspan(start, end, color=color, ymin=0.95, ymax=1.0, alpha=0.8)
+
+            # Adding a color bar for the long_tasks_fractions
+            # sm = plt.cm.ScalarMappable(cmap=color_map, norm=norm)
+            # cbar = plt.colorbar(sm, orientation='horizontal', pad=0.1, ax=axes)
+            # cbar.set_label('Utilization and Long Tasks Fraction')
+
+            plt.xlabel('Time (s)')
+            plt.ylabel('Latency (ms)')
+            plt.yscale('log')
+
+            axes.set_title(f'Average Latency {title_request_types}')
+            handles, labels = axes.get_legend_handles_labels()
+            # Add the color bar as a patch in the legend
+            # cbar_patch = Patch(facecolor=color_map(norm(np.mean(long_tasks_fractions))), edgecolor='black')
+
+            # Create a patch for each unique combination of Utilization and Long_tasks_fraction
+            for combination, color in combination_to_color.items():
+                utilization, long_tasks_fraction = combination
+                label = f'Utilization: {utilization:.2f}, Long Tasks Fraction: {long_tasks_fraction:.2f}'
+                patch = Patch(facecolor=color, edgecolor='black', label=label)
+                handles.append(patch)
+
+            # Place the legend below the graph
+            axes.legend(handles=handles, title='Policy and Settings',
+                        loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=3)
+
+            plt.tight_layout()
+
+            self.export_plots(file_name=f'{epoch}_{file_prefix}latency_over_time')
 
     def generate_plots(self) -> None:
         # reduced_policies = ['ARS', 'DQN', 'DQN_DUPL'] + ['DQN_EXPLR_0',
