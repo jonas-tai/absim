@@ -237,14 +237,22 @@ class ExperimentPlot:
         self.export_plots(file_name=f'{file_prefix}bar_p_{int(quantile * 1000)}')
 
     def plot_cdf_quantile(self, df: pd.DataFrame, quantile: float, title_request_types: str, file_prefix: str = ''):
+        if len(df) == 0:
+            print(f'Empty df, not continuing in plot_cdf_quantile()')
+            return
+
         plt.rcParams.update({'font.size': FONT_SIZE})
 
         fig, axes = plt.subplots(figsize=(16, 8), dpi=200, nrows=1, ncols=1, sharex='all')
 
         # Filter the DataFrame to only include latencies within the specified quantile
-        quantiles = df.groupby(['Policy', 'Epoch'])['Latency'].quantile(quantile).reset_index()
+        # quantiles = df.groupby(['Policy', 'Epoch'])['Latency'].quantile(quantile).reset_index()
         filtered_df = df[df.groupby(['Policy', 'Epoch'])[
             'Latency'].transform(lambda x: x > x.quantile(quantile))]
+
+        if len(filtered_df) == 0:
+            print(f'Empty df, not continuing in plot_cdf_quantile()')
+            return
 
         # Calculate the CDF for each policy
         cdfs = []
@@ -436,38 +444,32 @@ class ExperimentPlot:
         self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='all requests', file_prefix=f'all_req_')
 
         df = self.df[self.df['Policy'].isin(cdf_policies) & self.df['Is_long_request']]
-        if len(df) > 0:
-            self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='long requests', file_prefix=f'long_req_')
+        self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='long requests', file_prefix=f'long_req_')
 
-        if len(df) > 0:
-            df = self.df[self.df['Policy'].isin(cdf_policies) & (self.df['Is_long_request'] == False)]
-            self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='short requests',
-                                   file_prefix=f'short_req_')
+        df = self.df[self.df['Policy'].isin(cdf_policies) & (self.df['Is_long_request'] == False)]
+        self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='short requests',
+                               file_prefix=f'short_req_')
 
         cdf_policies = ['ARS', 'DQN', 'DQN_DUPL', 'DQN_EXPLR_10']
         df = self.df[self.df['Policy'].isin(cdf_policies)]
         self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='all requests', file_prefix=f'dupl_all_req_')
 
         df = self.df[self.df['Policy'].isin(cdf_policies) & self.df['Is_long_request']]
-        if len(df) > 0:
-            self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='long requests',
-                                   file_prefix=f'dupl_long_req_')
+        self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='long requests',
+                               file_prefix=f'dupl_long_req_')
 
-        if len(df) > 0:
-            df = self.df[self.df['Policy'].isin(cdf_policies) & (self.df['Is_long_request'] == False)]
-            self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='short requests',
-                                   file_prefix=f'dupl_short_req_')
+        df = self.df[self.df['Policy'].isin(cdf_policies) & (self.df['Is_long_request'] == False)]
+        self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='short requests',
+                               file_prefix=f'dupl_short_req_')
 
         cdf_policies = reduced_policies
         df = self.df[self.df['Policy'].isin(cdf_policies)]
         self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='all requests', file_prefix=f'explr_all_req_')
 
         df = self.df[self.df['Policy'].isin(cdf_policies) & self.df['Is_long_request']]
-        if len(df) > 0:
-            self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='long requests',
-                                   file_prefix=f'explr_long_req_')
+        self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='long requests',
+                               file_prefix=f'explr_long_req_')
 
-        if len(df) > 0:
-            df = self.df[self.df['Policy'].isin(cdf_policies) & (self.df['Is_long_request'] == False)]
-            self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='short requests',
-                                   file_prefix=f'explr_short_req_')
+        df = self.df[self.df['Policy'].isin(cdf_policies) & (self.df['Is_long_request'] == False)]
+        self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='short requests',
+                               file_prefix=f'explr_short_req_')

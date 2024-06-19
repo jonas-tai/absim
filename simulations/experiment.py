@@ -63,7 +63,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
 
     # Start the models and etc.
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
-    trainer = Trainer(state_parser=state_parser, model_structure=simulation_args.args.model_structure, n_actions=simulation_args.args.num_servers,
+    trainer = Trainer(state_parser=state_parser, model_structure=simulation_args.args.model_structure, n_actions=simulation_args.args.num_servers, replay_always_use_newest=simulation_args.args.replay_always_use_newest, replay_memory_size=simulation_args.args.replay_memory_size,
                       summary_stats_max_size=simulation_args.args.summary_stats_max_size,
                       gamma=simulation_args.args.gamma,
                       eps_decay=simulation_args.args.eps_decay, eps_start=simulation_args.args.eps_start, eps_end=simulation_args.args.eps_end,
@@ -463,6 +463,42 @@ def main(input_args=None, setting="base") -> None:
     for service_time_model in ['random.expovariate']:  # 'pareto'
         for test_service_time_model in ['random.expovariate', 'pareto']:  # 'random.expovariate',
             for dqn_explr_lr in [1e-5, 1e-6]:
+                if test_service_time_model == 'random.expovariate' and dqn_explr_lr == 1e-5:
+                    continue
+                args.args.seed = SEED
+                args.args.test_service_time_model = test_service_time_model
+                args.args.service_time_model = service_time_model
+                args.args.dqn_explr_lr = dqn_explr_lr
+                last = rl_experiment_wrapper(args,
+                                             train_workloads=train_workloads, test_workloads=test_workloads)
+
+    EXPERIMENT_NAME = 'replay_use_newest'
+
+    test_workloads = workload_builder.create_test_var_long_tasks_workloads(
+        num_requests=128000)
+
+    const.EVAL_POLICIES_TO_RUN = [
+        'round_robin',
+        'ARS',
+        'DQN',
+        'random',
+        # 'DQN_EXPLR',
+        # 'DQN_DUPL'
+    ] + ['DQN_DUPL_10', 'DQN_DUPL_15', 'DQN_DUPL_20', 'DQN_DUPL_25', 'DQN_DUPL_30', 'DQN_DUPL_35', 'DQN_DUPL_40', 'DQN_DUPL_45'] + ['DQN_EXPLR_0', 'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20', 'DQN_EXPLR_25']
+
+    args = HeterogeneousRequestsArgs(input_args=input_args)
+    args.args.exp_name = EXPERIMENT_NAME
+    args.args.epochs = 100
+    args.args.eps_decay = 180000
+    args.args.lr_scheduler_step_size = 30
+    args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_rate_intervals/0/train/data'
+    args.args.replay_always_use_newest = True
+
+    for service_time_model in ['random.expovariate']:  # 'pareto'
+        for test_service_time_model in ['random.expovariate', 'pareto']:  # 'random.expovariate',
+            for dqn_explr_lr in [1e-5, 1e-6]:
+                if test_service_time_model == 'random.expovariate' and dqn_explr_lr == 1e-5:
+                    continue
                 args.args.seed = SEED
                 args.args.test_service_time_model = test_service_time_model
                 args.args.service_time_model = service_time_model

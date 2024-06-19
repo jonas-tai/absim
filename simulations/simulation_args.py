@@ -169,6 +169,12 @@ class SimulationArgs:
         parser.add_argument('--summary_stats_max_size', nargs='?',
                             type=int, default=1000, help='Number of stats collected for normalizing')
 
+        # ReplayMemory parametes
+        parser.add_argument('--replay_memory_size', nargs='?',
+                            type=int, default=10000, help='Number of stats collected for normalizing')
+        parser.add_argument('--replay_always_use_newest', action='store_true',
+                            default=False, help='if true, always add newest transition to sample (see https://arxiv.org/pdf/1712.01275)')
+
         parser.add_argument('--duplication_rate', nargs='?',
                             type=float, default=0.1, help='Number of requests to duplicate')
 
