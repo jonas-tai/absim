@@ -1,6 +1,5 @@
 import json
 import os
-import random
 import math
 from collections import namedtuple
 from pathlib import Path
@@ -12,7 +11,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from matplotlib import pyplot as plt
 
-from simulations.training.replay_memory import ReplayMemory, Transition
+from simulations.training.replay_memory import ReplayMemoryWithSummary, Transition
 from simulations.models.dqn import DQN, SummaryStats
 from simulations.state import State, StateParser
 from collections import defaultdict
@@ -23,7 +22,7 @@ MODEL_TRAINER_JSON = 'model_trainer.json'
 
 
 class Trainer:
-    def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int, summary_stats_max_size: int, batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2,
+    def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int, summary_stats_max_size: int, replay_always_use_newest: bool, replay_memory_size: int, batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2,
                  eps_decay=1000, tau=0.005, lr=1e-4, tau_decay=10, lr_scheduler_step_size=50, lr_scheduler_gamma=0.5):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.state_parser = state_parser
@@ -70,7 +69,8 @@ class Trainer:
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
         self.scheduler = optim.lr_scheduler.StepLR(
             self.optimizer, step_size=self.lr_scheduler_step_size, gamma=self.lr_scheduler_gamma)
-        self.memory = ReplayMemory(10000, self.policy_net.summary)
+        self.memory = ReplayMemoryWithSummary(
+            max_size=replay_memory_size, summary=self.policy_net.summary, always_use_newest=replay_always_use_newest)
 
         self.steps_done = 0
         self.actions_chosen = defaultdict(int)
