@@ -468,7 +468,7 @@ def main(input_args=None, setting="base") -> None:
     test_workloads = []
 
     const.EVAL_POLICIES_TO_RUN = []
-    const.TRAIN_POLICIES_TO_RUN = ['ARS']
+    const.TRAIN_POLICIES_TO_RUN = ['ARS_20']
 
     args = HeterogeneousRequestsArgs(input_args=input_args)
     args.args.exp_name = EXPERIMENT_NAME

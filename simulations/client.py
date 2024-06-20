@@ -9,7 +9,7 @@ from simulations.training.training_data_collector import TrainingDataCollector
 from task import Task
 import math
 import threading
-
+import constants as const
 from yunomi.stats.exp_decay_sample import ExponentiallyDecayingSample
 
 from simulations.server import Server
@@ -262,6 +262,19 @@ class Client:
             replica_set.sort(key=oracle_map.get)
         elif self.REPLICA_SELECTION_STRATEGY == "ARS":
             replica_set = ars_replica_ranking
+        elif self.REPLICA_SELECTION_STRATEGY.startswith('ARS_'):
+            # ARS with some exploration, used for collecting training
+            explr_fraction = const.ARS_MAPPING[self.REPLICA_SELECTION_STRATEGY]
+
+            if self.simulation.random_exploration.random() > explr_fraction:
+                replica_set = ars_replica_ranking
+            else:
+                replica_id = random_relica_id
+                replica = next(server for server in replica_set if server.get_server_id() == replica_id)
+
+                # set the first replica to be the "action"
+                replica_set[0] = replica
+
         elif self.REPLICA_SELECTION_STRATEGY == "ds":
             first_node = replica_set[0]
             first_node_score = self.dsScores[first_node]
