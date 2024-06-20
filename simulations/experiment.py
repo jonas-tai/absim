@@ -14,6 +14,7 @@ from simulations.monitor import Monitor
 from simulations.plotting import ExperimentPlot
 from experiment_runner import ExperimentRunner
 from simulations.state import StateParser
+from simulations.training.training_data_collector import TrainingDataCollector
 from simulations.workload.workload import BaseWorkload
 from simulations.workload.workload_builder import WorkloadBuilder
 import constants as const
@@ -72,9 +73,14 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
 
     out_path = create_experiment_folders(simulation_args=simulation_args, state_parser=state_parser)
 
+    training_data_folder = out_path / 'collected_training_data'
+
+    training_data_collector = TrainingDataCollector(
+        state_parser=state_parser, n_actions=simulation_args.args.num_servers, summary_stats_max_size=simulation_args.args.summary_stats_max_size, data_folder=training_data_folder)
+
     if simulation_args.args.model_folder == '':
         run_rl_training(simulation_args=simulation_args, workloads=train_workloads,
-                        trainer=trainer, state_parser=state_parser, out_folder=out_path)
+                        trainer=trainer, state_parser=state_parser, out_folder=out_path, training_data_collector=training_data_collector)
         model_folder = out_path / 'train' / simulation_args.args.data_folder
     else:
         model_folder = Path(simulation_args.args.model_folder)
@@ -84,11 +90,16 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
         print('Running with args:')
         # TODO: Export workload config
         test_result += run_rl_test(simulation_args=simulation_args, workload=test_workload,
-                                   out_folder=out_path, model_folder=model_folder, trainer=trainer, state_parser=state_parser)
+                                   out_folder=out_path, model_folder=model_folder, trainer=trainer, state_parser=state_parser, training_data_collector=training_data_collector)
+
+    print(training_data_collector.read_training_data_from_csv(train_data_folder=training_data_folder)[:10])
+
+    if len(test_workloads) == 0:
+        return test_result
     return test_result / len(test_workloads)
 
 
-def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkload], trainer: Trainer, state_parser: StateParser, out_folder: Path):
+def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkload], trainer: Trainer, state_parser: StateParser, training_data_collector: TrainingDataCollector, out_folder: Path):
     NUM_EPSIODES = simulation_args.args.epochs
     LAST_EPOCH = NUM_EPSIODES - 1
     to_print = False
@@ -123,8 +134,6 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
     print('Starting experiments')
     for policy in const.TRAIN_POLICIES_TO_RUN:
         simulation_args.set_policy(policy)
-        # if policy == 'DQN':
-        #     simulation_args.set_print(True)
         for i_episode in range(NUM_EPSIODES):
             print(i_episode)
             random.seed(i_episode)
@@ -136,7 +145,7 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
             # TODO: Log workload configs used somewhere
 
             data_point_monitor = experiment_runner.run_experiment(
-                simulation_args.args, service_time_model=simulation_args.args.service_time_model, workload=workload, trainer=trainer, duplication_rate=duplication_rate)
+                simulation_args.args, service_time_model=simulation_args.args.service_time_model, workload=workload, trainer=trainer, duplication_rate=duplication_rate, training_data_collector=training_data_collector)
             train_plotter.add_data(data_point_monitor, policy, i_episode)
 
             # TODO: recomment
@@ -163,12 +172,16 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
         train_data_analyzer.export_epoch_data(epoch=LAST_EPOCH)
         # train_data_analyzer.export_training_data()
 
+    if simulation_args.args.collect_train_data:
+        training_data_collector.save_training_data()
+        training_data_collector.save_training_data_collector_stats()
+
     trainer.plot_grads_and_losses(plot_path=plot_path, file_prefix='train')
 
     plot_collected_data(plotter=train_plotter, epoch_to_plot=LAST_EPOCH, policies_to_plot=const.TRAIN_POLICIES_TO_RUN)
 
 
-def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_folder: Path, model_folder: Path, trainer: Trainer, state_parser: StateParser) -> float:
+def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_folder: Path, model_folder: Path, trainer: Trainer, state_parser: StateParser, training_data_collector: TrainingDataCollector) -> float:
     BASE_TEST_SEED = 111111
     BASE_TEST_EXPLR_SEED = 222222
 
@@ -259,7 +272,7 @@ def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_fol
                     raise Exception(f'Invalid policy for adapting: {policy}')
 
                 test_data_point_monitor = experiment_runner.run_experiment(
-                    simulation_args.args, service_time_model=simulation_args.args.test_service_time_model, workload=workload, trainer=trainer, duplication_rate=duplication_rate)
+                    simulation_args.args, service_time_model=simulation_args.args.test_service_time_model, workload=workload, trainer=trainer, duplication_rate=duplication_rate, training_data_collector=training_data_collector)
 
                 print('After training:')
                 print(trainer.task_id_to_next_state)
@@ -291,7 +304,7 @@ def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_fol
             simulation_args.set_seed(seed)
 
             test_data_point_monitor = experiment_runner.run_experiment(
-                simulation_args.args, service_time_model=simulation_args.args.test_service_time_model, workload=workload, trainer=trainer, duplication_rate=duplication_rate)
+                simulation_args.args, service_time_model=simulation_args.args.test_service_time_model, workload=workload, trainer=trainer, duplication_rate=duplication_rate, training_data_collector=training_data_collector)
 
             test_plotter.add_data(test_data_point_monitor, simulation_args.args.selection_strategy, i_episode)
 
@@ -315,6 +328,10 @@ def run_rl_test(simulation_args: SimulationArgs, workload: BaseWorkload, out_fol
         # test_data_analyzer.export_training_data()
 
     plot_collected_data(plotter=test_plotter, epoch_to_plot=LAST_EPOCH, policies_to_plot=const.EVAL_POLICIES_TO_RUN)
+
+    if simulation_args.args.collect_train_data:
+        training_data_collector.save_training_data()
+        training_data_collector.save_training_data_collector_stats()
 
     return test_plotter.get_autotuner_objective()
 
@@ -443,34 +460,32 @@ def main(input_args=None, setting="base") -> None:
     #             last = rl_experiment_wrapper(args,
     #                                          train_workloads=train_workloads, test_workloads=test_workloads)
 
-    EXPERIMENT_NAME = 'dupl_experiments'
+    EXPERIMENT_NAME = 'training_data_test'
 
     train_workloads = workload_builder.create_train_base_workloads(
-        long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.45])
+        long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.45], num_requests=100)
 
-    test_workloads = workload_builder.create_test_var_long_tasks_workloads(
-        num_requests=128000)
+    test_workloads = []
 
-    const.EVAL_POLICIES_TO_RUN = ['DQN_DUPL_30', 'DQN_DUPL_35', 'DQN_DUPL_40', 'DQN_DUPL_45']
+    const.EVAL_POLICIES_TO_RUN = []
+    const.TRAIN_POLICIES_TO_RUN = ['ARS']
 
     args = HeterogeneousRequestsArgs(input_args=input_args)
     args.args.exp_name = EXPERIMENT_NAME
-    args.args.epochs = 100
-    args.args.eps_decay = 180000
-    args.args.lr_scheduler_step_size = 30
-    args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_rate_intervals/0/train/data'
+    args.args.epochs = 5
+    args.args.model_folder = ''
+    args.args.collect_train_data = True
 
     for service_time_model in ['random.expovariate']:  # 'pareto'
-        for test_service_time_model in ['random.expovariate', 'pareto']:  # 'random.expovariate',
-            for dqn_explr_lr in [1e-5, 1e-6]:
-                if test_service_time_model == 'random.expovariate' and dqn_explr_lr == 1e-5:
-                    continue
+        for test_service_time_model in ['random.expovariate']:  # 'random.expovariate',
+            for dqn_explr_lr in [1e-5]:
                 args.args.seed = SEED
                 args.args.test_service_time_model = test_service_time_model
                 args.args.service_time_model = service_time_model
                 args.args.dqn_explr_lr = dqn_explr_lr
                 last = rl_experiment_wrapper(args,
                                              train_workloads=train_workloads, test_workloads=test_workloads)
+    return
 
     EXPERIMENT_NAME = 'replay_use_newest'
 

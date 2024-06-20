@@ -74,6 +74,9 @@ class ExperimentPlot:
             self.policy_order = [policy for policy in const.POLICY_ORDER if policy in self.df['Policy'].unique()]
 
     def get_autotuner_objective(self):
+        if len(self.df) == 0:
+            print('Empty DF, no result for autotuner')
+            return 0
         return - self.df[self.df['Policy'] == 'DQN']['Latency'].quantile(0.99)
 
     def export_data(self) -> None:

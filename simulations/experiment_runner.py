@@ -2,6 +2,7 @@ from typing import Any, Dict, List
 import server
 import client
 from simulations.state import StateParser
+from simulations.training.training_data_collector import TrainingDataCollector
 from simulations.workload.workload import BaseWorkload, VariableLongTaskFractionWorkload
 from simulator import Simulation
 import constants
@@ -29,7 +30,7 @@ class ExperimentRunner:
         ratio = self.clients[client_index].dqn_decision_equal_to_ars / self.clients[client_index].requests_handled
         print(f'DQN matched ARS for {ratio * 100}% of decisions')
 
-    def run_experiment(self, args, workload: BaseWorkload, service_time_model: str, trainer: Trainer = None, duplication_rate: float = 0.0) -> Monitor:
+    def run_experiment(self, args, workload: BaseWorkload, service_time_model: str, training_data_collector: TrainingDataCollector, trainer: Trainer = None, duplication_rate: float = 0.0) -> Monitor:
         self.reset_stats()
 
         # Set the random seed
@@ -212,6 +213,8 @@ class ExperimentRunner:
                               hysterisis_factor=args.hysterisis_factor,
                               demand_weight=client_weights[i],
                               rate_intervals=args.rate_intervals,
+                              collect_train_data=args.collect_train_data,
+                              training_data_collector=training_data_collector,
                               trainer=trainer,
                               simulation=simulation,
                               duplication_rate=duplication_rate)

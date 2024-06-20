@@ -4,6 +4,11 @@ NW_LATENCY_MU = 0.040
 NW_LATENCY_SIGMA = 0.0
 NUMBER_OF_CLIENTS = 1
 
+ARS_MAPPING = {f'ARS_{i}': (i / 100.0) for i in range(101)}
+
+ARS_SETTINGS = [item for i in range(101) for item in [f'ARS_{i}']]
+
+
 DQN_EXPLR_SETTINGS = [item for i in range(101) for item in [f'DQN_EXPLR_{i}_TRAIN', f'DQN_EXPLR_{i}']]
 
 DQN_DUPL_SETTINGS = [item for i in range(101) for item in [f'DQN_DUPL_{i}_TRAIN', f'DQN_DUPL_{i}']]

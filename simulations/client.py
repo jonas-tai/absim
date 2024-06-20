@@ -5,6 +5,7 @@ import torch
 from monitor import Monitor
 import constants
 from simulations.training.model_trainer import Trainer
+from simulations.training.training_data_collector import TrainingDataCollector
 from task import Task
 import math
 import threading
@@ -24,7 +25,7 @@ class Client:
                  access_pattern, replication_factor, backpressure,
                  shadow_read_ratio, rate_interval,
                  cubic_c, cubic_smax, cubic_beta, hysterisis_factor,
-                 demand_weight, simulation, duplication_rate: float = 0.0, rate_intervals=None, trainer: Trainer = None):
+                 demand_weight, simulation, collect_train_data: bool, training_data_collector: TrainingDataCollector, duplication_rate: float = 0.0, rate_intervals=None, trainer: Trainer = None):
         self.lock = threading.Lock()
 
         if rate_intervals is None:
@@ -48,6 +49,9 @@ class Client:
         self.simulation = simulation
         self.last_req_start_time = self.simulation.now
         self.time_since_last_req = 0
+
+        self.collect_train_data: bool = collect_train_data
+        self.training_data_collector = training_data_collector
         self.trainer = trainer
         self.request_rate_monitor = RequestRateMonitor(simulation, rate_intervals)
         # Tracks number of requests handled (requests that arrived, excludes duplicate requests)
@@ -287,6 +291,11 @@ class Client:
             print(self.REPLICA_SELECTION_STRATEGY)
             assert False, "REPLICA_SELECTION_STRATEGY isn't set or is invalid"
 
+        if self.collect_train_data:
+            action = replica_set[0].id
+            self.training_data_collector.log_state_and_action(
+                task=task, action=action, policy=self.REPLICA_SELECTION_STRATEGY)
+
         self.requests_handled += 1
         return replica_set[0]
 
@@ -365,6 +374,10 @@ class Client:
             if not self.trainer.eval_mode:
                 action = duplicate_replica.id
                 self.trainer.record_state_and_action(task=duplicate_task, action=action)
+
+            if self.collect_train_data:
+                self.training_data_collector.log_state_and_action(
+                    task=duplicate_task, action=action, policy=self.REPLICA_SELECTION_STRATEGY)
 
             self.send_request(task=duplicate_task, replica_to_serve=duplicate_replica)
 
@@ -525,6 +538,9 @@ class ResponseHandler:
             # Task completed, we call the trainer to see if we can do a step
             if not client.trainer.eval_mode:
                 client.trainer.execute_step_if_state_present(task=task, latency=latency)
+
+            if client.collect_train_data:
+                client.training_data_collector.log_completion(task=task, latency=latency)
 
             state = task.get_state()
 
