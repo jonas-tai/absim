@@ -33,6 +33,8 @@ class Trainer:
         self.last_task: Task = None
         self.summary_stats_max_size = summary_stats_max_size
 
+        self.model_folder: Path | None = None
+
         self.BATCH_SIZE = batch_size
         self.GAMMA = gamma
         self.EPS_START = eps_start
@@ -104,9 +106,19 @@ class Trainer:
         torch.save(self.policy_net.state_dict(), model_folder / 'target_model_weights.pth')
 
         self.save_model_trainer_stats(model_folder)
+        self.memory.save_to_file(model_folder=model_folder)
 
-    def load_models(self, model_folder: Path):
+    def set_model_folder(self, model_folder: Path) -> None:
+        self.model_folder = model_folder
+
+    def load_models(self):
+        if self.model_folder is None:
+            raise Exception('Error, model path is none')
+        self.load_models_from_path(model_folder=self.model_folder)
+
+    def load_models_from_path(self, model_folder: Path):
         self.load_stats_from_file(model_folder)
+        self.memory = ReplayMemoryWithSummary.load_from_file(model_folder=model_folder)
 
         policy_net = DQN(self.n_observations, self.n_actions, model_structure=self.model_structure,
                          summary_stats=self.feature_stats).to(self.device)

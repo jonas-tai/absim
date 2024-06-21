@@ -59,7 +59,7 @@ class SummaryStats:
 
 
 class DQN(nn.Module):
-    def __init__(self, n_observations: int, n_actions: int, summary_stats: SummaryStats, n_hidden: int = 128, model_structure: str = "linear"):
+    def __init__(self, n_observations: int, n_actions: int, summary_stats: SummaryStats = None, n_hidden: int = 128, model_structure: str = "linear"):
         super(DQN, self).__init__()
         self.model_structure = model_structure
         if self.model_structure == 'three_layers':
@@ -75,7 +75,8 @@ class DQN(nn.Module):
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
     def forward(self, x):
-        x = (x - self.summary.means) * self.summary.inv_sqrt_sd()
+        if self.summary is not None:
+            x = (x - self.summary.means) * self.summary.inv_sqrt_sd()
         if self.model_structure == 'three_layers':
             x = F.relu(self.layer1(x))
             x = F.relu(self.layer2(x))
@@ -91,4 +92,6 @@ class DQN(nn.Module):
         print(f"\nLayer 3 Bias: {layer3_bias}")
 
     def get_summary_stats(self):
+        if self.summary is None:
+            raise Exception('DQN does not have summary stats')
         return self.summary
