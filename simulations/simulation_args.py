@@ -85,11 +85,9 @@ class SimulationArgs:
         # General Feature parameters
         parser.add_argument('--rate_intervals', nargs='+', default=[100, 50, 10])
         parser.add_argument('--print', action='store_true',
-                            default=True, help='Prints latency at the end of the experiment')
+                            default=False, help='Prints latency at the end of the experiment')
         parser.add_argument('--poly_feat_degree', nargs='?',
                             type=float, default=2, help='Degree of created polynomial and interaction features')
-        parser.add_argument('--collect_data_points', action='store_true',
-                            default=False, help='Collect and export data points for training of supervised model')
         parser.add_argument('--server_concurrency', nargs='?',
                             type=int, default=2, help='Amount of resources per server.')
         parser.add_argument('--service_time', nargs='?',
@@ -168,6 +166,14 @@ class SimulationArgs:
                             type=float, default=0.5, help='Model trainer argument')
         parser.add_argument('--summary_stats_max_size', nargs='?',
                             type=int, default=1000, help='Number of stats collected for normalizing')
+
+        # Offline training parameters
+        parser.add_argument('--offline_train_batch_size', nargs='?',
+                            type=int, default=2000, help='Number of requests after which the model is retrained')
+        parser.add_argument('--offline_train_data', nargs='?', type=str, default="",
+                            help='Location of the train data for offline training.')
+        parser.add_argument('--offline_model', nargs='?', type=str, default="",
+                            help='Location of the offline model.')
 
         # ReplayMemory parametes
         parser.add_argument('--replay_memory_size', nargs='?',
