@@ -8,12 +8,27 @@ ARS_MAPPING = {f'ARS_{i}': (i / 100.0) for i in range(101)}
 
 ARS_SETTINGS = [item for i in range(101) for item in [f'ARS_{i}']]
 
-DQN_EXPLR_SETTINGS = [item for i in range(101) for item in [f'DQN_EXPLR_{i}_TRAIN', f'DQN_EXPLR_{i}']]
+DQN_EXPLR_SETTINGS = [item for i in range(
+    101) for item in [f'DQN_EXPLR_{i}_TRAIN', f'DQN_EXPLR_{i}', f'OFFLINE_DQN_EXPLR_{i}_TRAIN', f'OFFLINE_DQN_EXPLR_{i}']]
 
-DQN_DUPL_SETTINGS = [item for i in range(101) for item in [f'DQN_DUPL_{i}_TRAIN', f'DQN_DUPL_{i}']]
+DQN_DUPL_SETTINGS = [item for i in range(
+    101) for item in [f'DQN_DUPL_{i}_TRAIN', f'DQN_DUPL_{i}', f'OFFLINE_DQN_DUPL_{i}_TRAIN', f'OFFLINE_DQN_DUPL_{i}']]
 
-POLICY_ORDER = ["DQN", 'DQN_OPTIMIZED', "DQN_DUPL_TRAIN", "DQN_DUPL",
-                "DQN_EXPLR"] + DQN_DUPL_SETTINGS + DQN_EXPLR_SETTINGS + ARS_SETTINGS + ["random", "ARS", "round_robin"]
+POLICY_ORDER = ["DQN", 'OFFLINE_DQB', 'DQN_OPTIMIZED', "DQN_DUPL_TRAIN", "DQN_DUPL", "OFFLINE_DQN_DUPL_TRAIN", "OFFLINE_DQN_DUPL",
+                "DQN_EXPLR", "OFFLINE_DQN_EXPLR"] + DQN_DUPL_SETTINGS + DQN_EXPLR_SETTINGS + ARS_SETTINGS + ["random", "ARS", "round_robin"]
+
+# POLICY_COLORS = {
+#     "ARS": "C0",
+#     "random": "C1",
+#     "DQN": "C2",
+#     "DQN_OPTIMIZED": "C2",
+#     "round_robin": "C3",
+#     'DQN_EXPLR': "C4",
+#     "DQN_DUPL": 'C5',
+#     "DQN_DUPL_TRAIN": 'C5',
+# } | {f'DQN_EXPLR_{i}': 'C4' for i in range(101)} | {f'DQN_EXPLR_{i}_TRAIN': 'C4' for i in range(101)} | {f'DQN_DUPL_{i}': f'C{5 + i}' for i in range(101)} | {f'DQN_DUPL_{i}_TRAIN': f'C{5 + i}' for i in range(101)} | {f'ARS_{i}': 'C0' for i in range(101)}
+
+# POLICY_COLORS = POLICY_COLORS | {f'OFFLINE_{policy}': color for policy, color in POLICY_COLORS.items()}
 
 POLICY_COLORS = {
     "ARS": "C0",
@@ -24,10 +39,23 @@ POLICY_COLORS = {
     'DQN_EXPLR': "C4",
     "DQN_DUPL": 'C5',
     "DQN_DUPL_TRAIN": 'C5',
-} | {f'DQN_EXPLR_{i}': 'C4' for i in range(101)} | {f'DQN_EXPLR_{i}_TRAIN': 'C4' for i in range(101)} | {f'DQN_DUPL_{i}': f'C{5 + i}' for i in range(101)} | {f'DQN_DUPL_{i}_TRAIN': f'C{5 + i}' for i in range(101)} | {f'ARS_{i}': 'C0' for i in range(101)}
+}
+
+# Extend POLICY_COLORS with additional keys
+POLICY_COLORS.update({f'DQN_EXPLR_{i}': 'C4' for i in range(101)})
+POLICY_COLORS.update({f'DQN_EXPLR_{i}_TRAIN': 'C4' for i in range(101)})
+POLICY_COLORS.update({f'DQN_DUPL_{i}': f'C{5 + i % 10}' for i in range(101)})
+POLICY_COLORS.update({f'DQN_DUPL_{i}_TRAIN': f'C{5 + i % 10}' for i in range(101)})
+POLICY_COLORS.update({f'ARS_{i}': 'C0' for i in range(101)})
+
+# Add 'OFFLINE_' prefix variations
+POLICY_COLORS.update({f'OFFLINE_{policy}': color for policy, color in POLICY_COLORS.items()})
+
 
 # Pareto distribution alpha
 ALPHA = 1.1
+
+NUM_TEST_EPSIODES = 3
 
 
 TRAIN_POLICIES_TO_RUN = [

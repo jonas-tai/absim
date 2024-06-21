@@ -4,7 +4,7 @@ import random
 import math
 from collections import namedtuple
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
 import torch
 import torch.nn as nn
@@ -18,18 +18,18 @@ from simulations.state import State, StateParser
 from collections import defaultdict
 
 from simulations.task import Task
+from simulations.training.norm_stats import NormStats
 
 MODEL_TRAINER_JSON = 'model_trainer.json'
 
 
-class Trainer:
-    def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int, summary_stats_max_size: int,
+class OfflineTrainer:
+    def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int,
+                 replay_always_use_newest: bool, replay_memory_size: int,
                  batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2, eps_decay=1000, tau=0.005, lr=1e-4,
-                 tau_decay=10, lr_scheduler_step_size=50, lr_scheduler_gamma=0.5):
+                 tau_decay=10):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.state_parser = state_parser
-
-        self.summary_stats_max_size = summary_stats_max_size
 
         self.BATCH_SIZE = batch_size
         self.GAMMA = gamma
@@ -41,6 +41,8 @@ class Trainer:
         self.LR = lr
         # self.lr_scheduler_step_size = lr_scheduler_step_size
         # self.lr_scheduler_gamma = lr_scheduler_gamma
+
+        self.model_folder: Path | None = None
 
         self.explore_actions_episode = 0
         self.exploit_actions_episode = 0
@@ -55,33 +57,33 @@ class Trainer:
         self.n_observations = self.state_parser.get_state_size()
         self.model_structure = model_structure
 
-        self.eval_mode = False
-        self.feature_stats = SummaryStats(max_size=summary_stats_max_size, size=self.n_observations)
+        self.reward_mean = torch.zeros(1)
+        self.reward_std = torch.ones(1)
 
-        self.policy_net = DQN(self.n_observations, n_actions, model_structure=model_structure,
-                              summary_stats=self.feature_stats).to(self.device)
-        self.target_net = DQN(self.n_observations, n_actions, model_structure=model_structure,
-                              summary_stats=SummaryStats(max_size=summary_stats_max_size, size=self.n_observations)).to(self.device)
+        self.feature_mean = torch.zeros(self.n_observations)
+        self.feature_std = torch.ones(self.n_observations)
+
+        self.eval_mode = False
+
+        self.policy_net = DQN(self.n_observations, n_actions, model_structure=model_structure).to(self.device)
+        self.target_net = DQN(self.n_observations, n_actions, model_structure=model_structure).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
         # self.scheduler = optim.lr_scheduler.StepLR(
         #     self.optimizer, step_size=self.lr_scheduler_step_size, gamma=self.lr_scheduler_gamma)
-        self.memory = ReplayMemory(10000, self.policy_net.summary)
+        self.memory = ReplayMemory(max_size=replay_memory_size, always_use_newest=replay_always_use_newest)
 
         self.steps_done = 0
         self.actions_chosen = defaultdict(int)
 
-        self.reward_stats = SummaryStats(max_size=summary_stats_max_size, size=1)
-
     def save_model_trainer_stats(self, data_folder: Path):
-        feature_stats_json = self.feature_stats.to_dict()
-        reward_stats_json = self.reward_stats.to_dict()
-
         model_trainer_json = {
             "steps_done": self.steps_done,
-            "feature_summary_stats": feature_stats_json,
-            "reward_summary_stats": reward_stats_json
+            "feature_mean": self.feature_mean.tolist(),
+            "feature_std": self.feature_std.tolist(),
+            "reward_mean": self.reward_mean.tolist(),
+            "reward_std": self.reward_std.tolist()
         }
 
         # To get the final JSON string
@@ -93,99 +95,49 @@ class Trainer:
             data = json.load(f)
 
         self.steps_done = data['steps_done']
-        self.feature_stats = SummaryStats.from_dict(data=data['feature_summary_stats'])
-        self.reward_stats = SummaryStats.from_dict(data=data['reward_summary_stats'])
+        self.feature_mean = torch.tensor(data['feature_mean'], dtype=torch.float32, device=self.device)
+        self.feature_std = torch.tensor(data['feature_std'], dtype=torch.float32, device=self.device)
+        self.reward_mean = torch.tensor(data['reward_mean'], dtype=torch.float32, device=self.device)
+        self.reward_std = torch.tensor(data['reward_std'], dtype=torch.float32, device=self.device)
 
     def save_models_and_stats(self, model_folder: Path):
         torch.save(self.policy_net.state_dict(), model_folder / 'policy_model_weights.pth')
         torch.save(self.policy_net.state_dict(), model_folder / 'target_model_weights.pth')
 
         self.save_model_trainer_stats(model_folder)
+        self.memory.save_to_file(model_folder=model_folder)
 
-    def load_models(self, model_folder: Path):
+    def set_model_folder(self, model_folder: Path) -> None:
+        self.model_folder = model_folder
+
+    def load_models(self):
+        if self.model_folder is None:
+            raise Exception('Error, model path is none')
+        self.load_models_from_file(model_folder=self.model_folder)
+
+    def load_models_from_file(self, model_folder: Path):
         self.load_stats_from_file(model_folder)
+        self.memory = ReplayMemory.load_from_file(model_folder=model_folder)
 
-        policy_net = DQN(self.n_observations, self.n_actions, model_structure=self.model_structure,
-                         summary_stats=self.feature_stats).to(self.device)
+        policy_net = DQN(self.n_observations, self.n_actions,
+                         model_structure=self.model_structure).to(self.device)
         policy_net.load_state_dict(torch.load(model_folder / 'policy_model_weights.pth'))
         self.policy_net = policy_net
 
         # Target net gts normalized values so should not normalize!
-        target_net = DQN(self.n_observations, self.n_actions, model_structure=self.model_structure,
-                         summary_stats=SummaryStats(max_size=self.summary_stats_max_size, size=self.n_observations)).to(self.device)
+        target_net = DQN(self.n_observations, self.n_actions,
+                         model_structure=self.model_structure).to(self.device)
         target_net.load_state_dict(torch.load(model_folder / 'target_model_weights.pth'))
         self.target_net = target_net
 
         # Set optimizer to new model
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
         # Note: Learning rate scheduler is currently not called in test epochs!
-        self.scheduler = optim.lr_scheduler.StepLR(
-            self.optimizer, step_size=self.lr_scheduler_step_size, gamma=self.lr_scheduler_gamma)
-
-    def record_state_and_action(self, task: Task, action: int | torch.Tensor) -> None:
-        if self.eval_mode:
-            return
-        action = torch.tensor([[action]], device=self.device)
-        state = self.state_parser.state_to_tensor(state=task.get_state())
-        self.task_id_to_action[task.id] = action
-
-        # Only do this if this is not the first task of the epoch and not a duplicate task
-        if (self.last_task is not None) and (not task.is_duplicate):
-            self.task_id_to_next_state[self.last_task.id] = state
-
-            if self.last_task.has_duplicate:
-                self.task_id_to_next_state[self.last_task.duplicate_task.id] = state
-
-            # Check if reward (latency) of last task already present and not pushed to memory yet
-            if self.last_task.id in self.task_id_to_rewards:
-                self.training_step(task=self.last_task)
-            if self.last_task.has_duplicate and self.last_task.duplicate_task.id in self.task_id_to_rewards:
-                self.training_step(task=self.last_task.duplicate_task)
-        if not task.is_duplicate:
-            self.last_task = task
-
-    def execute_step_if_state_present(self, task: Task, latency: int) -> None:
-        if self.eval_mode:
-            return
-        self.task_id_to_rewards[task.id] = torch.tensor([[- latency]], device=self.device, dtype=torch.float32)
-        if task.id not in self.task_id_to_next_state:
-            # Next state not present because request finished before next request arrived
-            return
-        self.training_step(task=task)
-
-    def push_to_memory(self, task: Task) -> None:
-        state = self.state_parser.state_to_tensor(state=task.get_state())
-        action = self.task_id_to_action[task.id]
-        next_state = self.task_id_to_next_state[task.id]
-        reward = self.task_id_to_rewards[task.id]
-        self.reward_stats.add(reward)
-        self.memory.push(state, action, next_state, reward)
-
-    def clean_up_after_step(self, task: Task) -> None:
-        del self.task_id_to_action[task.id]
-        del self.task_id_to_rewards[task.id]
-        del self.task_id_to_next_state[task.id]
-
-    def training_step(self, task: Task):
-        # Store the transition in memory
-        self.push_to_memory(task=task)
-
-        # Perform one step of the optimization (on the policy network)
-        self.optimize_model()
-
-        # Soft update of the target network's weights
-        # θ′ ← τ θ + (1 −τ )θ′
-        tau = self.TAU + (1 - self.TAU) * math.exp(-1. * self.steps_done / self.TAU_DECAY)
-
-        target_net_state_dict = self.target_net.state_dict()
-        policy_net_state_dict = self.policy_net.state_dict()
-        for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key] * tau + target_net_state_dict[key] * (1 - tau)
-        self.target_net.load_state_dict(target_net_state_dict)
-        self.clean_up_after_step(task=task)
+        # self.scheduler = optim.lr_scheduler.StepLR(
+        #     self.optimizer, step_size=self.lr_scheduler_step_size, gamma=self.lr_scheduler_gamma)
 
     def select_action(self, state: State, simulation, random_decision: int, task: Task) -> torch.Tensor:
-        # random_decision int handed in from outside to ensure its the same decision that ranom strategy would take
+        # random_decision int handed in from outside to ensure its the same decision that random strategy would take
         sample = simulation.random_exploration.random()
         eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(
             -1. * self.steps_done / self.EPS_DECAY)
@@ -210,19 +162,40 @@ class Trainer:
             self.actions_chosen[action_chosen.item()] += 1
         return action_chosen
 
-    def select_action_debug(self, state_tensor: torch.Tensor):
-        # random_decision int handed in from outside to ensure its the same decision that ranom strategy would take
+    def run_offline_training_epoch(self, transitions: List[Transition], norm_stats: NormStats = None) -> None:
+        if norm_stats is not None:
+            self.reward_mean = norm_stats.reward_mean
+            self.feature_mean = norm_stats.feature_mean
+            self.reward_std = norm_stats.reward_std
+            self.feature_std = norm_stats.feature_std
 
-        with torch.no_grad():
-            # t.max(1) will return the largest column value of each row.
-            # second column on max result is index of where max element was
-            # found, so we pick action with the larger expected reward.
-            q_values = self.policy_net(state_tensor)
-            action_chosen = q_values.max(1).indices.view(1, 1)
-            self.exploit_actions_episode += 1
-            print(f'Action chosen: {action_chosen}')
+        for transition in transitions:
+            self.training_step(transition=transition)
 
-        return q_values
+    def normalize_transition(self, transition: Transition) -> Transition:
+        norm_state = (transition.state - self.feature_mean) / self.feature_std
+        norm_next_state = (transition.next_state - self.feature_mean) / self.feature_std
+        norm_reward = (transition.reward - self.reward_mean) / self.reward_std
+        return Transition(state=norm_state, action=transition.action, next_state=norm_next_state, reward=norm_reward)
+
+    def training_step(self, transition: Transition):
+        norm_transiion = self.normalize_transition(transition=transition)
+
+        # Store the normalized transition in memory
+        self.memory.push_transition(transition=norm_transiion)
+
+        # Perform one step of the optimization (on the policy network)
+        self.optimize_model()
+
+        # Soft update of the target network's weights
+        # θ′ ← τ θ + (1 −τ )θ′
+        tau = self.TAU + (1 - self.TAU) * math.exp(-1. * self.steps_done / self.TAU_DECAY)
+
+        target_net_state_dict = self.target_net.state_dict()
+        policy_net_state_dict = self.policy_net.state_dict()
+        for key in policy_net_state_dict:
+            target_net_state_dict[key] = policy_net_state_dict[key] * tau + target_net_state_dict[key] * (1 - tau)
+        self.target_net.load_state_dict(target_net_state_dict)
 
     def optimize_model(self):
         if len(self.memory) < self.BATCH_SIZE:
@@ -242,7 +215,7 @@ class Trainer:
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
 
-        reward_batch = (reward_batch - self.reward_stats.means) * self.reward_stats.inv_sqrt_sd()
+        # reward_batch = (reward_batch - self.reward_mean) / self.reward_std
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
@@ -291,12 +264,8 @@ class Trainer:
     def reset_episode_counters(self) -> None:
         self.explore_actions_episode = 0
         self.exploit_actions_episode = 0
-        self.task_id_to_action = {}
-        self.task_id_to_next_state = {}
-        self.task_id_to_rewards = {}
-        self.last_task = None
 
-    def reset_model_training_stats(self) -> None:
+    def reset_training_stats(self) -> None:
         self.losses = []
         self.grads = []
         self.mean_value = []

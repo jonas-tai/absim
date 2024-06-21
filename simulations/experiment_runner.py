@@ -2,6 +2,7 @@ from typing import Any, Dict, List
 import server
 import client
 from simulations.state import StateParser
+from simulations.training.offline_model_trainer import OfflineTrainer
 from simulations.training.training_data_collector import TrainingDataCollector
 from simulations.workload.workload import BaseWorkload, VariableLongTaskFractionWorkload
 from simulator import Simulation
@@ -14,11 +15,13 @@ from simulations.training.model_trainer import Trainer
 
 
 class ExperimentRunner:
-    def __init__(self, state_parser: StateParser) -> None:
+    def __init__(self, state_parser: StateParser, trainer: Trainer = None, offline_trainer: OfflineTrainer = None) -> None:
         self.servers: List[server.Server] = []
         self.clients: List[client.Client] = []
         self.workload_gens: List[BaseWorkload] = []
         self.state_parser = state_parser
+        self.trainer = trainer
+        self.offline_trainer = offline_trainer
 
     def reset_stats(self) -> None:
         self.servers = []
@@ -30,7 +33,7 @@ class ExperimentRunner:
         ratio = self.clients[client_index].dqn_decision_equal_to_ars / self.clients[client_index].requests_handled
         print(f'DQN matched ARS for {ratio * 100}% of decisions')
 
-    def run_experiment(self, args, workload: BaseWorkload, service_time_model: str, training_data_collector: TrainingDataCollector, trainer: Trainer = None, duplication_rate: float = 0.0) -> Monitor:
+    def run_experiment(self, args, workload: BaseWorkload, service_time_model: str, training_data_collector: TrainingDataCollector, duplication_rate: float = 0.0) -> Monitor:
         self.reset_stats()
 
         # Set the random seed
@@ -215,7 +218,7 @@ class ExperimentRunner:
                               rate_intervals=args.rate_intervals,
                               collect_train_data=args.collect_train_data,
                               training_data_collector=training_data_collector,
-                              trainer=trainer,
+                              trainer=self.trainer,
                               simulation=simulation,
                               duplication_rate=duplication_rate)
             self.clients.append(c)

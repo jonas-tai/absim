@@ -4,10 +4,12 @@ import pandas as pd
 import torch
 
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from simulations.models.dqn import SummaryStats
 from simulations.state import StateParser
 from simulations.task import Task
+from simulations.training.norm_stats import NormStats
+from simulations.training.offline_model_trainer import OfflineTrainer
 from simulations.training.replay_memory import Transition
 
 MODEL_TRAINER_JSON = 'training_data_collector.json'
@@ -17,10 +19,11 @@ NEXT_STATE_FILE = 'next_state_data.csv'
 
 
 class TrainingDataCollector:
-    def __init__(self, state_parser: StateParser, n_actions: int, summary_stats_max_size: int, data_folder: Path):
+    def __init__(self, offline_trainer: OfflineTrainer, state_parser: StateParser, n_actions: int, summary_stats_max_size: int, offline_train_batch_size: int, data_folder: Path):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.state_parser = state_parser
         self.data_folder = data_folder
+        self.offline_trainer = offline_trainer
 
         self.task_id_to_action: Dict[str, int] = {}
         self.task_id_to_next_state: Dict[str, torch.Tensor] = {}
@@ -28,32 +31,34 @@ class TrainingDataCollector:
         self.task_id_to_policy: Dict[str, str] = {}
         self.last_task: Task = None
         self.summary_stats_max_size = summary_stats_max_size
+        self.current_train_batch = 0
+        self.offline_train_batch_size = offline_train_batch_size
 
         self.states = []
         self.actions = []
         self.next_states = []
         self.rewards = []
         self.policies = []
+        self.train_batches = []
+
+        self.all_states = []
+        self.all_actions = []
+        self.all_next_states = []
+        self.all_rewards = []
+        self.all_policies = []
+        self.all_train_batches = []
 
         # num servers
         self.n_actions = n_actions
         self.n_observations = self.state_parser.get_state_size()
-
-        self.reward_stats = SummaryStats(max_size=summary_stats_max_size, size=1)
-        self.feature_stats = SummaryStats(max_size=summary_stats_max_size, size=self.n_observations)
 
         self.logged_transitions = 0
 
     def save_training_data_collector_stats(self):
         os.makedirs(self.data_folder, exist_ok=True)
 
-        feature_stats_json = self.feature_stats.to_dict()
-        reward_stats_json = self.reward_stats.to_dict()
-
         model_trainer_json = {
             "logged_transitions": self.logged_transitions,
-            "feature_summary_stats": feature_stats_json,
-            "reward_summary_stats": reward_stats_json
         }
 
         # To get the final JSON string
@@ -65,33 +70,74 @@ class TrainingDataCollector:
             data = json.load(f)
 
         self.logged_transitions = data['logged_transitions']
-        self.feature_stats = SummaryStats.from_dict(data=data['feature_summary_stats'])
-        self.reward_stats = SummaryStats.from_dict(data=data['reward_summary_stats'])
+
+    def next_train_batch_is_ready(self) -> bool:
+        return len(self.rewards) >= self.offline_train_batch_size
+
+    def end_train_batch(self) -> List[Transition]:
+        # TODO: Restore the replay memory state properly
+        raise Exception('Implement proper reset')
+        transitions = self.convert_current_train_batch_to_transitions()
+
+        self.all_states += self.states[:self.offline_train_batch_size]
+        self.all_actions += self.actions[:self.offline_train_batch_size]
+        self.all_next_states += self.next_states[:self.offline_train_batch_size]
+        self.all_rewards += self.rewards[:self.offline_train_batch_size]
+        self.all_policies += self.policies[:self.offline_train_batch_size]
+        self.all_train_batches += self.train_batches[:self.offline_train_batch_size]
+
+        self.states = self.states[self.offline_train_batch_size:]
+        self.actions = self.actions[self.offline_train_batch_size:]
+        self.next_states = self.next_states[self.offline_train_batch_size:]
+        self.rewards = self.rewards[self.offline_train_batch_size:]
+        self.policies = self.policies[self.offline_train_batch_size:]
+        self.current_train_batch += 1
+
+        self.train_batches = [self.current_train_batch for _ in self.policies]
+
+        return transitions
+
+    def convert_current_train_batch_to_transitions(self) -> List[Transition]:
+        return [Transition(state=state, action=torch.tensor([[action]], dtype=torch.float32, device=self.device),
+                           next_state=next_state,
+                           reward=reward)
+                for state, action, next_state, reward in zip(self.states[:self.offline_train_batch_size],
+                                                             self.actions[:self.offline_train_batch_size],
+                                                             self.next_states[:self.offline_train_batch_size],
+                                                             self.rewards[:self.offline_train_batch_size])]
 
     def save_training_data(self) -> None:
         os.makedirs(self.data_folder, exist_ok=True)
 
+        self.all_states += self.states
+        self.all_actions += self.actions
+        self.all_next_states += self.next_states
+        self.all_rewards += self.rewards
+        self.all_policies += self.policies
+        self.all_train_batches += self.train_batches
+
         data = {
-            'action': self.actions,
-            'reward': [reward.squeeze().numpy() for reward in self.rewards],
-            'policy': self.policies,
+            'action': self.all_actions,
+            'reward': [reward.squeeze().numpy() for reward in self.all_rewards],
+            'policy': self.all_policies,
+            'train_batch': self.all_train_batches
         }
 
         action_reward_policy_df = pd.DataFrame(data)
         file_path = self.data_folder / ACTION_REWARD_POLICY_FILE
         action_reward_policy_df.to_csv(file_path, index=False)
 
-        data = [state.numpy() for state in self.states]
+        data = [state.squeeze().numpy() for state in self.all_states]
         state_df = pd.DataFrame(data)
         file_path = self.data_folder / STATE_FILE
         state_df.to_csv(file_path, index=False)
 
-        data = [next_state.numpy() for next_state in self.next_states]
+        data = [next_state.squeeze().numpy() for next_state in self.all_next_states]
         next_state_df = pd.DataFrame(data)
         file_path = self.data_folder / NEXT_STATE_FILE
         next_state_df.to_csv(file_path, index=False)
 
-    def read_training_data_from_csv(self, train_data_folder: Path) -> List[Transition]:
+    def read_training_data_from_csv(self, train_data_folder: Path) -> Tuple[List[Transition], NormStats]:
         action_reward_policy_df = pd.read_csv(train_data_folder / ACTION_REWARD_POLICY_FILE)
         state_df = pd.read_csv(train_data_folder / STATE_FILE)
         next_state_df = pd.read_csv(train_data_folder / NEXT_STATE_FILE)
@@ -101,6 +147,15 @@ class TrainingDataCollector:
 
         transitions = []
 
+        reward_mean = torch.tensor([action_reward_policy_df['reward'].mean()], dtype=torch.float32, device=self.device)
+        reward_std = torch.tensor([action_reward_policy_df['reward'].std()], dtype=torch.float32, device=self.device)
+
+        feature_mean = torch.tensor(state_df.mean(), dtype=torch.float32, device=self.device)
+        feature_std = torch.tensor(state_df.std(), dtype=torch.float32, device=self.device)
+
+        norm_stats = NormStats(reward_mean=reward_mean, reward_std=reward_std,
+                               feature_mean=feature_mean, feature_std=feature_std)
+
         for action_reward_policy_row, state_row, next_state_row in zip(action_reward_policy_df.itertuples(index=False), state_df.itertuples(index=False), next_state_df.itertuples(index=False)):
             action = torch.tensor([[action_reward_policy_row.action]], dtype=torch.float32, device=self.device)
             reward = torch.tensor([[action_reward_policy_row.reward]], dtype=torch.float32, device=self.device)
@@ -109,7 +164,7 @@ class TrainingDataCollector:
 
             transition = Transition(state=state, action=action, next_state=next_state, reward=reward)
             transitions.append(transition)
-        return transitions
+        return transitions, norm_stats
 
     def log_state_and_action(self, task: Task, action: int, policy: str) -> None:
         state = self.state_parser.state_to_tensor(state=task.get_state())
@@ -142,18 +197,20 @@ class TrainingDataCollector:
     def log_transition(self, task: Task) -> None:
         # Log transitions and maintain summary stats
         state = self.state_parser.state_to_tensor(state=task.get_state())
-        self.states.append(state.squeeze())
-        self.feature_stats.add(state)
+        self.states.append(state)
 
         self.actions.append(self.task_id_to_action[task.id])
-        self.next_states.append(self.task_id_to_next_state[task.id].squeeze())
+        self.next_states.append(self.task_id_to_next_state[task.id])
         self.policies.append(self.task_id_to_policy[task.id])
+        self.train_batches.append(self.current_train_batch)
 
         reward = self.task_id_to_rewards[task.id]
         self.rewards.append(reward)
-        self.reward_stats.add(reward)
 
         self.logged_transitions += 1
+        if not self.offline_trainer.eval_mode and len(self.rewards) >= self.offline_train_batch_size:
+            train_batch_transitions = self.end_train_batch()
+            self.offline_trainer.run_offline_training_epoch(transitions=train_batch_transitions)
 
     def clean_up_transition(self, task: Task) -> None:
         del self.task_id_to_action[task.id]
