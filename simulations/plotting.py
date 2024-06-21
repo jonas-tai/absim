@@ -442,7 +442,7 @@ class ExperimentPlot:
         self.plot_average_quantile_bar_short_long_requests(quantile=0.99, policies=reduced_policies)
         self.plot_average_quantile_bar_short_long_requests(quantile=0.999, policies=reduced_policies)
 
-        cdf_policies = ['ARS', 'DQN', 'DQN_EXPLR_10']
+        cdf_policies = ['ARS', 'DQN', 'DQN_EXPLR_10_TRAIN']
         df = self.df[self.df['Policy'].isin(cdf_policies)]
         self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='all requests', file_prefix=f'all_req_')
 
@@ -453,17 +453,17 @@ class ExperimentPlot:
         self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='short requests',
                                file_prefix=f'short_req_')
 
-        cdf_policies = ['ARS', 'DQN', 'DQN_DUPL', 'DQN_EXPLR_10']
-        df = self.df[self.df['Policy'].isin(cdf_policies)]
-        self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='all requests', file_prefix=f'dupl_all_req_')
+        # cdf_policies = ['ARS', 'DQN', 'DQN_DUPL', 'DQN_EXPLR_10_TRAIN']
+        # df = self.df[self.df['Policy'].isin(cdf_policies)]
+        # self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='all requests', file_prefix=f'dupl_all_req_')
 
-        df = self.df[self.df['Policy'].isin(cdf_policies) & self.df['Is_long_request']]
-        self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='long requests',
-                               file_prefix=f'dupl_long_req_')
+        # df = self.df[self.df['Policy'].isin(cdf_policies) & self.df['Is_long_request']]
+        # self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='long requests',
+        #                        file_prefix=f'dupl_long_req_')
 
-        df = self.df[self.df['Policy'].isin(cdf_policies) & (self.df['Is_long_request'] == False)]
-        self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='short requests',
-                               file_prefix=f'dupl_short_req_')
+        # df = self.df[self.df['Policy'].isin(cdf_policies) & (self.df['Is_long_request'] == False)]
+        # self.plot_cdf_quantile(df=df, quantile=0.99, title_request_types='short requests',
+        #                        file_prefix=f'dupl_short_req_')
 
         cdf_policies = reduced_policies
         df = self.df[self.df['Policy'].isin(cdf_policies)]
