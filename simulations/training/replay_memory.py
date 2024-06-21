@@ -1,3 +1,5 @@
+from pathlib import Path
+import pickle
 import random
 from collections import namedtuple, deque
 
@@ -27,6 +29,9 @@ class ReplayMemory(object):
 
     def push(self, state: torch.Tensor, action: torch.Tensor, next_state: torch.Tensor, latency: torch.Tensor) -> None:
         transition = Transition(state, action, next_state, latency)
+        self.push_transition(transition=transition)
+
+    def push_transition(self, transition: Transition) -> None:
         self.memory[self.index] = transition
         self.size = min(self.size + 1, self.max_size)
         self.index = (self.index + 1) % self.max_size
@@ -43,6 +48,17 @@ class ReplayMemory(object):
     def __len__(self):
         return self.size
 
+    def save_to_file(self, model_folder: Path) -> None:
+        file_path = model_folder / 'replay_memory_state.pkl'
+        with open(file_path, 'wb') as f:
+            pickle.dump(self, f)
+
+    @staticmethod
+    def load_from_file(model_folder: Path):
+        file_path = model_folder / 'replay_memory_state.pkl'
+        with open(file_path, 'rb') as f:
+            return pickle.load(f)
+
 
 class ReplayMemoryWithSummary(ReplayMemory):
     def __init__(self, max_size: int, summary: SummaryStats, always_use_newest: bool = False) -> None:
@@ -52,3 +68,14 @@ class ReplayMemoryWithSummary(ReplayMemory):
     def push(self, state: torch.Tensor, action: torch.Tensor, next_state: torch.Tensor, latency: torch.Tensor) -> None:
         super().push(state=state, action=action, next_state=next_state, latency=latency)
         self.summary.add(state)
+
+    def save_to_file(self, model_folder: Path) -> None:
+        file_path = model_folder / 'replay_memory_with_summary_state.pkl'
+        with open(file_path, 'wb') as f:
+            pickle.dump(self, f)
+
+    @staticmethod
+    def load_from_file(model_folder: Path):
+        file_path = model_folder / 'replay_memory_with_summary_state.pkl'
+        with open(file_path, 'rb') as f:
+            return pickle.load(f)
