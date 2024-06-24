@@ -75,8 +75,6 @@ class TrainingDataCollector:
         return len(self.rewards) >= self.offline_train_batch_size
 
     def end_train_batch(self) -> List[Transition]:
-        # TODO: Restore the replay memory state properly
-        raise Exception('Implement proper reset')
         transitions = self.convert_current_train_batch_to_transitions()
 
         self.all_states += self.states[:self.offline_train_batch_size]
@@ -98,13 +96,30 @@ class TrainingDataCollector:
         return transitions
 
     def convert_current_train_batch_to_transitions(self) -> List[Transition]:
-        return [Transition(state=state, action=torch.tensor([[action]], dtype=torch.float32, device=self.device),
+        return [Transition(state=state, action=torch.tensor([[action]],  device=self.device),
                            next_state=next_state,
                            reward=reward)
                 for state, action, next_state, reward in zip(self.states[:self.offline_train_batch_size],
                                                              self.actions[:self.offline_train_batch_size],
                                                              self.next_states[:self.offline_train_batch_size],
                                                              self.rewards[:self.offline_train_batch_size])]
+
+    def end_train_episode(self) -> None:
+        self.all_states += self.states
+        self.all_actions += self.actions
+        self.all_next_states += self.next_states
+        self.all_rewards += self.rewards
+        self.all_policies += self.policies
+        self.all_train_batches += self.train_batches
+
+        self.states = []
+        self.actions = []
+        self.next_states = []
+        self.rewards = []
+        self.policies = []
+        self.train_batches = []
+
+        self.current_train_batch += 1
 
     def save_training_data(self) -> None:
         os.makedirs(self.data_folder, exist_ok=True)
@@ -157,10 +172,10 @@ class TrainingDataCollector:
                                feature_mean=feature_mean, feature_std=feature_std)
 
         for action_reward_policy_row, state_row, next_state_row in zip(action_reward_policy_df.itertuples(index=False), state_df.itertuples(index=False), next_state_df.itertuples(index=False)):
-            action = torch.tensor([[action_reward_policy_row.action]], dtype=torch.float32, device=self.device)
+            action = torch.tensor([[action_reward_policy_row.action]], device=self.device)
             reward = torch.tensor([[action_reward_policy_row.reward]], dtype=torch.float32, device=self.device)
-            state = torch.tensor(state_row, dtype=torch.float32, device=self.device)
-            next_state = torch.tensor(next_state_row, dtype=torch.float32, device=self.device)
+            state = torch.tensor([state_row], dtype=torch.float32, device=self.device)
+            next_state = torch.tensor([next_state_row], dtype=torch.float32, device=self.device)
 
             transition = Transition(state=state, action=action, next_state=next_state, reward=reward)
             transitions.append(transition)
@@ -208,7 +223,7 @@ class TrainingDataCollector:
         self.rewards.append(reward)
 
         self.logged_transitions += 1
-        if not self.offline_trainer.eval_mode and len(self.rewards) >= self.offline_train_batch_size:
+        if self.offline_trainer.do_active_retraining and len(self.rewards) >= self.offline_train_batch_size:
             train_batch_transitions = self.end_train_batch()
             self.offline_trainer.run_offline_training_epoch(transitions=train_batch_transitions)
 
