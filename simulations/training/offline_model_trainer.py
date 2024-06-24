@@ -1,10 +1,9 @@
 import json
 import os
-import random
 import math
 from collections import namedtuple
 from pathlib import Path
-from typing import Dict, List
+from typing import List
 
 import torch
 import torch.nn as nn
@@ -13,7 +12,7 @@ import torch.nn.functional as F
 from matplotlib import pyplot as plt
 
 from simulations.training.replay_memory import ReplayMemory, Transition
-from simulations.models.dqn import DQN, SummaryStats
+from simulations.models.dqn import DQN
 from simulations.state import State, StateParser
 from collections import defaultdict
 
@@ -63,7 +62,7 @@ class OfflineTrainer:
         self.feature_mean = torch.zeros(self.n_observations)
         self.feature_std = torch.ones(self.n_observations)
 
-        self.eval_mode = False
+        self.do_active_retraining = False
 
         self.policy_net = DQN(self.n_observations, n_actions, model_structure=model_structure).to(self.device)
         self.target_net = DQN(self.n_observations, n_actions, model_structure=model_structure).to(self.device)
@@ -147,8 +146,9 @@ class OfflineTrainer:
                 # t.max(1) will return the largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
-                q_values = self.policy_net(self.state_parser.state_to_tensor(state=state))
-                # print(q_values)
+                state = self.state_parser.state_to_tensor(state=state)
+                norm_state = self.normalize_state(state=state)
+                q_values = self.policy_net(norm_state)
                 task.set_q_values(q_values=q_values)
                 action_chosen = q_values.max(1).indices.view(1, 1)
                 self.exploit_actions_episode += 1
@@ -157,9 +157,8 @@ class OfflineTrainer:
             action_chosen = torch.tensor([[random_decision]], device=self.device,
                                          dtype=torch.long)
 
-        if not self.eval_mode:
-            self.steps_done += 1
-            self.actions_chosen[action_chosen.item()] += 1
+        self.steps_done += 1
+        self.actions_chosen[action_chosen.item()] += 1
         return action_chosen
 
     def run_offline_training_epoch(self, transitions: List[Transition], norm_stats: NormStats = None) -> None:
@@ -168,13 +167,17 @@ class OfflineTrainer:
             self.feature_mean = norm_stats.feature_mean
             self.reward_std = norm_stats.reward_std
             self.feature_std = norm_stats.feature_std
-
         for transition in transitions:
             self.training_step(transition=transition)
 
+    def normalize_state(self, state):
+        epsilon = 1e-8  # A small value to avoid division by zero
+        norm_state = (state - self.feature_mean) / (self.feature_std + epsilon)
+        return norm_state
+
     def normalize_transition(self, transition: Transition) -> Transition:
-        norm_state = (transition.state - self.feature_mean) / self.feature_std
-        norm_next_state = (transition.next_state - self.feature_mean) / self.feature_std
+        norm_state = self.normalize_state(state=transition.state)
+        norm_next_state = self.normalize_state(state=transition.next_state)
         norm_reward = (transition.reward - self.reward_mean) / self.reward_std
         return Transition(state=norm_state, action=transition.action, next_state=norm_next_state, reward=norm_reward)
 

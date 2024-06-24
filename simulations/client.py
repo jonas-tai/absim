@@ -300,6 +300,16 @@ class Client:
                 self.dqn_decision_equal_to_ars += 1
             # set the first replica to be the "action"
             replica_set[0] = replica
+        elif self.REPLICA_SELECTION_STRATEGY.startswith('OFFLINE'):
+            action = self.training_data_collector.offline_trainer.select_action(
+                state=state, simulation=self.simulation, random_decision=random_relica_id, task=task)
+            # Map action back to server id
+            replica = next(server for server in replica_set if server.get_server_id() == action)
+
+            # if ars_replica_ranking[0] == replica:
+            #     self.dqn_decision_equal_to_ars += 1
+            # set the first replica to be the "action"
+            replica_set[0] = replica
         else:
             print(self.REPLICA_SELECTION_STRATEGY)
             assert False, "REPLICA_SELECTION_STRATEGY isn't set or is invalid"
