@@ -42,10 +42,7 @@ class SimulationArgs:
                             help='Key access pattern of requests, e.g., zipfian will cause '
                                  'requests to desire a subset of replica sets')
 
-        parser.add_argument('--exp_prefix', nargs='?',
-                            type=str, default="7")
-        parser.add_argument('--exp_name', nargs='?',
-                            type=str, default="")
+        parser.add_argument('--exp_name', nargs='?', type=str, default="Name of a set of experiments")
 
         parser.add_argument('--seed', nargs='?',
                             type=int, default=25072014)
@@ -181,7 +178,7 @@ class SimulationArgs:
         parser.add_argument('--replay_always_use_newest', action='store_true',
                             default=False, help='if true, always add newest transition to sample (see https://arxiv.org/pdf/1712.01275)')
         parser.add_argument('--collect_train_data', action='store_true',
-                            default=False, help='If true, log and save all data collected for offline training later')
+                            default=True, help='If true, log and save all data collected for offline training later')
 
         parser.add_argument('--duplication_rate', nargs='?',
                             type=float, default=0.1, help='Number of requests to duplicate')

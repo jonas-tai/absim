@@ -67,10 +67,11 @@ class ExperimentPlot:
         df = pd.DataFrame(df_entries)
 
         if self.df is None:
-            self.df = df
+            self.df = df.reset_index(drop=True)
             self.policy_order = [policy for policy in const.POLICY_ORDER if policy in self.df['Policy'].unique()]
         else:
-            self.df = pd.concat((self.df, df), axis=0)
+            df = df.reset_index(drop=True)  # Reset the index of the new dataframe before concatenation
+            self.df = pd.concat((self.df, df), axis=0).reset_index(drop=True)
             self.policy_order = [policy for policy in const.POLICY_ORDER if policy in self.df['Policy'].unique()]
 
     def get_autotuner_objective(self):
@@ -143,7 +144,6 @@ class ExperimentPlot:
     def boxplot_latency(self) -> None:
         plt.rcParams.update({'font.size': FONT_SIZE})
         fig, axes = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
-
         # Plotting boxplot
         sns.boxplot(x="Policy", y="Latency", data=self.df, ax=axes,
                     hue="Policy", palette=const.POLICY_COLORS, order=self.policy_order)
@@ -418,6 +418,7 @@ class ExperimentPlot:
         # reduced_policies = ['ARS', 'DQN', 'DQN_DUPL'] + ['DQN_EXPLR_0',
         #                                                 'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20', 'DQN_EXPLR_25']
         reduced_policies = [policy for policy in self.policy_order if policy not in ['random', 'DQN_DUPL']]
+        print(reduced_policies)
 
         print('Before')
         print(len(self.df))

@@ -45,7 +45,6 @@ def create_experiment_folders(simulation_args: SimulationArgs, state_parser: Sta
             experiment_num += 1
             out_path = Path('..', simulation_args.args.output_folder, str(experiment_num))
 
-    simulation_args.args.exp_prefix = str(experiment_num)
     os.makedirs(out_path, exist_ok=True)
 
     return out_path
@@ -95,36 +94,41 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
 
     assert simulation_args.args.offline_train_data == '' or simulation_args.args.offline_model == ''
 
-    if simulation_args.args.offline_model != '':
-        print('WARNING: Not loading offline model')
-        # offline_trainer.load_models(simulation_args.args.offline_model)
-
-    if simulation_args.args.offline_train_data != '':
-        offline_train_folder = out_path / 'offline_train' / simulation_args.args.data_folder
-        offline_plot_folder = out_path / 'offline_train' / simulation_args.args.plot_folder
-
-        os.makedirs(offline_train_folder, exist_ok=True)
-        os.makedirs(offline_plot_folder, exist_ok=True)
-
-        # Offline training data given, load data and train model on it
-        transitions, norm_stats = training_data_collector.read_training_data_from_csv(
-            simulation_args.args.offline_train_data)
-        offline_trainer.run_offline_training_epoch(transitions=transitions, norm_stats=norm_stats)
-        offline_trainer.save_models_and_stats(offline_train_folder)
-        offline_trainer.plot_grads_and_losses(plot_path=offline_plot_folder, file_prefix='offline_train')
-        offline_model_folder = offline_train_folder
-    else:
-        offline_model_folder = Path(simulation_args.args.offline_model)
-
-    if simulation_args.args.model_folder == '':
+    if len(const.TRAIN_POLICIES_TO_RUN) > 0:
         run_rl_training(simulation_args=simulation_args, workloads=train_workloads, offline_trainer=offline_trainer,
                         trainer=trainer, state_parser=state_parser, out_folder=out_path, training_data_collector=training_data_collector)
+
+    if simulation_args.args.model_folder == '':
         model_folder = out_path / 'train' / simulation_args.args.data_folder
     else:
         model_folder = Path(simulation_args.args.model_folder)
 
+    offline_train_data_folder = Path(simulation_args.args.offline_train_data)
+    # Use data that was just collected to train model
+    if simulation_args.args.offline_model == '' and simulation_args.args.offline_train_data == '':
+        offline_train_data_folder = training_data_folder
+
+    if offline_train_data_folder != Path(''):
+        offline_train_out_folder = out_path / 'offline_train' / simulation_args.args.data_folder
+        offline_plot_folder = out_path / 'offline_train' / simulation_args.args.plot_folder
+
+        os.makedirs(offline_train_out_folder, exist_ok=True)
+        os.makedirs(offline_plot_folder, exist_ok=True)
+
+        # Offline training data given, load data and train model on it
+        transitions, norm_stats = training_data_collector.read_training_data_from_csv(
+            train_data_folder=offline_train_data_folder)
+        offline_trainer.run_offline_training_epoch(transitions=transitions, norm_stats=norm_stats)
+        offline_trainer.save_models_and_stats(offline_train_out_folder)
+        offline_trainer.plot_grads_and_losses(plot_path=offline_plot_folder, file_prefix='offline_train')
+        offline_model_folder = offline_train_out_folder
+    else:
+        offline_model_folder = Path(simulation_args.args.offline_model)
+
     trainer.set_model_folder(model_folder=model_folder)
     offline_trainer.set_model_folder(model_folder=offline_model_folder)
+
+    simulation_args.args.collect_train_data = False
 
     run_rl_tests(simulation_args=simulation_args, workloads=test_workloads, out_folder=out_path, trainer=trainer,
                  offline_trainer=offline_trainer, state_parser=state_parser, training_data_collector=training_data_collector)
@@ -176,6 +180,9 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
             data_point_monitor = experiment_runner.run_experiment(
                 simulation_args.args, service_time_model=simulation_args.args.service_time_model, workload=workload, duplication_rate=duplication_rate, training_data_collector=training_data_collector)
             train_plotter.add_data(data_point_monitor, policy, i_episode)
+
+            if simulation_args.args.collect_train_data:
+                training_data_collector.end_train_episode()
 
             if policy == 'DQN':
                 # Print number of DQN decisions that matched ARS
@@ -243,7 +250,7 @@ def run_rl_tests(simulation_args: SimulationArgs, workloads: List[BaseWorkload],
 
             if policy.startswith('OFFLINE_'):
                 run_rl_offline_test(simulation_args=simulation_args, workload=test_workload, policy=policy,
-                                    plot_folder=plot_path, data_folder=data_folder, offline_trainer=offline_trainer, experiment_runner=experiment_folder, training_data_collector=training_data_collector, test_plotter=test_plotter)
+                                    plot_folder=plot_path, data_folder=data_folder, offline_trainer=offline_trainer, experiment_runner=experiment_runner, training_data_collector=training_data_collector, test_plotter=test_plotter)
             elif policy.startswith('DQN'):
                 run_rl_dqn_test(simulation_args=simulation_args, workload=test_workload, policy=policy,
                                 plot_folder=plot_path, data_folder=data_folder, trainer=trainer, experiment_runner=experiment_runner, training_data_collector=training_data_collector, test_plotter=test_plotter)
@@ -283,10 +290,10 @@ def run_rl_offline_test(simulation_args: SimulationArgs, workload: BaseWorkload,
     # Reset hyperparameters
     offline_trainer.EPS_START = 0
     offline_trainer.EPS_END = 0
-    offline_trainer.eval_mode = True
+    offline_trainer.do_active_retraining = True
 
     if policy == 'OFFLINE_DQN':
-        pass
+        offline_trainer.do_active_retraining = False
     elif policy == 'OFFLINE_DQN_EXPLR':
         print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
         offline_trainer.EPS_END = simulation_args.args.dqn_explr
@@ -334,6 +341,7 @@ def run_rl_offline_test(simulation_args: SimulationArgs, workload: BaseWorkload,
             file_prefix = f'{policy}_{i_episode}'
             offline_trainer.plot_grads_and_losses(plot_path=plot_folder, file_prefix=file_prefix)
 
+        print(f'Adding offline data: {policy_str}')
         test_plotter.add_data(test_data_point_monitor, policy=policy_str, epoch_num=i_episode)
 
         # Print number of DQN decisions that matched ARS
@@ -439,107 +447,14 @@ def main(input_args=None, setting="base") -> None:
     else:
         raise Exception(f'Unknown setting {setting}')
 
-    EXPERIMENT_NAME = 'fixed_rate_intervals'
     SEED = args.args.seed
 
     config_folder = Path('..', 'configs')
     workload_builder = WorkloadBuilder(config_folder=config_folder)
 
     args.set_policy('ARS')
-    args.args.exp_name = EXPERIMENT_NAME
 
     last = 0.0
-
-    # train_workloads = workload_builder.create_train_base_workloads(
-    #     long_tasks_fractions=[0.3, 0.35, 0.4],
-    #     utilizations=[0.45])
-    # test_workloads = workload_builder.create_test_base_workloads(
-    #     long_tasks_fractions=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
-
-    # args = HeterogeneousRequestsArgs(input_args=input_args)
-    # args.args.exp_name = EXPERIMENT_NAME
-    # args.args.epochs = 100
-    # args.args.num_requests = 8000
-    # args.args.num_requests_test = 8000
-    # args.args.eps_decay = 180000
-    # args.args.lr_scheduler_step_size = 30
-    # args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_rate_intervals/0/train/data'
-
-    # for service_time_model in ['random.expovariate']:  # 'pareto'
-    #     for test_service_time_model in ['random.expovariate']:  # 'random.expovariate',
-    #         for dqn_explr_lr in [1e-5, 1e-6]:
-    #             args.args.seed = SEED
-    #             args.args.test_service_time_model = test_service_time_model
-    #             args.args.service_time_model = service_time_model
-    #             args.args.dqn_explr_lr = dqn_explr_lr
-    #             last = rl_experiment_wrapper(args,
-    #                                          train_workloads=train_workloads, test_workloads=test_workloads)
-
-    # test_workloads = workload_builder.create_test_base_workloads(long_tasks_fractions=[0.0, 0.2, 0.4, 0.6, 0.8])
-
-    # args.args.model_folder = ''
-
-    # for service_time_model in ['pareto']:  # 'pareto'
-    #     for test_service_time_model in ['pareto', 'random.expovariate']:  # 'random.expovariate',
-    #         for dqn_explr_lr in [1e-6]:
-    #             args.args.seed = SEED
-    #             args.args.test_service_time_model = test_service_time_model
-    #             args.args.service_time_model = service_time_model
-    #             args.args.dqn_explr_lr = dqn_explr_lr
-    #             last = rl_experiment_wrapper(args,
-    #                                          train_workloads=train_workloads, test_workloads=test_workloads)
-    #             args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_rate_intervals/4/train/data'
-
-    # EXPERIMENT_NAME = 'different_utilization'
-
-    # train_workloads = workload_builder.create_train_base_workloads(
-    #     long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.45])
-    # test_workloads = workload_builder.create_test_base_workloads(
-    #     long_tasks_fractions=[0.0, 0.2, 0.3, 0.4, 0.6, 0.8], utilizations=[0.7])
-
-    # args = HeterogeneousRequestsArgs(input_args=input_args)
-    # args.args.exp_name = EXPERIMENT_NAME
-    # args.args.epochs = 100
-    # args.args.num_requests = 8000
-    # args.args.num_requests_test = 8000
-    # args.args.eps_decay = 180000
-    # args.args.lr_scheduler_step_size = 30
-    # args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_rate_intervals/0/train/data'
-
-    # for service_time_model in ['random.expovariate']:  # 'pareto'
-    #     for test_service_time_model in ['random.expovariate']:  # 'random.expovariate',
-    #         for dqn_explr_lr in [1e-5, 1e-6]:
-    #             args.args.seed = SEED
-    #             args.args.test_service_time_model = test_service_time_model
-    #             args.args.service_time_model = service_time_model
-    #             args.args.dqn_explr_lr = dqn_explr_lr
-    #             last = rl_experiment_wrapper(args,
-    #                                          train_workloads=train_workloads, test_workloads=test_workloads)
-
-    # EXPERIMENT_NAME = 'new_benchmarks'
-
-    # args = HeterogeneousRequestsArgs(input_args=input_args)
-    # args.args.exp_name = EXPERIMENT_NAME
-    # args.args.epochs = 50
-    # args.args.num_requests = 8000
-    # args.args.num_requests_test = 8000
-    # args.args.eps_decay = 90000
-    # args.args.lr_scheduler_step_size = 20
-    # args.args.model_folder = ''
-
-    # for service_time_model in ['random.expovariate', 'pareto']:  # 'pareto'
-    #     for test_service_time_model in ['pareto', 'random.expovariate']:  # 'random.expovariate',
-    #         for long_tasks_fraction in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
-    #             train_workloads = workload_builder.create_train_base_workloads(
-    #                 long_tasks_fractions=[long_tasks_fraction],
-    #                 utilizations=[0.45])
-    #             test_workloads = workload_builder.create_test_base_workloads(long_tasks_fractions=[long_tasks_fraction])
-    #             args.args.seed = SEED
-    #             args.args.test_service_time_model = test_service_time_model
-    #             args.args.service_time_model = service_time_model
-    #             args.args.dqn_explr_lr = dqn_explr_lr
-    #             last = rl_experiment_wrapper(args,
-    #                                          train_workloads=train_workloads, test_workloads=test_workloads)
 
     # EXPERIMENT_NAME = 'training_data_test'
 
@@ -562,6 +477,81 @@ def main(input_args=None, setting="base") -> None:
     #             last = rl_experiment_wrapper(args,
     #                                          train_workloads=train_workloads, test_workloads=test_workloads)
     # return
+
+    EXPERIMENT_NAME = 'offline_parameter_search'
+
+    train_workloads = workload_builder.create_train_base_workloads(
+        long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.45], num_requests=48000)
+
+    test_workloads = workload_builder.create_test_base_workloads(utilizations=[0.45], long_tasks_fractions=[
+                                                                 0.3, 0.35, 0.4], num_requests=8000)  # workload_builder.create_test_var_long_tasks_workloads(num_requests=128000)
+
+    const.EVAL_POLICIES_TO_RUN = ['ARS', 'DQN', 'OFFLINE_DQN', 'random']
+    args = HeterogeneousRequestsArgs(input_args=input_args)
+    args.args.exp_name = EXPERIMENT_NAME
+    args.args.eps_decay = 180000
+    args.args.lr_scheduler_step_size = 30
+    args.args.replay_always_use_newest = False
+    args.args.collect_train_data = False
+    args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
+    args.args.offline_model = ''  # '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
+
+    # '/home/jonas/projects/absim/outputs/collect_offline_data/0/collected_training_data'
+
+    for train_policy in ['ARS', 'ARS_10', 'ARS_20', 'ARS_30', 'RANDOM']:
+        for epochs in [10, 20]:
+            for num_requests in [48000, 96000]:
+                args.args.collect_train_data = True
+
+                const.TRAIN_POLICIES_TO_RUN = [train_policy]
+                train_workloads = workload_builder.create_train_base_workloads(
+                    long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.45], num_requests=num_requests)
+
+                test_workloads = workload_builder.create_test_base_workloads(utilizations=[0.45], long_tasks_fractions=[
+                    0.0, 0.1, 0.3, 0.35, 0.4, 0.6, 0.7], num_requests=8000)  # workload_builder.create_test_var_long_tasks_workloads(num_requests=128000)
+                args.args.epochs = epochs
+
+                args.args.seed = SEED
+                last = rl_experiment_wrapper(args,
+                                             train_workloads=train_workloads, test_workloads=test_workloads)
+    return
+    EXPERIMENT_NAME = 'fixed_memory_not_use_latest'
+
+    train_workloads = workload_builder.create_train_base_workloads(
+        long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.45], num_requests=8000)
+
+    test_workloads = workload_builder.create_test_var_long_tasks_workloads(
+        num_requests=128000)
+
+    const.EVAL_POLICIES_TO_RUN = [
+        'round_robin',
+        'ARS',
+        'DQN',
+        'random',
+        # 'DQN_EXPLR',
+        # 'DQN_DUPL'
+    ] + ['DQN_DUPL_10', 'DQN_DUPL_25', 'DQN_DUPL_40', 'DQN_DUPL_45'] + ['DQN_EXPLR_0', 'DQN_EXPLR_10', 'DQN_EXPLR_20', 'DQN_EXPLR_25']
+
+    args = HeterogeneousRequestsArgs(input_args=input_args)
+    args.args.exp_name = EXPERIMENT_NAME
+    args.args.epochs = 100
+    args.args.eps_decay = 180000
+    args.args.lr_scheduler_step_size = 30
+    args.args.model_folder = ''
+    args.args.replay_always_use_newest = False
+    args.args.offline_model = 'dummy'
+
+    for service_time_model in ['random.expovariate']:  # 'pareto'
+        for test_service_time_model in ['random.expovariate', 'pareto']:  # 'random.expovariate',
+            for dqn_explr_lr in [1e-5, 1e-6]:
+                args.args.seed = SEED
+                args.args.test_service_time_model = test_service_time_model
+                args.args.service_time_model = service_time_model
+                args.args.dqn_explr_lr = dqn_explr_lr
+                last = rl_experiment_wrapper(args,
+                                             train_workloads=train_workloads, test_workloads=test_workloads)
+                if (test_service_time_model == 'random.expovariate' and dqn_explr_lr == 1e-5):
+                    args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
 
     EXPERIMENT_NAME = 'fixed_memory_train_not_test_use_latest'
 
@@ -600,6 +590,49 @@ def main(input_args=None, setting="base") -> None:
                 last = rl_experiment_wrapper(args,
                                              train_workloads=train_workloads, test_workloads=test_workloads)
 
+    EXPERIMENT_NAME = 'replay_mem_size_experiment'
+
+    train_workloads = workload_builder.create_train_base_workloads(
+        long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.45], num_requests=8000)
+
+    test_workloads = workload_builder.create_test_var_long_tasks_workloads(
+        num_requests=128000)
+
+    const.EVAL_POLICIES_TO_RUN = [
+        'round_robin',
+        'ARS',
+        'DQN',
+        'random',
+        # 'DQN_EXPLR',
+        # 'DQN_DUPL'
+    ] + ['DQN_DUPL_10', 'DQN_DUPL_25', 'DQN_DUPL_40', 'DQN_DUPL_45'] + ['DQN_EXPLR_0', 'DQN_EXPLR_10', 'DQN_EXPLR_20', 'DQN_EXPLR_25']
+
+    args = HeterogeneousRequestsArgs(input_args=input_args)
+    args.args.exp_name = EXPERIMENT_NAME
+    args.args.epochs = 100
+    args.args.eps_decay = 180000
+    args.args.lr_scheduler_step_size = 30
+    args.args.model_folder = ''
+    args.args.offline_model = 'dummy'
+
+    i = 0
+    for buffer_size in [25000, 5000, 100000]:  # 'pareto'
+        for use_newest in [True, False]:  # 'random.expovariate',
+            for dqn_explr_lr in [1e-5, 1e-6]:
+                args.args.seed = SEED
+                args.args.replay_always_use_newest = use_newest
+                args.args.replay_memory_size = buffer_size
+                args.args.service_time_model = service_time_model
+                args.args.dqn_explr_lr = dqn_explr_lr
+                last = rl_experiment_wrapper(args,
+                                             train_workloads=train_workloads, test_workloads=test_workloads)
+                if dqn_explr_lr == 1e-5:
+                    args.args.model_folder = f'/home/jonas/projects/absim/outputs/replay_mem_size_experiment/{i}/train/data'
+                else:
+                    args.args.model_folder = ''
+                i += 1
+
+    return
     EXPERIMENT_NAME = 'larger_replay_memory'
 
     train_workloads = workload_builder.create_train_base_workloads(
@@ -639,238 +672,7 @@ def main(input_args=None, setting="base") -> None:
                 last = rl_experiment_wrapper(args,
                                              train_workloads=train_workloads, test_workloads=test_workloads)
 
-    EXPERIMENT_NAME = 'fixed_memory_not_use_latest'
-
-    train_workloads = workload_builder.create_train_base_workloads(
-        long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.45], num_requests=800)
-
-    test_workloads = workload_builder.create_test_var_long_tasks_workloads(
-        num_requests=128)
-
-    const.EVAL_POLICIES_TO_RUN = [
-        'round_robin',
-        'ARS',
-        'DQN',
-        'random',
-        # 'DQN_EXPLR',
-        # 'DQN_DUPL'
-    ] + ['DQN_DUPL_10', 'DQN_DUPL_25', 'DQN_DUPL_40', 'DQN_DUPL_45'] + ['DQN_EXPLR_0', 'DQN_EXPLR_10', 'DQN_EXPLR_20', 'DQN_EXPLR_25']
-
-    args = HeterogeneousRequestsArgs(input_args=input_args)
-    args.args.exp_name = EXPERIMENT_NAME
-    args.args.epochs = 10
-    args.args.eps_decay = 180000
-    args.args.lr_scheduler_step_size = 30
-    args.args.model_folder = ''
-    args.args.replay_always_use_newest = False
-    args.args.offline_model = 'dummy'
-
-    for service_time_model in ['random.expovariate']:  # 'pareto'
-        for test_service_time_model in ['random.expovariate', 'pareto']:  # 'random.expovariate',
-            for dqn_explr_lr in [1e-5, 1e-6]:
-                args.args.seed = SEED
-                args.args.test_service_time_model = test_service_time_model
-                args.args.service_time_model = service_time_model
-                args.args.dqn_explr_lr = dqn_explr_lr
-                last = rl_experiment_wrapper(args,
-                                             train_workloads=train_workloads, test_workloads=test_workloads)
-                if (test_service_time_model == 'random.expovariate' and dqn_explr_lr == 1e-5):
-                    args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
-
-    # EXPERIMENT_NAME = 'var_workload_32000_with_util_less_trained_model'
-
-    # const.EVAL_POLICIES_TO_RUN = [
-    #     # 'round_robin',
-    #     'ARS',
-    #     'DQN',
-    #     'random',
-    #     'DQN_DUPL'
-    # ] + ['DQN_EXPLR_0', 'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20']
-
-    # train_workloads = workload_builder.create_train_base_workloads(
-    #     long_tasks_fractions=[0.3], utilizations=[0.45])
-
-    # test_workloads = workload_builder.create_test_var_long_tasks_workloads(
-    #     num_requests=128000)
-
-    # args = HeterogeneousRequestsArgs(input_args=input_args)
-    # args.args.exp_name = EXPERIMENT_NAME
-    # args.args.epochs = 100
-    # args.args.eps_decay = 180000
-    # args.args.lr_scheduler_step_size = 30
-    # args.args.model_folder = ''
-
-    # for service_time_model in ['random.expovariate']:  # 'pareto'
-    #     for test_service_time_model in ['random.expovariate', 'pareto']:  # 'random.expovariate',
-    #         for dqn_explr_lr in [1e-5, 1e-6]:
-    #             args.args.seed = SEED
-    #             args.args.test_service_time_model = test_service_time_model
-    #             args.args.service_time_model = service_time_model
-    #             args.args.dqn_explr_lr = dqn_explr_lr
-    #             last = rl_experiment_wrapper(args,
-    #                                          train_workloads=train_workloads, test_workloads=test_workloads)
-    #             if args.args.model_folder == '':
-    #                 args.args.model_folder = '/home/jonas/projects/absim/outputs/var_workload_32000_with_util_less_trained_model/0/train/data'
-
-    # EXPERIMENT_NAME = 'var_workload_32000_with_util_alternate_start'
-
-    # const.EVAL_POLICIES_TO_RUN = [
-    #     # 'round_robin',
-    #     'ARS',
-    #     'DQN',
-    #     'random',
-    #     'DQN_DUPL'
-    # ] + ['DQN_EXPLR_0', 'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20']
-
-    # train_workloads = workload_builder.create_train_base_workloads(
-    #     long_tasks_fractions=[0.5, 0.55], utilizations=[0.55])
-
-    # test_workloads = workload_builder.create_test_var_long_tasks_workloads(
-    #     num_requests=128000)
-
-    # args = HeterogeneousRequestsArgs(input_args=input_args)
-    # args.args.exp_name = EXPERIMENT_NAME
-    # args.args.epochs = 100
-    # args.args.eps_decay = 180000
-    # args.args.lr_scheduler_step_size = 30
-    # args.args.model_folder = ''
-
-    # for service_time_model in ['random.expovariate']:  # 'pareto'
-    #     for test_service_time_model in ['random.expovariate', 'pareto']:  # 'random.expovariate',
-    #         for dqn_explr_lr in [1e-5, 1e-6]:
-    #             args.args.seed = SEED
-    #             args.args.test_service_time_model = test_service_time_model
-    #             args.args.service_time_model = service_time_model
-    #             args.args.dqn_explr_lr = dqn_explr_lr
-    #             last = rl_experiment_wrapper(args,
-    #                                          train_workloads=train_workloads, test_workloads=test_workloads)
-    #             if args.args.model_folder == '':
-    #                 args.args.model_folder = '/home/jonas/projects/absim/outputs/var_workload_32000_with_util_alternate_start/0/train/data'
-
     return
-
-    EXPERIMENT_NAME = 'shorter_train'
-
-    train_workloads = workload_builder.create_train_base_workloads(
-        long_tasks_fractions=[0.3, 0.35, 0.4],
-        utilizations=[0.45])
-    test_workloads = workload_builder.create_test_base_workloads(
-        long_tasks_fractions=[0.0, 0.2, 0.4, 0.6, 0.8])
-
-    args = HeterogeneousRequestsArgs(input_args=input_args)
-    args.args.exp_name = EXPERIMENT_NAME
-    args.args.epochs = 50
-    args.args.num_requests = 8000
-    args.args.num_requests_test = 8000
-    args.args.eps_decay = 90000
-    args.args.lr_scheduler_step_size = 20
-    args.args.model_folder = ''
-
-    for service_time_model in ['random.expovariate']:  # 'pareto'
-        for test_service_time_model in ['pareto', 'random.expovariate']:  # 'random.expovariate',
-            for dqn_explr_lr in [1e-6]:
-                # for _ in [1, 2, 3]:
-                args.args.seed = SEED
-                args.args.test_service_time_model = test_service_time_model
-                args.args.service_time_model = service_time_model
-                args.args.dqn_explr_lr = dqn_explr_lr
-                last = rl_experiment_wrapper(args,
-                                             train_workloads=train_workloads, test_workloads=test_workloads)
-
-    train_workloads = workload_builder.create_train_base_workloads(
-        long_tasks_fractions=[0.3, 0.35, 0.4],
-        utilizations=[0.45, 0.6, 0.7])
-    test_workloads = workload_builder.create_test_base_workloads(
-        long_tasks_fractions=[0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.8])
-
-    EXPERIMENT_NAME = 'slightly_varied_training_shorter_test'
-
-    args = HeterogeneousRequestsArgs(input_args=input_args)
-    args.args.exp_name = EXPERIMENT_NAME
-    args.args.epochs = 700
-    args.args.num_requests = 2000
-    args.args.num_requests_test = 8000
-    args.args.eps_decay = 300000
-    args.args.lr_scheduler_step_size = 150
-    args.args.model_folder = ''
-
-    for service_time_model in ['random.expovariate']:  # 'pareto'
-        for test_service_time_model in ['random.expovariate', 'pareto']:
-            for dqn_explr_lr in [1e-6]:
-                # for _ in [1, 2, 3]:
-                args.args.seed = SEED
-                args.args.test_service_time_model = test_service_time_model
-                args.args.service_time_model = service_time_model
-                args.args.dqn_explr_lr = dqn_explr_lr
-                last = rl_experiment_wrapper(args,
-                                             train_workloads=train_workloads, test_workloads=test_workloads)
-
-    train_workloads = workload_builder.create_train_base_workloads(
-        long_tasks_fractions=[0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6],
-        utilizations=[0.45, 0.7, 1.2])
-    test_workloads = workload_builder.create_test_base_workloads(
-        long_tasks_fractions=[0.2, 0.3, 0.4, 0.5, 0.7, 0.8, 0.9])
-
-    EXPERIMENT_NAME = 'pareto_repeat'
-
-    # TODO: Run same experiments for pareto
-    args = HeterogeneousRequestsArgs(input_args=input_args)
-    args.args.exp_name = EXPERIMENT_NAME
-    args.args.epochs = 700
-    args.args.num_requests = 2000
-    args.args.eps_decay = 300000
-    args.args.model_folder = ''
-
-    for service_time_model in ['pareto']:  # 'pareto'
-        for test_service_time_model in ['pareto']:
-            for dqn_explr_lr in [1e-6]:
-                # for _ in [1, 2, 3]:
-                args.args.seed = SEED
-                args.args.test_service_time_model = test_service_time_model
-                args.args.service_time_model = service_time_model
-                args.args.dqn_explr_lr = dqn_explr_lr
-                last = rl_experiment_wrapper(args,
-                                             train_workloads=train_workloads, test_workloads=test_workloads)
-
-    return
-    # Static slow server workloads
-    # args = StaticSlowServerArgs(input_args=input_args)
-    # args.args.exp_name = EXPERIMENT_NAME
-    # args.args.epochs = 300
-    # args.args.num_requests = 8000
-    # args.args.num_requests_test = 60000
-    # args.args.eps_decay = 400000
-    # args.args.lr_scheduler_step_size = 70
-    # for slow_server_slowness in [2.0, 3.0]:
-    #     for dqn_explr in [0.1]:
-    #         for utilization in [0.45, 0.7]:
-    #            args.args.seed = SEED
-    #             args.args.slow_server_slowness = slow_server_slowness
-    #             args.args.dqn_explr = dqn_explr
-    #             args.args.utilization = utilization
-    #             last = rl_experiment_wrapper(args)
-
-    args = TimeVaryingServerArgs(input_args=input_args)
-    args.args.exp_name = EXPERIMENT_NAME
-    args.args.epochs = 300
-    args.args.num_requests = 8000
-    args.args.num_requests_test = 60000
-    args.args.eps_decay = 400000
-    args.args.interval_param = 2500
-    args.args.lr_scheduler_step_size = 70
-    for time_varying_drift in [2.0, 3.0]:
-        for interval in [500]:  # 200, 50
-            for dqn_explr in [0.1]:
-                for utilization in [0.45, 0.7]:
-                    for duplication_rate in [0.05, 0.1]:
-                        args.args.seed = SEED
-                        args.args.duplication_rate = duplication_rate
-                        args.args.interval_param = interval
-                        args.args.time_varying_drift = time_varying_drift
-                        args.args.dqn_explr = dqn_explr
-                        last = rl_experiment_wrapper(args, input_args=input_args)
-
-    return last
 
 
 if __name__ == '__main__':

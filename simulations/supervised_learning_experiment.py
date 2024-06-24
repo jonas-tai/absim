@@ -39,7 +39,6 @@ def supervised_learning_wrapper(simulation_args: SimulationArgs):
         experiment_num += 1
         plot_path = Path('..', simulation_args.args.plot_folder, str(experiment_num))
 
-    simulation_args.args.exp_prefix = str(experiment_num)
     os.makedirs(plot_path, exist_ok=True)
     os.makedirs(plot_path / 'pdfs', exist_ok=True)
 
