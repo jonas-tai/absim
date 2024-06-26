@@ -20,8 +20,13 @@ from simulations.workload.workload import BaseWorkload
 from simulations.workload.workload_builder import WorkloadBuilder
 import constants as const
 
-DQN_EXPLR_MAPPING = {f'DQN_EXPLR_{i}': (i / 100.0) for i in range(101)}
-DQN_DUPL_MAPPING = {f'DQN_DUPL_{i}': (i / 100.0) for i in range(101)}
+DQN_EXPLR_MAPPING = {item for i in range(101)
+                     for item in [(f'DQN_EXPLR_{i}', i / 100.0), (f'DQN_EXPLR_{i}_TRAIN', i / 100), (f'OFFLINE_DQN_EXPLR_{i}', i / 100.0), (f'OFFLINE_DQN_EXPLR_{i}_TRAIN', i / 100)]}
+DQN_DUPL_MAPPING = {item for i in range(101)
+                    for item in [(f'DQN_DUPL_{i}', i / 100.0), (f'DQN_DUPL_{i}_TRAIN', i / 100), (f'OFFLINE_DQN_DUPL_{i}', i / 100.0), (f'OFFLINE_DQN_DUPL_{i}_TRAIN', i / 100)]}
+
+BASE_TEST_SEED = 111111
+BASE_TEST_EXPLR_SEED = 222222
 
 
 def print_monitor_time_series_to_file(file_desc, prefix, monitor) -> None:
@@ -128,8 +133,6 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
     trainer.set_model_folder(model_folder=model_folder)
     offline_trainer.set_model_folder(model_folder=offline_model_folder)
 
-    simulation_args.args.collect_train_data = False
-
     run_rl_tests(simulation_args=simulation_args, workloads=test_workloads, out_folder=out_path, trainer=trainer,
                  offline_trainer=offline_trainer, state_parser=state_parser, training_data_collector=training_data_collector)
 
@@ -137,12 +140,11 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
 
 
 def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkload], trainer: Trainer, offline_trainer: OfflineTrainer, state_parser: StateParser, training_data_collector: TrainingDataCollector, out_folder: Path):
+
+    if len(workloads) == 0:
+        return
     NUM_EPSIODES = simulation_args.args.epochs
     LAST_EPOCH = NUM_EPSIODES - 1
-
-    # TODO: Fix / workaround
-    utilization = workloads[0].utilization
-    long_tasks_fraction = workloads[0].long_tasks_fraction
 
     # Init directories
     experiment_folder = out_folder / 'train'
@@ -151,6 +153,10 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
     os.makedirs(plot_path, exist_ok=True)
     os.makedirs(data_folder, exist_ok=True)
     os.makedirs(plot_path / 'pdfs', exist_ok=True)
+
+    # TODO: Fix / workaround
+    utilization = workloads[0].utilization
+    long_tasks_fraction = workloads[0].long_tasks_fraction
 
     experiment_runner = ExperimentRunner(state_parser=state_parser, trainer=trainer, offline_trainer=offline_trainer)
 
@@ -207,10 +213,6 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
     trainer.plot_grads_and_losses(plot_path=plot_path, file_prefix='train')
 
     plot_collected_data(plotter=train_plotter, epoch_to_plot=LAST_EPOCH, policies_to_plot=const.TRAIN_POLICIES_TO_RUN)
-
-
-BASE_TEST_SEED = 111111
-BASE_TEST_EXPLR_SEED = 222222
 
 
 def run_rl_tests(simulation_args: SimulationArgs, workloads: List[BaseWorkload], out_folder: Path, trainer: Trainer, offline_trainer: OfflineTrainer, state_parser: StateParser, training_data_collector: TrainingDataCollector) -> None:
@@ -292,20 +294,15 @@ def run_rl_offline_test(simulation_args: SimulationArgs, workload: BaseWorkload,
     offline_trainer.EPS_END = 0
     offline_trainer.do_active_retraining = True
 
-    if policy == 'OFFLINE_DQN':
+    if not policy.endswith('_TRAIN'):
         offline_trainer.do_active_retraining = False
-    elif policy == 'OFFLINE_DQN_EXPLR':
-        print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
-        offline_trainer.EPS_END = simulation_args.args.dqn_explr
-        offline_trainer.EPS_START = simulation_args.args.dqn_explr
-    elif policy == 'OFFLINE_DQN_DUPL':
-        duplication_rate = simulation_args.args.duplication_rate
-        print(f'Duplicating with rate of {duplication_rate}')
+
+    if policy == 'OFFLINE_DQN':
         offline_trainer.EPS_END = 0
         offline_trainer.EPS_START = 0
-    elif policy.startswith('OFFLINE_DQN_EXPLR_'):
+    if policy.startswith('OFFLINE_DQN_EXPLR_'):
         print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
-        print(f'DQN_EXPLR_MAPPING: {DQN_EXPLR_MAPPING[policy]}')
+        print(f'OFFLINE_DQN_EXPLR_MAPPING: {DQN_EXPLR_MAPPING[policy]}')
         offline_trainer.EPS_END = DQN_EXPLR_MAPPING[policy]
         offline_trainer.EPS_START = DQN_EXPLR_MAPPING[policy]
     elif policy.startswith('OFFLINE_DQN_DUPL_'):
@@ -314,7 +311,7 @@ def run_rl_offline_test(simulation_args: SimulationArgs, workload: BaseWorkload,
         offline_trainer.EPS_END = 0
         offline_trainer.EPS_START = 0
     else:
-        raise Exception(f'Invalid policy for adapting: {policy}')
+        raise Exception(f'Invalid policy for offline RL adapting: {policy}')
 
     for i_episode in range(const.NUM_TEST_EPSIODES):
         seed = BASE_TEST_SEED + i_episode
@@ -332,17 +329,15 @@ def run_rl_offline_test(simulation_args: SimulationArgs, workload: BaseWorkload,
         test_data_point_monitor = experiment_runner.run_experiment(
             simulation_args.args, service_time_model=simulation_args.args.test_service_time_model, workload=workload, duplication_rate=duplication_rate, training_data_collector=training_data_collector)
 
-        policy_str = policy
-        if policy != 'OFFLINE_DQN':
-            policy_str = f'{policy_str}_TRAIN'
+        if policy.endswith('_TRAIN'):
             offline_model_folder = data_folder / f'{policy}_{i_episode}'
             os.makedirs(offline_model_folder, exist_ok=True)
             offline_trainer.save_models_and_stats(model_folder=offline_model_folder)
             file_prefix = f'{policy}_{i_episode}'
             offline_trainer.plot_grads_and_losses(plot_path=plot_folder, file_prefix=file_prefix)
 
-        print(f'Adding offline data: {policy_str}')
-        test_plotter.add_data(test_data_point_monitor, policy=policy_str, epoch_num=i_episode)
+        print(f'Adding offline data: {policy}')
+        test_plotter.add_data(test_data_point_monitor, policy=policy, epoch_num=i_episode)
 
         # Print number of DQN decisions that matched ARS
         experiment_runner.print_dqn_decision_equal_to_ars_ratio()
@@ -358,17 +353,10 @@ def run_rl_dqn_test(simulation_args: SimulationArgs, workload: BaseWorkload, pol
     trainer.LR = simulation_args.args.dqn_explr_lr
     duplication_rate = 0.0
 
-    if policy == 'DQN':
-        trainer.EPS_END = 0
-        trainer.EPS_START = 0
+    if not policy.endswith('_TRAIN'):
         trainer.eval_mode = True
-    elif policy == 'DQN_EXPLR':
-        print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
-        trainer.EPS_END = simulation_args.args.dqn_explr
-        trainer.EPS_START = simulation_args.args.dqn_explr
-    elif policy == 'DQN_DUPL':
-        duplication_rate = simulation_args.args.duplication_rate
-        print(f'Duplicating with rate of {duplication_rate}')
+
+    if policy == 'DQN':
         trainer.EPS_END = 0
         trainer.EPS_START = 0
     elif policy.startswith('DQN_EXPLR_'):
@@ -478,15 +466,92 @@ def main(input_args=None, setting="base") -> None:
     #                                          train_workloads=train_workloads, test_workloads=test_workloads)
     # return
 
-    EXPERIMENT_NAME = 'offline_parameter_search'
+    # EXPERIMENT_NAME = 'replay_mem_size_experiment'
 
-    train_workloads = workload_builder.create_train_base_workloads(
-        long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.45], num_requests=48000)
+    # train_workloads = workload_builder.create_train_base_workloads(
+    #     long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.45], num_requests=8000)
 
-    test_workloads = workload_builder.create_test_base_workloads(utilizations=[0.45], long_tasks_fractions=[
-                                                                 0.3, 0.35, 0.4], num_requests=8000)  # workload_builder.create_test_var_long_tasks_workloads(num_requests=128000)
+    # test_workloads = workload_builder.create_test_var_long_tasks_workloads(
+    #     num_requests=128000)
 
-    const.EVAL_POLICIES_TO_RUN = ['ARS', 'DQN', 'OFFLINE_DQN', 'random']
+    # const.EVAL_POLICIES_TO_RUN = [
+    #     'round_robin',
+    #     'ARS',
+    #     'DQN',
+    #     'random',
+    #     # 'DQN_EXPLR',
+    #     # 'DQN_DUPL'
+    # ] + ['DQN_DUPL_10', 'DQN_DUPL_25', 'DQN_DUPL_40', 'DQN_DUPL_45'] + ['DQN_EXPLR_0', 'DQN_EXPLR_10', 'DQN_EXPLR_20', 'DQN_EXPLR_25']
+
+    # args = HeterogeneousRequestsArgs(input_args=input_args)
+    # args.args.exp_name = EXPERIMENT_NAME
+    # args.args.epochs = 100
+    # args.args.eps_decay = 180000
+    # args.args.lr_scheduler_step_size = 30
+    # args.args.model_folder = ''
+    # args.args.offline_model = '/home/jonas/projects/absim/outputs/offline_parameter_search/9/train/data'
+    # args.args.collect_train_data = False
+
+    # i = 12
+    # for buffer_size in [1000, 100]:
+    #     for use_newest in [True, False]:
+    #         for dqn_explr_lr in [1e-5, 1e-6]:
+    #             args.args.seed = SEED
+    #             args.args.replay_always_use_newest = use_newest
+    #             args.args.replay_memory_size = buffer_size
+    #             args.args.dqn_explr_lr = dqn_explr_lr
+    #             last = rl_experiment_wrapper(args,
+    #                                          train_workloads=train_workloads, test_workloads=test_workloads)
+    #             if dqn_explr_lr == 1e-5:
+    #                 args.args.model_folder = f'/home/jonas/projects/absim/outputs/replay_mem_size_experiment/{i}/train/data'
+    #             else:
+    #                 args.args.model_folder = ''
+    #             i += 1
+
+    # EXPERIMENT_NAME = 'offline_parameter_search'
+
+    # train_workloads = workload_builder.create_train_base_workloads(
+    #     long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.45], num_requests=48000)
+
+    # test_workloads = workload_builder.create_test_base_workloads(utilizations=[0.45], long_tasks_fractions=[
+    #                                                              0.3, 0.35, 0.4], num_requests=8000)  # workload_builder.create_test_var_long_tasks_workloads(num_requests=128000)
+
+    # const.EVAL_POLICIES_TO_RUN = ['ARS', 'DQN', 'OFFLINE_DQN', 'random']
+    # args = HeterogeneousRequestsArgs(input_args=input_args)
+    # args.args.exp_name = EXPERIMENT_NAME
+    # args.args.eps_decay = 180000
+    # args.args.lr_scheduler_step_size = 30
+    # args.args.replay_always_use_newest = False
+    # args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
+    # args.args.offline_model = ''  # '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
+
+    # # '/home/jonas/projects/absim/outputs/collect_offline_data/0/collected_training_data'
+
+    # for train_policy in ['random']:
+    #     for epochs in [10, 20]:
+    #         for num_requests in [48000, 96000]:
+    #             args.args.collect_train_data = True
+
+    #             const.TRAIN_POLICIES_TO_RUN = [train_policy]
+    #             train_workloads = workload_builder.create_train_base_workloads(
+    #                 long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.45], num_requests=num_requests)
+
+    #             test_workloads = workload_builder.create_test_base_workloads(utilizations=[0.45], long_tasks_fractions=[
+    #                 0.0, 0.1, 0.3, 0.35, 0.4, 0.6, 0.7], num_requests=8000)  # workload_builder.create_test_var_long_tasks_workloads(num_requests=128000)
+    #             args.args.epochs = epochs
+
+    #             args.args.seed = SEED
+    #             last = rl_experiment_wrapper(args,
+    #                                          train_workloads=train_workloads, test_workloads=test_workloads)
+
+    EXPERIMENT_NAME = 'offline_adaption'
+
+    train_workloads = []
+
+    test_workloads = workload_builder.create_test_var_long_tasks_workloads(num_requests=128000)
+
+    const.EVAL_POLICIES_TO_RUN = ['ARS', 'OFFLINE_DQN', 'OFFLINE_DQN_EXPLR_10_TRAIN', 'OFFLINE_DQN_EXPLR_20_TRAIN',
+                                  'OFFLINE_DQN_EXPLR_30_TRAIN', 'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_DUPL_30_TRAIN']
     args = HeterogeneousRequestsArgs(input_args=input_args)
     args.args.exp_name = EXPERIMENT_NAME
     args.args.eps_decay = 180000
@@ -498,22 +563,16 @@ def main(input_args=None, setting="base") -> None:
 
     # '/home/jonas/projects/absim/outputs/collect_offline_data/0/collected_training_data'
 
-    for train_policy in ['ARS', 'ARS_10', 'ARS_20', 'ARS_30', 'RANDOM']:
-        for epochs in [10, 20]:
-            for num_requests in [48000, 96000]:
-                args.args.collect_train_data = True
+    for offline_model in ['/home/jonas/projects/absim/outputs/offline_parameter_search/9/offline_train/data', '/home/jonas/projects/absim/outputs/offline_parameter_search/0/offline_train/data']:
+        for offline_train_batch_size in [2000, 4000, 8000]:
+            args.args.collect_train_data = False
+            args.args.offline_model = offline_model
+            args.args.offline_train_batch_size = offline_train_batch_size
 
-                const.TRAIN_POLICIES_TO_RUN = [train_policy]
-                train_workloads = workload_builder.create_train_base_workloads(
-                    long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.45], num_requests=num_requests)
+            args.args.seed = SEED
+            last = rl_experiment_wrapper(args,
+                                         train_workloads=train_workloads, test_workloads=test_workloads)
 
-                test_workloads = workload_builder.create_test_base_workloads(utilizations=[0.45], long_tasks_fractions=[
-                    0.0, 0.1, 0.3, 0.35, 0.4, 0.6, 0.7], num_requests=8000)  # workload_builder.create_test_var_long_tasks_workloads(num_requests=128000)
-                args.args.epochs = epochs
-
-                args.args.seed = SEED
-                last = rl_experiment_wrapper(args,
-                                             train_workloads=train_workloads, test_workloads=test_workloads)
     return
     EXPERIMENT_NAME = 'fixed_memory_not_use_latest'
 

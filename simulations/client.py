@@ -51,6 +51,9 @@ class Client:
         self.time_since_last_req = 0
 
         self.collect_train_data: bool = collect_train_data
+        if (self.REPLICA_SELECTION_STRATEGY.startswith('OFFLINE_DQN_EXPLR_') or self.REPLICA_SELECTION_STRATEGY.startswith('OFFLINE_DQN_DUPL_')) and self.REPLICA_SELECTION_STRATEGY.endswith('_TRAIN'):
+            self.collect_train_data = True
+
         self.training_data_collector = training_data_collector
         self.trainer = trainer
         self.request_rate_monitor = RequestRateMonitor(simulation, rate_intervals)

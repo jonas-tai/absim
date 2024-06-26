@@ -224,7 +224,9 @@ class TrainingDataCollector:
 
         self.logged_transitions += 1
         if self.offline_trainer.do_active_retraining and len(self.rewards) >= self.offline_train_batch_size:
+            print('Retraining')
             train_batch_transitions = self.end_train_batch()
+            print(len(train_batch_transitions))
             self.offline_trainer.run_offline_training_epoch(transitions=train_batch_transitions)
 
     def clean_up_transition(self, task: Task) -> None:

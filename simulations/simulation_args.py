@@ -178,7 +178,7 @@ class SimulationArgs:
         parser.add_argument('--replay_always_use_newest', action='store_true',
                             default=False, help='if true, always add newest transition to sample (see https://arxiv.org/pdf/1712.01275)')
         parser.add_argument('--collect_train_data', action='store_true',
-                            default=True, help='If true, log and save all data collected for offline training later')
+                            default=False, help='If true, log and save all data collected for offline training later')
 
         parser.add_argument('--duplication_rate', nargs='?',
                             type=float, default=0.1, help='Number of requests to duplicate')
