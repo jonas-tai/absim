@@ -20,10 +20,15 @@ from simulations.workload.workload import BaseWorkload
 from simulations.workload.workload_builder import WorkloadBuilder
 import constants as const
 
-DQN_EXPLR_MAPPING = {item for i in range(101)
-                     for item in [(f'DQN_EXPLR_{i}', i / 100.0), (f'DQN_EXPLR_{i}_TRAIN', i / 100), (f'OFFLINE_DQN_EXPLR_{i}', i / 100.0), (f'OFFLINE_DQN_EXPLR_{i}_TRAIN', i / 100)]}
-DQN_DUPL_MAPPING = {item for i in range(101)
-                    for item in [(f'DQN_DUPL_{i}', i / 100.0), (f'DQN_DUPL_{i}_TRAIN', i / 100), (f'OFFLINE_DQN_DUPL_{i}', i / 100.0), (f'OFFLINE_DQN_DUPL_{i}_TRAIN', i / 100)]}
+DQN_EXPLR_MAPPING = {f'DQN_EXPLR_{i}': i / 100.0 for i in range(101)}
+DQN_EXPLR_MAPPING.update({f'DQN_EXPLR_{i}_TRAIN': i / 100 for i in range(101)})
+DQN_EXPLR_MAPPING.update({f'OFFLINE_DQN_EXPLR_{i}': i / 100.0 for i in range(101)})
+DQN_EXPLR_MAPPING.update({f'OFFLINE_DQN_EXPLR_{i}_TRAIN': i / 100 for i in range(101)})
+
+DQN_DUPL_MAPPING = {f'DQN_DUPL_{i}': i / 100.0 for i in range(101)}
+DQN_DUPL_MAPPING.update({f'DQN_DUPL_{i}_TRAIN': i / 100 for i in range(101)})
+DQN_DUPL_MAPPING.update({f'OFFLINE_DQN_DUPL_{i}': i / 100.0 for i in range(101)})
+DQN_DUPL_MAPPING.update({f'OFFLINE_DQN_DUPL_{i}_TRAIN': i / 100 for i in range(101)})
 
 BASE_TEST_SEED = 111111
 BASE_TEST_EXPLR_SEED = 222222
@@ -74,7 +79,8 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
                       gamma=simulation_args.args.gamma,
                       eps_decay=simulation_args.args.eps_decay, eps_start=simulation_args.args.eps_start, eps_end=simulation_args.args.eps_end,
                       tau=simulation_args.args.tau, tau_decay=simulation_args.args.tau_decay,
-                      lr=simulation_args.args.lr, batch_size=simulation_args.args.batch_size, lr_scheduler_gamma=simulation_args.args.lr_scheduler_gamma, lr_scheduler_step_size=simulation_args.args.lr_scheduler_step_size)
+                      lr=simulation_args.args.lr, batch_size=simulation_args.args.batch_size, lr_scheduler_gamma=simulation_args.args.lr_scheduler_gamma, lr_scheduler_step_size=simulation_args.args.lr_scheduler_step_size,
+                      clipping_value=simulation_args.args.clipping_value)
 
     offline_trainer = OfflineTrainer(state_parser=state_parser,
                                      model_structure=simulation_args.args.model_structure,
@@ -88,14 +94,14 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
                                      tau=simulation_args.args.tau,
                                      tau_decay=simulation_args.args.tau_decay,
                                      lr=simulation_args.args.lr,
-                                     batch_size=simulation_args.args.batch_size, )
+                                     batch_size=simulation_args.args.batch_size, clipping_value=simulation_args.args.clipping_value)
 
     out_path = create_experiment_folders(simulation_args=simulation_args, state_parser=state_parser)
 
     training_data_folder = out_path / 'collected_training_data'
 
     training_data_collector = TrainingDataCollector(
-        state_parser=state_parser, n_actions=simulation_args.args.num_servers, summary_stats_max_size=simulation_args.args.summary_stats_max_size, offline_trainer=offline_trainer, offline_train_batch_size=simulation_args.args.offline_train_batch_size, data_folder=training_data_folder)
+        state_parser=state_parser, n_actions=simulation_args.args.num_servers, summary_stats_max_size=simulation_args.args.summary_stats_max_size, offline_trainer=offline_trainer, offline_train_batch_size=simulation_args.args.offline_train_batch_size, data_folder=training_data_folder, num_permutations=simulation_args.args.num_permutations)
 
     assert simulation_args.args.offline_train_data == '' or simulation_args.args.offline_model == ''
 
@@ -300,7 +306,7 @@ def run_rl_offline_test(simulation_args: SimulationArgs, workload: BaseWorkload,
     if policy == 'OFFLINE_DQN':
         offline_trainer.EPS_END = 0
         offline_trainer.EPS_START = 0
-    if policy.startswith('OFFLINE_DQN_EXPLR_'):
+    elif policy.startswith('OFFLINE_DQN_EXPLR_'):
         print(f'simulation_args.args.dqn_explr: {simulation_args.args.dqn_explr}')
         print(f'OFFLINE_DQN_EXPLR_MAPPING: {DQN_EXPLR_MAPPING[policy]}')
         offline_trainer.EPS_END = DQN_EXPLR_MAPPING[policy]
@@ -544,14 +550,16 @@ def main(input_args=None, setting="base") -> None:
     #             last = rl_experiment_wrapper(args,
     #                                          train_workloads=train_workloads, test_workloads=test_workloads)
 
-    EXPERIMENT_NAME = 'offline_adaption'
+    EXPERIMENT_NAME = 'fixed_retrain_interval_adapt_offline_param_test'
 
     train_workloads = []
 
     test_workloads = workload_builder.create_test_var_long_tasks_workloads(num_requests=128000)
 
-    const.EVAL_POLICIES_TO_RUN = ['ARS', 'OFFLINE_DQN', 'OFFLINE_DQN_EXPLR_10_TRAIN', 'OFFLINE_DQN_EXPLR_20_TRAIN',
-                                  'OFFLINE_DQN_EXPLR_30_TRAIN', 'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_DUPL_30_TRAIN']
+    const.EVAL_POLICIES_TO_RUN = ['ARS', 'OFFLINE_DQN', 'OFFLINE_DQN_EXPLR_10_TRAIN',
+                                  'OFFLINE_DQN_DUPL_10_TRAIN']  # 'ARS', 'OFFLINE_DQN',
+    # 'OFFLINE_DQN_EXPLR_20_TRAIN', 'OFFLINE_DQN_EXPLR_30_TRAIN',
+    # 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_DUPL_30_TRAIN'
     args = HeterogeneousRequestsArgs(input_args=input_args)
     args.args.exp_name = EXPERIMENT_NAME
     args.args.eps_decay = 180000
@@ -560,18 +568,28 @@ def main(input_args=None, setting="base") -> None:
     args.args.collect_train_data = False
     args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
     args.args.offline_model = ''  # '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
+    args.args.lr = 1e-6
+    args.args.replay_memory_size = 5000
 
     # '/home/jonas/projects/absim/outputs/collect_offline_data/0/collected_training_data'
 
-    for offline_model in ['/home/jonas/projects/absim/outputs/offline_parameter_search/9/offline_train/data', '/home/jonas/projects/absim/outputs/offline_parameter_search/0/offline_train/data']:
-        for offline_train_batch_size in [2000, 4000, 8000]:
-            args.args.collect_train_data = False
-            args.args.offline_model = offline_model
-            args.args.offline_train_batch_size = offline_train_batch_size
+    for offline_train_batch_size in [2000, 1000, 4000]:
+        for offline_model in ['/home/jonas/projects/absim/outputs/offline_parameter_search/0/offline_train/data', '/home/jonas/projects/absim/outputs/offline_parameter_search/13/offline_train/data', '/home/jonas/projects/absim/outputs/offline_parameter_search/15/offline_train/data']:
+            for test_service_time_model in ['random.expovariate', 'pareto']:
+                # '/home/jonas/projects/absim/outputs/offline_parameter_search/9/offline_train/data'
+                for clip_value in [10, 1]:
+                    for num_perm in [1, 2, 5]:
+                        args.args.num_permutations = num_perm
+                        args.args.clipping_value = clip_value
+                        args.args.test_service_time_model = test_service_time_model
 
-            args.args.seed = SEED
-            last = rl_experiment_wrapper(args,
-                                         train_workloads=train_workloads, test_workloads=test_workloads)
+                        args.args.collect_train_data = False
+                        args.args.offline_model = offline_model
+                        args.args.offline_train_batch_size = offline_train_batch_size
+
+                        args.args.seed = SEED
+                        last = rl_experiment_wrapper(args,
+                                                     train_workloads=train_workloads, test_workloads=test_workloads)
 
     return
     EXPERIMENT_NAME = 'fixed_memory_not_use_latest'

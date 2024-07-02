@@ -1,12 +1,13 @@
 import json
 import os
+import random
 import pandas as pd
 import torch
 
 from pathlib import Path
 from typing import Dict, List, Tuple
 from simulations.models.dqn import SummaryStats
-from simulations.state import StateParser
+from simulations.state import NodeState, State, StateParser
 from simulations.task import Task
 from simulations.training.norm_stats import NormStats
 from simulations.training.offline_model_trainer import OfflineTrainer
@@ -19,20 +20,22 @@ NEXT_STATE_FILE = 'next_state_data.csv'
 
 
 class TrainingDataCollector:
-    def __init__(self, offline_trainer: OfflineTrainer, state_parser: StateParser, n_actions: int, summary_stats_max_size: int, offline_train_batch_size: int, data_folder: Path):
+    def __init__(self, offline_trainer: OfflineTrainer, state_parser: StateParser, n_actions: int, summary_stats_max_size: int, offline_train_batch_size: int, num_permutations: int, data_folder: Path):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.state_parser = state_parser
         self.data_folder = data_folder
         self.offline_trainer = offline_trainer
+        self.num_permutations = num_permutations
 
+        self.task_id_to_permutations: Dict[str, List[List[int]]] = {}
         self.task_id_to_action: Dict[str, int] = {}
-        self.task_id_to_next_state: Dict[str, torch.Tensor] = {}
+        self.task_id_to_next_state: Dict[str, State] = {}
         self.task_id_to_rewards: Dict[str, torch.Tensor] = {}
         self.task_id_to_policy: Dict[str, str] = {}
         self.last_task: Task = None
         self.summary_stats_max_size = summary_stats_max_size
         self.current_train_batch = 0
-        self.offline_train_batch_size = offline_train_batch_size
+        self.offline_train_batch_size = offline_train_batch_size * num_permutations
 
         self.states = []
         self.actions = []
@@ -181,10 +184,11 @@ class TrainingDataCollector:
             transitions.append(transition)
         return transitions, norm_stats
 
-    def log_state_and_action(self, task: Task, action: int, policy: str) -> None:
-        state = self.state_parser.state_to_tensor(state=task.get_state())
+    def log_state_and_action(self, simulation, task: Task, action: int, policy: str) -> None:
+        state = state = task.get_state()
         self.task_id_to_action[task.id] = action
         self.task_id_to_policy[task.id] = policy
+        self.task_id_to_permutations[task.id] = self.generate_permutations(simulation=simulation)
 
         # Only do this if this is not the first task of the epoch and not a duplicate task
         if (self.last_task is not None) and (not task.is_duplicate):
@@ -209,20 +213,47 @@ class TrainingDataCollector:
             return
         self.process_complete_transition(task=task)
 
+    def generate_permutations(self, simulation) -> List[List[int]]:
+        num_permutations = self.num_permutations
+        num_servers = self.n_actions
+
+        # Store unique permutations in a set
+        unique_permutations = set()
+
+        original_list = [i for i in range(num_servers)]
+        unique_permutations.add(tuple(original_list))
+
+        while len(unique_permutations) < num_permutations:
+            # Generate a random permutation
+            perm = tuple(simulation.random_permutations.sample(original_list, len(original_list)))
+            # Add the permutation to the set if it's not already present
+            unique_permutations.add(perm)
+
+        # Convert the set of permutations to a list
+        return list(unique_permutations)
+
     def log_transition(self, task: Task) -> None:
-        # Log transitions and maintain summary stats
-        state = self.state_parser.state_to_tensor(state=task.get_state())
-        self.states.append(state)
+        permutations = self.task_id_to_permutations[task.id]
+        action = self.task_id_to_action[task.id]
+        for permutation in permutations:
+            # Log transitions and maintain summary stats
+            state = self.state_parser.state_to_tensor(state=task.get_state(), server_permutation=permutation)
+            self.states.append(state)
 
-        self.actions.append(self.task_id_to_action[task.id])
-        self.next_states.append(self.task_id_to_next_state[task.id])
-        self.policies.append(self.task_id_to_policy[task.id])
-        self.train_batches.append(self.current_train_batch)
+            permutated_action = permutation.index(action)
+            self.actions.append(permutated_action)
 
-        reward = self.task_id_to_rewards[task.id]
-        self.rewards.append(reward)
+            next_state = self.state_parser.state_to_tensor(
+                state=self.task_id_to_next_state[task.id], server_permutation=permutation)
+            self.next_states.append(next_state)
+            self.policies.append(self.task_id_to_policy[task.id])
+            self.train_batches.append(self.current_train_batch)
 
-        self.logged_transitions += 1
+            reward = self.task_id_to_rewards[task.id]
+            self.rewards.append(reward)
+
+            self.logged_transitions += 1
+
         if self.offline_trainer.do_active_retraining and len(self.rewards) >= self.offline_train_batch_size:
             print('Retraining')
             train_batch_transitions = self.end_train_batch()
@@ -234,6 +265,7 @@ class TrainingDataCollector:
         del self.task_id_to_rewards[task.id]
         del self.task_id_to_next_state[task.id]
         del self.task_id_to_policy[task.id]
+        del self.task_id_to_permutations[task.id]
 
     def process_complete_transition(self, task: Task):
         # Store the transition in memory
@@ -245,4 +277,5 @@ class TrainingDataCollector:
         self.task_id_to_next_state = {}
         self.task_id_to_rewards = {}
         self.task_id_to_policy = {}
+        self.task_id_to_permutations = {}
         self.last_task = None

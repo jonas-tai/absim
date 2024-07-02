@@ -82,9 +82,12 @@ class StateParser:
 
         return torch.tensor([state_features], dtype=torch.float32)
 
-    def state_to_tensor(self, state: State) -> torch.Tensor:
+    def state_to_tensor(self, state: State, server_permutation: List[int] | None = None) -> torch.Tensor:
+        if server_permutation is None:
+            server_permutation = [i for i in range(len(state.node_states))]
+
         node_state_tensor = torch.cat(
-            [self.node_state_to_tensor(node_state) for node_state in state.node_states], 1)
+            [self.node_state_to_tensor(state.node_states[i]) for i in server_permutation], 1)
 
         general_state = state.request_trend + [state.time_since_last_req, int(state.is_long_request)]
         general_state_tensor = torch.tensor([general_state], dtype=torch.float32)

@@ -183,6 +183,11 @@ class SimulationArgs:
         parser.add_argument('--duplication_rate', nargs='?',
                             type=float, default=0.1, help='Number of requests to duplicate')
 
+        parser.add_argument('--num_permutations', nargs='?',
+                            type=int, default=1, help='Number of permutations added per request')
+
+        parser.add_argument('--clipping_value', nargs='?',
+                            type=int, default=1, help='Gradient clipping value')
         self.parser = parser
         print(input_args)
         self.args = parser.parse_args(args=input_args)

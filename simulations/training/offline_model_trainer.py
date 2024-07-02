@@ -26,7 +26,7 @@ class OfflineTrainer:
     def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int,
                  replay_always_use_newest: bool, replay_memory_size: int,
                  batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2, eps_decay=1000, tau=0.005, lr=1e-4,
-                 tau_decay=10):
+                 tau_decay=10, clipping_value=1):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.state_parser = state_parser
 
@@ -38,6 +38,7 @@ class OfflineTrainer:
         self.TAU = tau
         self.TAU_DECAY = tau_decay
         self.LR = lr
+        self.CLIPPING_VALUE = clipping_value
         # self.lr_scheduler_step_size = lr_scheduler_step_size
         # self.lr_scheduler_gamma = lr_scheduler_gamma
 
@@ -137,6 +138,7 @@ class OfflineTrainer:
 
     def select_action(self, state: State, simulation, random_decision: int, task: Task) -> torch.Tensor:
         # random_decision int handed in from outside to ensure its the same decision that random strategy would take
+
         sample = simulation.random_exploration.random()
         eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * math.exp(
             -1. * self.steps_done / self.EPS_DECAY)
@@ -167,8 +169,30 @@ class OfflineTrainer:
             self.feature_mean = norm_stats.feature_mean
             self.reward_std = norm_stats.reward_std
             self.feature_std = norm_stats.feature_std
+
+        # print(len(transitions))
+
+        # print(self.reward_mean)
+        # print(self.feature_mean)
+        # print(self.reward_std)
+        # print(self.feature_std)
+
+        # print(len(self.memory))
+        # print(transitions[0])
+        # print(transitions[100])
+        # print('Starting offline Epoch')
+        # print(self.BATCH_SIZE)
+        # print(self.GAMMA)
+        # print(self.EPS_START)
+        # print(self.EPS_END)
+        # print(self.EPS_DECAY)
+        # print(self.TAU)
+        # print(self.TAU_DECAY)
+        # print(self.LR)
+
         for transition in transitions:
             self.training_step(transition=transition)
+        # print('Offline epoch finished')
 
     def normalize_state(self, state):
         epsilon = 1e-8  # A small value to avoid division by zero
@@ -182,10 +206,10 @@ class OfflineTrainer:
         return Transition(state=norm_state, action=transition.action, next_state=norm_next_state, reward=norm_reward)
 
     def training_step(self, transition: Transition):
-        norm_transiion = self.normalize_transition(transition=transition)
+        norm_transition = self.normalize_transition(transition=transition)
 
         # Store the normalized transition in memory
-        self.memory.push_transition(transition=norm_transiion)
+        self.memory.push_transition(transition=norm_transition)
 
         # Perform one step of the optimization (on the policy network)
         self.optimize_model()
@@ -261,7 +285,7 @@ class OfflineTrainer:
         self.grads.append(norm.item())
 
         # In-place gradient clipping
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 1)
+        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), self.CLIPPING_VALUE)
         self.optimizer.step()
 
     def reset_episode_counters(self) -> None:

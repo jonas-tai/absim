@@ -23,7 +23,7 @@ MODEL_TRAINER_JSON = 'model_trainer.json'
 
 class Trainer:
     def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int, summary_stats_max_size: int, replay_always_use_newest: bool, replay_memory_size: int, batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2,
-                 eps_decay=1000, tau=0.005, lr=1e-4, tau_decay=10, lr_scheduler_step_size=50, lr_scheduler_gamma=0.5):
+                 eps_decay=1000, tau=0.005, lr=1e-4, tau_decay=10, lr_scheduler_step_size=50, lr_scheduler_gamma=0.5, clipping_value=1):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.state_parser = state_parser
 
@@ -45,6 +45,7 @@ class Trainer:
         self.LR = lr
         self.lr_scheduler_step_size = lr_scheduler_step_size
         self.lr_scheduler_gamma = lr_scheduler_gamma
+        self.CLIPPING_VALUE = clipping_value
 
         self.explore_actions_episode = 0
         self.exploit_actions_episode = 0
@@ -300,7 +301,7 @@ class Trainer:
         self.grads.append(norm.item())
 
         # In-place gradient clipping
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 1)
+        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), self.CLIPPING_VALUE)
         self.optimizer.step()
 
     def reset_episode_counters(self) -> None:

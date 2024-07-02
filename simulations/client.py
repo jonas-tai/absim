@@ -206,13 +206,13 @@ class Client:
 
         task.set_state(state=state)
 
-        random_relica_id = self.simulation.random_strategy.randint(0, len(original_replica_set) - 1)
+        random_replica_id = self.simulation.random_strategy.randint(0, len(original_replica_set) - 1)
 
         if self.REPLICA_SELECTION_STRATEGY == "random":
             # Pick a random node for the request.
             # Represents SimpleSnitch + uniform request access.
             # Ignore scores and everything else.
-            replica_id = random_relica_id
+            replica_id = random_replica_id
             # self.simulation.random.shuffle(replica_set)
             replica = next(server for server in replica_set if server.get_server_id() == replica_id)
 
@@ -272,7 +272,7 @@ class Client:
             if self.simulation.random_exploration.random() > explr_fraction:
                 replica_set = ars_replica_ranking
             else:
-                replica_id = random_relica_id
+                replica_id = random_replica_id
                 replica = next(server for server in replica_set if server.get_server_id() == replica_id)
 
                 # set the first replica to be the "action"
@@ -291,7 +291,7 @@ class Client:
                         replica_set.sort(key=self.dsScores.get)
         elif self.REPLICA_SELECTION_STRATEGY.startswith('DQN'):
             action = self.trainer.select_action(
-                state=state, simulation=self.simulation, random_decision=random_relica_id, task=task)
+                state=state, simulation=self.simulation, random_decision=random_replica_id, task=task)
 
             if not self.trainer.eval_mode:
                 self.trainer.record_state_and_action(task=task, action=action)
@@ -305,7 +305,7 @@ class Client:
             replica_set[0] = replica
         elif self.REPLICA_SELECTION_STRATEGY.startswith('OFFLINE'):
             action = self.training_data_collector.offline_trainer.select_action(
-                state=state, simulation=self.simulation, random_decision=random_relica_id, task=task)
+                state=state, simulation=self.simulation, random_decision=random_replica_id, task=task)
             # Map action back to server id
             replica = next(server for server in replica_set if server.get_server_id() == action)
 
@@ -320,7 +320,7 @@ class Client:
         if self.collect_train_data:
             action = replica_set[0].id
             self.training_data_collector.log_state_and_action(
-                task=task, action=action, policy=self.REPLICA_SELECTION_STRATEGY)
+                task=task, action=action, policy=self.REPLICA_SELECTION_STRATEGY, simulation=self.simulation)
 
         self.requests_handled += 1
         return replica_set[0]
@@ -403,7 +403,7 @@ class Client:
 
             if self.collect_train_data:
                 self.training_data_collector.log_state_and_action(
-                    task=duplicate_task, action=action, policy=self.REPLICA_SELECTION_STRATEGY)
+                    task=duplicate_task, action=action, policy=self.REPLICA_SELECTION_STRATEGY, simulation=self.simulation)
 
             self.send_request(task=duplicate_task, replica_to_serve=duplicate_replica)
 
