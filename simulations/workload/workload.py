@@ -33,6 +33,8 @@ class BaseWorkload:
         self.client_delay_mean = -1
         self.num_requests = num_requests
         self.executed_requests = 0
+        self.req_since_last_workload_change = 0
+
         self.long_tasks_fraction = long_tasks_fraction
         self.workload_type: str = 'base'
         # self.proc = self.simulation.process(self.run(), 'Workload' + str(id_))
@@ -42,6 +44,7 @@ class BaseWorkload:
     def reset_workload(self):
         self.executed_requests = 0
         self.client_delay_mean = -1
+        self.req_since_last_workload_change = 0
         # TODO: Make this use separate randomState generators instead of reseeding the library
         self.random = random.Random(self.workload_seed)
         self.np_random = np.random.default_rng(self.workload_seed)
@@ -120,6 +123,7 @@ class BaseWorkload:
                 yield simulation.timeout(self.np_random.pareto(ALPHA) * scale)
 
             self.executed_requests += 1
+            self.req_since_last_workload_change += 1
         self.reset_workload()
 
     def weighted_choice(self, simulation, clients: List[Client]) -> Client:
@@ -139,10 +143,11 @@ class BaseWorkload:
 
 # Workload that changes the fraction of long tasks after some threshold
 class VariableLongTaskFractionWorkload(BaseWorkload):
-    def __init__(self, id_, workload_seed: int, trigger_threshold: int, updated_long_tasks_fractions: List[float], updated_utilizations: List[float], arrival_model: str, utilization: float, num_requests: int, long_tasks_fraction: float = 0, ):
+    def __init__(self, id_, workload_seed: int, trigger_threshold_mean: int, updated_long_tasks_fractions: List[float], updated_utilizations: List[float], arrival_model: str, utilization: float, num_requests: int, long_tasks_fraction: float = 0, ):
         super().__init__(id_=id_, workload_seed=workload_seed, arrival_model=arrival_model,
                          num_requests=num_requests, long_tasks_fraction=long_tasks_fraction, utilization=utilization)
-        self.trigger_threshold = trigger_threshold
+        self.trigger_threshold_mean = trigger_threshold_mean
+        self.next_trigger_threshold = int(self.random.normalvariate(self.trigger_threshold_mean, 8000))
         self.updated_long_tasks_fractions = updated_long_tasks_fractions
         self.updated_utilizations = updated_utilizations
 
@@ -153,6 +158,7 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
 
     def reset_workload(self):
         super().reset_workload()
+        self.next_trigger_threshold = int(self.random.normalvariate(self.trigger_threshold_mean, 8000))
         self.long_tasks_fraction = self.random.choice(self.updated_long_tasks_fractions)
         self.utilization = self.random.choice(self.updated_utilizations)
 
@@ -160,7 +166,7 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
         return f'{self.workload_type}_{self.workload_seed}'
 
     def before_task_creation(self, servers: List[Server]):
-        if self.executed_requests > 0 and self.executed_requests % self.trigger_threshold == 0:
+        if self.req_since_last_workload_change > 0 and self.req_since_last_workload_change % self.next_trigger_threshold == 0:
 
             new_long_task_fraction = self.random.choice(self.updated_long_tasks_fractions)
             print(
@@ -178,6 +184,9 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
             self.utilization = new_utilization
             self.client_delay_mean = updated_client_delay_mean
 
+            self.req_since_last_workload_change = 0
+            self.next_trigger_threshold = int(self.random.normalvariate(self.trigger_threshold_mean, sigma=8000))
+
     @classmethod
     def from_dict(cls, id_: int, config: Dict[str, Any]) -> 'VariableLongTaskFractionWorkload':
         num_requests = config['num_requests']
@@ -193,7 +202,7 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
         return cls(
             id_=id_,  # You can set a proper id here
             workload_seed=workload_seed,
-            trigger_threshold=trigger_threshold,
+            trigger_threshold_mean=trigger_threshold,
             updated_long_tasks_fractions=updated_long_tasks_fractions,
             updated_utilizations=updated_utilizations,
             arrival_model=arrival_model,
@@ -205,7 +214,7 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
     def to_json(self) -> str:
         base_data = json.loads(super().to_json())
         additional_data = {
-            'trigger_threshold': self.trigger_threshold,
+            'trigger_threshold': self.trigger_threshold_mean,
             'updated_long_tasks_fractions': self.updated_long_tasks_fractions,
             'updated_utilizations': self.updated_utilizations,
         }
