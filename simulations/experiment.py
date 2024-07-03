@@ -550,13 +550,13 @@ def main(input_args=None, setting="base") -> None:
     #             last = rl_experiment_wrapper(args,
     #                                          train_workloads=train_workloads, test_workloads=test_workloads)
 
-    EXPERIMENT_NAME = 'fixed_retrain_interval_adapt_offline_param_test'
+    EXPERIMENT_NAME = ''
 
     train_workloads = []
 
-    test_workloads = workload_builder.create_test_var_long_tasks_workloads(num_requests=128000)
+    test_workloads = workload_builder.create_test_var_long_tasks_workloads(num_requests=128)
 
-    const.EVAL_POLICIES_TO_RUN = ['ARS', 'OFFLINE_DQN', 'OFFLINE_DQN_EXPLR_10_TRAIN',
+    const.EVAL_POLICIES_TO_RUN = ['OFFLINE_DQN', 'OFFLINE_DQN_EXPLR_10_TRAIN',
                                   'OFFLINE_DQN_DUPL_10_TRAIN']  # 'ARS', 'OFFLINE_DQN',
     # 'OFFLINE_DQN_EXPLR_20_TRAIN', 'OFFLINE_DQN_EXPLR_30_TRAIN',
     # 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_DUPL_30_TRAIN'
@@ -573,23 +573,21 @@ def main(input_args=None, setting="base") -> None:
 
     # '/home/jonas/projects/absim/outputs/collect_offline_data/0/collected_training_data'
 
-    for offline_train_batch_size in [2000, 1000, 4000]:
+    for offline_train_batch_size in [4000]:
         for offline_model in ['/home/jonas/projects/absim/outputs/offline_parameter_search/0/offline_train/data', '/home/jonas/projects/absim/outputs/offline_parameter_search/13/offline_train/data', '/home/jonas/projects/absim/outputs/offline_parameter_search/15/offline_train/data']:
             for test_service_time_model in ['random.expovariate', 'pareto']:
                 # '/home/jonas/projects/absim/outputs/offline_parameter_search/9/offline_train/data'
-                for clip_value in [10, 1]:
-                    for num_perm in [1, 2, 5]:
-                        args.args.num_permutations = num_perm
-                        args.args.clipping_value = clip_value
-                        args.args.test_service_time_model = test_service_time_model
+                for num_perm in [5, 10]:
+                    args.args.num_permutations = num_perm
+                    args.args.test_service_time_model = test_service_time_model
 
-                        args.args.collect_train_data = False
-                        args.args.offline_model = offline_model
-                        args.args.offline_train_batch_size = offline_train_batch_size
+                    args.args.collect_train_data = False
+                    args.args.offline_model = offline_model
+                    args.args.offline_train_batch_size = offline_train_batch_size
 
-                        args.args.seed = SEED
-                        last = rl_experiment_wrapper(args,
-                                                     train_workloads=train_workloads, test_workloads=test_workloads)
+                    args.args.seed = SEED
+                    last = rl_experiment_wrapper(args,
+                                                 train_workloads=train_workloads, test_workloads=test_workloads)
 
     return
     EXPERIMENT_NAME = 'fixed_memory_not_use_latest'

@@ -228,7 +228,7 @@ class ExperimentRunner:
         assert args.num_workload == 1
         print(f'Running with seed {args.seed}')
         simulation.process(workload.run(servers=self.servers, clients=self.clients,
-                           seed=args.seed, simulation=simulation))
+                                        simulation=simulation))
         self.workload_gens.append(workload)
 
         # Begin simulation

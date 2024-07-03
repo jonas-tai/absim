@@ -184,7 +184,7 @@ class SimulationArgs:
                             type=float, default=0.1, help='Number of requests to duplicate')
 
         parser.add_argument('--num_permutations', nargs='?',
-                            type=int, default=1, help='Number of permutations added per request')
+                            type=int, default=5, help='Number of permutations added per request')
 
         parser.add_argument('--clipping_value', nargs='?',
                             type=int, default=1, help='Gradient clipping value')
