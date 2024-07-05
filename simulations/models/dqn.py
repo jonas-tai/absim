@@ -13,6 +13,7 @@ class SummaryStats:
         self.means = torch.zeros(size)
         self.S = torch.ones(size)
         self.n = 0
+        self.device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
 
     def add(self, x):
         # stop adding new stats after 1000
@@ -44,8 +45,8 @@ class SummaryStats:
         max_size = data['max_size']
         obj = cls(max_size=max_size)
         # Load data from the dictionary
-        obj.means = torch.tensor(data['means'])
-        obj.S = torch.tensor(data['S'])
+        obj.means = torch.tensor(data['means'], device=obj.device)
+        obj.S = torch.tensor(data['S'], device=obj.device)
         obj.n = data['n']
         return obj
 

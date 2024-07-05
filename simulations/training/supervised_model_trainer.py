@@ -15,7 +15,7 @@ import torch.utils.data.dataloader as dataloader
 class SupervisedModelTrainer:
     def __init__(self, n_labels, out_folder: Path, data_path: Path, state_parser: StateParser, seed: int,
                  target_col: str = 'Replica', print_interval: int = 200, batch_size=128,  lr=1e-4) -> None:
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
 
         self.seed = seed
         self.out_folder = out_folder

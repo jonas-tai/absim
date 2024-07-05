@@ -60,6 +60,7 @@ class StateParser:
         self.num_servers = num_servers
         self.num_request_rates = num_request_rates
         self.poly_feat_degree = poly_feat_degree
+        self.device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
 
     def create_dummy_state(self) -> State:
         node_states = [NodeState(response_time=0.0, outstanding_requests=0.0, ars_score=0.0)
@@ -97,4 +98,4 @@ class StateParser:
         # Add polynomial and interaction features
         poly = PolynomialFeatures(self.poly_feat_degree)
         poly_state = poly.fit_transform(state_tensor)
-        return torch.tensor(poly_state, dtype=torch.float32)
+        return torch.tensor(poly_state, dtype=torch.float32, device=self.device)

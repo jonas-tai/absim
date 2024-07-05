@@ -27,8 +27,9 @@ class OfflineTrainer:
                  replay_always_use_newest: bool, replay_memory_size: int,
                  batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2, eps_decay=1000, tau=0.005, lr=1e-4,
                  tau_decay=10, clipping_value=1):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
         self.state_parser = state_parser
+        self.replay_memory_size = replay_memory_size
 
         self.BATCH_SIZE = batch_size
         self.GAMMA = gamma
@@ -117,7 +118,7 @@ class OfflineTrainer:
 
     def load_models_from_file(self, model_folder: Path):
         self.load_stats_from_file(model_folder)
-        self.memory = ReplayMemory.load_from_file(model_folder=model_folder)
+        self.memory = ReplayMemory.load_from_file(model_folder=model_folder, size=self.replay_memory_size)
 
         policy_net = DQN(self.n_observations, self.n_actions,
                          model_structure=self.model_structure).to(self.device)

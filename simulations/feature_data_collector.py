@@ -39,7 +39,7 @@ class FeatureDataCollector:
         } for (data_point, time) in data_point_time_tuples]
         )
 
-        feature_data = pd.DataFrame(np.concatenate([self.state_parser.state_to_tensor(state=data_point.state).numpy()
+        feature_data = pd.DataFrame(np.concatenate([self.state_parser.state_to_tensor(state=data_point.state).cpu().numpy()
                                                     for (data_point, time) in data_point_time_tuples]))
 
         self.data.append(AnalysisData(policy=policy, epoch=epoch_num,

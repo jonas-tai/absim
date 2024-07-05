@@ -24,7 +24,7 @@ MODEL_TRAINER_JSON = 'model_trainer.json'
 class Trainer:
     def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int, summary_stats_max_size: int, replay_always_use_newest: bool, replay_memory_size: int, batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2,
                  eps_decay=1000, tau=0.005, lr=1e-4, tau_decay=10, lr_scheduler_step_size=50, lr_scheduler_gamma=0.5, clipping_value=1):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
         self.state_parser = state_parser
 
         self.task_id_to_action: Dict[str, torch.Tensor] = {}
@@ -46,6 +46,8 @@ class Trainer:
         self.lr_scheduler_step_size = lr_scheduler_step_size
         self.lr_scheduler_gamma = lr_scheduler_gamma
         self.CLIPPING_VALUE = clipping_value
+
+        self.replay_memory_size = replay_memory_size
 
         self.explore_actions_episode = 0
         self.exploit_actions_episode = 0
@@ -119,7 +121,7 @@ class Trainer:
 
     def load_models_from_path(self, model_folder: Path):
         self.load_stats_from_file(model_folder)
-        self.memory = ReplayMemoryWithSummary.load_from_file(model_folder=model_folder)
+        self.memory = ReplayMemoryWithSummary.load_from_file(model_folder=model_folder, size=self.replay_memory_size)
 
         policy_net = DQN(self.n_observations, self.n_actions, model_structure=self.model_structure,
                          summary_stats=self.feature_stats).to(self.device)

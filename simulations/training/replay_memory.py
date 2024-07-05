@@ -25,6 +25,8 @@ class ReplayMemory(object):
         self.size = 0
         self.newest = None
         self.always_use_newest = always_use_newest  # Use https://arxiv.org/pdf/1712.01275
+        self.device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
+
         # self.memory = deque([], maxlen=capacity)
 
     def push(self, state: torch.Tensor, action: torch.Tensor, next_state: torch.Tensor, latency: torch.Tensor) -> None:
@@ -39,6 +41,7 @@ class ReplayMemory(object):
 
     def sample(self, batch_size):
         if self.always_use_newest:
+
             indices = random.sample(range(self.size), int(batch_size) - 1)
             return [self.newest] + [self.memory[index] for index in indices]
         else:
@@ -54,10 +57,41 @@ class ReplayMemory(object):
             pickle.dump(self, f)
 
     @staticmethod
-    def load_from_file(model_folder: Path):
+    def load_from_file(model_folder: Path, size: int):
         file_path = model_folder / 'replay_memory_state.pkl'
         with open(file_path, 'rb') as f:
-            return pickle.load(f)
+            replay_memory = pickle.load(f)
+            if size < replay_memory.max_size:
+                replay_memory.memory = replay_memory.memory[:size]
+            elif size > replay_memory.max_size:
+                replay_memory.memory = replay_memory.memory + [None] * (size - replay_memory.max_size)
+            replay_memory.max_size = size
+            replay_memory.size = min(replay_memory.max_size, replay_memory.size)
+            replay_memory.index = 0
+            replay_memory.to_device()
+            return replay_memory
+
+    def to_device(self) -> None:
+        """Move all tensors in the replay memory to the specified device."""
+        device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
+
+        for i in range(self.size):
+            transition = self.memory[i]
+
+            if transition is not None:
+                self.memory[i] = Transition(
+                    state=transition.state.to(device),
+                    action=transition.action.to(device),
+                    next_state=transition.next_state.to(device),
+                    reward=transition.reward.to(device)
+                )
+        if self.newest is not None:
+            self.newest = Transition(
+                state=self.newest.state.to(device),
+                action=self.newest.action.to(device),
+                next_state=self.newest.next_state.to(device),
+                reward=self.newest.reward.to(device)
+            )
 
 
 class ReplayMemoryWithSummary(ReplayMemory):
@@ -75,7 +109,37 @@ class ReplayMemoryWithSummary(ReplayMemory):
             pickle.dump(self, f)
 
     @staticmethod
-    def load_from_file(model_folder: Path):
+    def load_from_file(model_folder: Path, size: int):
         file_path = model_folder / 'replay_memory_with_summary_state.pkl'
         with open(file_path, 'rb') as f:
-            return pickle.load(f)
+            replay_memory = pickle.load(f)
+            if size < replay_memory.size:
+                replay_memory.memory = replay_memory.memory[:size]
+            elif size > replay_memory.size:
+                replay_memory.memory = replay_memory.memory + [None] * (size - replay_memory.size)
+            replay_memory.size = size
+            replay_memory.index = 0
+
+            replay_memory.to_device()
+            return replay_memory
+
+    def to_device(self) -> None:
+        """Move all tensors in the replay memory to the specified device."""
+        device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
+
+        for i in range(self.size):
+            transition = self.memory[i]
+            if transition is not None:
+                self.memory[i] = Transition(
+                    state=transition.state.to(device),
+                    action=transition.action.to(device),
+                    next_state=transition.next_state.to(device),
+                    reward=transition.reward.to(device)
+                )
+        if self.newest is not None:
+            self.newest = Transition(
+                state=self.newest.state.to(device),
+                action=self.newest.action.to(device),
+                next_state=self.newest.next_state.to(device),
+                reward=self.newest.reward.to(device)
+            )

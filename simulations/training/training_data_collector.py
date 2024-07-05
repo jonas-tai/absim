@@ -6,8 +6,7 @@ import torch
 
 from pathlib import Path
 from typing import Dict, List, Tuple
-from simulations.models.dqn import SummaryStats
-from simulations.state import NodeState, State, StateParser
+from simulations.state import State, StateParser
 from simulations.task import Task
 from simulations.training.norm_stats import NormStats
 from simulations.training.offline_model_trainer import OfflineTrainer
@@ -21,12 +20,13 @@ NEXT_STATE_FILE = 'next_state_data.csv'
 
 class TrainingDataCollector:
     def __init__(self, offline_trainer: OfflineTrainer, state_parser: StateParser, n_actions: int, summary_stats_max_size: int, offline_train_batch_size: int, num_permutations: int, data_folder: Path):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
         self.state_parser = state_parser
         self.data_folder = data_folder
         self.offline_trainer = offline_trainer
         self.num_permutations = num_permutations
 
+        # TOOD: Clean this up manually?
         self.task_id_to_permutations: Dict[str, List[List[int]]] = {}
         self.task_id_to_action: Dict[str, int] = {}
         self.task_id_to_next_state: Dict[str, State] = {}
@@ -80,12 +80,12 @@ class TrainingDataCollector:
     def end_train_batch(self) -> List[Transition]:
         transitions = self.convert_current_train_batch_to_transitions()
 
-        self.all_states += self.states[:self.offline_train_batch_size]
-        self.all_actions += self.actions[:self.offline_train_batch_size]
-        self.all_next_states += self.next_states[:self.offline_train_batch_size]
-        self.all_rewards += self.rewards[:self.offline_train_batch_size]
-        self.all_policies += self.policies[:self.offline_train_batch_size]
-        self.all_train_batches += self.train_batches[:self.offline_train_batch_size]
+        # self.all_states += self.states[:self.offline_train_batch_size]
+        # self.all_actions += self.actions[:self.offline_train_batch_size]
+        # self.all_next_states += self.next_states[:self.offline_train_batch_size]
+        # self.all_rewards += self.rewards[:self.offline_train_batch_size]
+        # self.all_policies += self.policies[:self.offline_train_batch_size]
+        # self.all_train_batches += self.train_batches[:self.offline_train_batch_size]
 
         self.states = self.states[self.offline_train_batch_size:]
         self.actions = self.actions[self.offline_train_batch_size:]
@@ -114,6 +114,7 @@ class TrainingDataCollector:
         self.all_rewards += self.rewards
         self.all_policies += self.policies
         self.all_train_batches += self.train_batches
+        # TODO: Write batch to file instead of collecting everything!
 
         self.states = []
         self.actions = []
@@ -123,6 +124,16 @@ class TrainingDataCollector:
         self.train_batches = []
 
         self.current_train_batch += 1
+
+    def end_test_episode(self) -> None:
+        self.states = []
+        self.actions = []
+        self.next_states = []
+        self.rewards = []
+        self.policies = []
+        self.train_batches = []
+
+        self.current_train_batch = 0
 
     def save_training_data(self) -> None:
         os.makedirs(self.data_folder, exist_ok=True)
@@ -136,7 +147,7 @@ class TrainingDataCollector:
 
         data = {
             'action': self.all_actions,
-            'reward': [reward.squeeze().numpy() for reward in self.all_rewards],
+            'reward': [reward.squeeze().cpu().numpy() for reward in self.all_rewards],
             'policy': self.all_policies,
             'train_batch': self.all_train_batches
         }
@@ -145,12 +156,12 @@ class TrainingDataCollector:
         file_path = self.data_folder / ACTION_REWARD_POLICY_FILE
         action_reward_policy_df.to_csv(file_path, index=False)
 
-        data = [state.squeeze().numpy() for state in self.all_states]
+        data = [state.squeeze().cpu().numpy() for state in self.all_states]
         state_df = pd.DataFrame(data)
         file_path = self.data_folder / STATE_FILE
         state_df.to_csv(file_path, index=False)
 
-        data = [next_state.squeeze().numpy() for next_state in self.all_next_states]
+        data = [next_state.squeeze().cpu().numpy() for next_state in self.all_next_states]
         next_state_df = pd.DataFrame(data)
         file_path = self.data_folder / NEXT_STATE_FILE
         next_state_df.to_csv(file_path, index=False)
