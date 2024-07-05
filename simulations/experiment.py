@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from typing import Any, Dict, List
 
 import torch
@@ -44,17 +45,18 @@ def create_experiment_folders(simulation_args: SimulationArgs, state_parser: Sta
     # Adapted from https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
     experiment_num = 0
     if simulation_args.args.exp_name != "":
-        out_path = Path('..', simulation_args.args.output_folder, simulation_args.args.exp_name, str(experiment_num))
+        out_path = Path(simulation_args.args.output_folder, simulation_args.args.exp_name, str(experiment_num))
         while os.path.isdir(out_path):
             experiment_num += 1
-            out_path = Path('..', simulation_args.args.output_folder,
+            out_path = Path(simulation_args.args.output_folder,
                             simulation_args.args.exp_name, str(experiment_num))
     else:
-        out_path = Path('..', simulation_args.args.output_folder, str(experiment_num))
+        out_path = Path(simulation_args.args.output_folder, str(experiment_num))
         while os.path.isdir(out_path):
             experiment_num += 1
-            out_path = Path('..', simulation_args.args.output_folder, str(experiment_num))
+            out_path = Path(simulation_args.args.output_folder, str(experiment_num))
 
+    print(out_path)
     os.makedirs(out_path, exist_ok=True)
 
     return out_path
@@ -70,6 +72,8 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
     torch.manual_seed(simulation_args.args.seed)
 
     torch.backends.cudnn.benchmark = False
+    torch.set_num_threads(1)
+    # print('Warning: pytorch uses non-deterministic algorithms!')
     torch.use_deterministic_algorithms(True)
 
     # Start the models and etc.
@@ -350,6 +354,7 @@ def run_rl_offline_test(simulation_args: SimulationArgs, workload: BaseWorkload,
         print(f'Exlore actions this episode: {offline_trainer.explore_actions_episode}')
         print(f'Exploit actions this episode: {offline_trainer.exploit_actions_episode}')
         offline_trainer.reset_episode_counters()
+        training_data_collector.end_test_episode()
 
 
 def run_rl_dqn_test(simulation_args: SimulationArgs, workload: BaseWorkload, policy: str, plot_folder: Path,
@@ -429,26 +434,10 @@ def plot_collected_data(plotter: ExperimentPlot, epoch_to_plot: int, policies_to
 
 
 # TODO: Make scenarios enum and find better way to select args for them
-def main(input_args=None, setting="base") -> None:
-    if setting == "base":
-        args = BaseArgs(input_args=input_args)
-    elif setting == "heterogenous_requests_scenario":
-        args = HeterogeneousRequestsArgs(input_args=input_args)
-    elif setting == "heterogenous_static_service_time_scenario":
-        args = StaticSlowServerArgs(input_args=input_args)
-    elif setting == "time_varying_service_time_servers":
-        args = TimeVaryingServerArgs(input_args=input_args)
-    else:
-        raise Exception(f'Unknown setting {setting}')
+def main(input_args=None) -> None:
 
-    SEED = args.args.seed
-
-    config_folder = Path('..', 'configs')
+    config_folder = Path('./', 'configs')
     workload_builder = WorkloadBuilder(config_folder=config_folder)
-
-    args.set_policy('ARS')
-
-    last = 0.0
 
     # EXPERIMENT_NAME = 'training_data_test'
 
@@ -550,44 +539,41 @@ def main(input_args=None, setting="base") -> None:
     #             last = rl_experiment_wrapper(args,
     #                                          train_workloads=train_workloads, test_workloads=test_workloads)
 
-    EXPERIMENT_NAME = ''
+    EXPERIMENT_NAME = 'same_workload_seed_long'
 
-    train_workloads = []
+    train_workloads = []  # workload_builder.create_train_base_workloads(
+    # long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.7], num_requests=48000)
 
-    test_workloads = workload_builder.create_test_var_long_tasks_workloads(num_requests=128)
+    test_workloads = workload_builder.create_test_var_long_tasks_workloads(num_requests=350000)
 
-    const.EVAL_POLICIES_TO_RUN = ['OFFLINE_DQN', 'OFFLINE_DQN_EXPLR_10_TRAIN',
-                                  'OFFLINE_DQN_DUPL_10_TRAIN']  # 'ARS', 'OFFLINE_DQN',
+    # test_workloads = workload_builder.create_test_base_workloads(utilizations=[0.6, 0.7, 0.8], long_tasks_fractions=[
+    #     0.0, 0.1, 0.3, 0.6, 0.7], num_requests=8000)
+    const.TRAIN_POLICIES_TO_RUN = []
+    const.EVAL_POLICIES_TO_RUN = [
+        'ARS', 'OFFLINE_DQN',
+        'OFFLINE_DQN_EXPLR_10_TRAIN', 'OFFLINE_DQN_EXPLR_15_TRAIN',
+        'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_15_TRAIN']  # 'ARS', 'OFFLINE_DQN',
     # 'OFFLINE_DQN_EXPLR_20_TRAIN', 'OFFLINE_DQN_EXPLR_30_TRAIN',
     # 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_DUPL_30_TRAIN'
     args = HeterogeneousRequestsArgs(input_args=input_args)
+    SEED = args.args.seed
+
     args.args.exp_name = EXPERIMENT_NAME
     args.args.eps_decay = 180000
+    args.args.epochs = 10
     args.args.lr_scheduler_step_size = 30
     args.args.replay_always_use_newest = False
     args.args.collect_train_data = False
     args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
-    args.args.offline_model = ''  # '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
+    # args.args.offline_model = ''  # '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
     args.args.lr = 1e-6
-    args.args.replay_memory_size = 5000
+    # args.args.replay_memory_size = 5000
 
     # '/home/jonas/projects/absim/outputs/collect_offline_data/0/collected_training_data'
-
-    for offline_train_batch_size in [4000]:
-        for offline_model in ['/home/jonas/projects/absim/outputs/offline_parameter_search/0/offline_train/data', '/home/jonas/projects/absim/outputs/offline_parameter_search/13/offline_train/data', '/home/jonas/projects/absim/outputs/offline_parameter_search/15/offline_train/data']:
-            for test_service_time_model in ['random.expovariate', 'pareto']:
-                # '/home/jonas/projects/absim/outputs/offline_parameter_search/9/offline_train/data'
-                for num_perm in [5, 10]:
-                    args.args.num_permutations = num_perm
-                    args.args.test_service_time_model = test_service_time_model
-
-                    args.args.collect_train_data = False
-                    args.args.offline_model = offline_model
-                    args.args.offline_train_batch_size = offline_train_batch_size
-
-                    args.args.seed = SEED
-                    last = rl_experiment_wrapper(args,
-                                                 train_workloads=train_workloads, test_workloads=test_workloads)
+    # '/home/jonas/projects/absim/outputs/offline_parameter_search/0/offline_train/data', '/home/jonas/projects/absim/outputs/offline_parameter_search/15/offline_train/data', '/home/jonas/projects/absim/outputs/offline_parameter_search/9/offline_train/data'
+    args.args.seed = SEED
+    last = rl_experiment_wrapper(args,
+                                 train_workloads=train_workloads, test_workloads=test_workloads)
 
     return
     EXPERIMENT_NAME = 'fixed_memory_not_use_latest'
@@ -751,4 +737,4 @@ def main(input_args=None, setting="base") -> None:
 
 
 if __name__ == '__main__':
-    main(setting="base")
+    main(sys.argv[1:])
