@@ -8,18 +8,97 @@ import pandas as pd
 from simulations.plotting import ExperimentPlot
 
 
-MODE = 'test'
-EXPERIMENT = 'fixed_random'
+MODE = 'same_workload_seed'
+EXPERIMENT = 'same_workload_seed_long'
 
-for i in range(0, 17):
-    base_path = Path(f'/home/jonas/projects/absim/outputs/{EXPERIMENT}/{i}/{MODE}')
 
-    data_folder = base_path / 'data'
-    plot_folder = base_path / 'plots'
+def get_directory_paths(folder_path):
+    directory_paths = [Path(os.path.join(folder_path, d)) for d in os.listdir(folder_path)
+                       if os.path.isdir(os.path.join(folder_path, d)) and d.startswith('variable_long_task_fraction')]
+    return directory_paths
 
-    plotter = ExperimentPlot(plot_folder=plot_folder, data_folder=data_folder)
 
-    plotter.from_csv()
+for i in range(0, 24):
+    directories = get_directory_paths(f'/home/jonas/projects/absim/outputs/{EXPERIMENT}/{i}/')
 
-    plotter.generate_plots()
-    plotter.save_stats_to_file()
+    # base_path = Path(
+    # f'/home/jonas/projects/absim/outputs/{EXPERIMENT}/{i}/variable_long_task_fraction_updated_long_tasks_20.00_util_20.00_long_tasks')
+    for base_path in directories:
+        data_folder = base_path / 'data'
+        plot_folder = base_path / 'plots'
+
+        plotter = ExperimentPlot(plot_folder=plot_folder, data_folder=data_folder)
+
+        plotter.from_csv()
+        plotter.plot_latency_over_time_short_long_request(
+            policies=['OFFLINE_DQN', 'ARS', 'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_DUPL_30_TRAIN', 'OFFLINE_DQN_EXPLR_10_TRAIN', 'OFFLINE_DQN_EXPLR_20_TRAIN', 'OFFLINE_DQN_EXPLR_30_TRAIN'])
+
+
+# for (long_tasks, i) in [('0.00', 9), ('10.00', 10), ('20.00', 11), ('30.00', 12), ('40.00', 13), ('50.00', 14), ('60.00', 15), ('70.00', 16), ('80.00', 17)]:  # [('10.00', 1),
+#     additional_data_path = Path(
+#         f'/home/jonas/projects/absim/outputs/new_benchmarks/{i}/base_45.00_util_{long_tasks}_long_tasks/data')
+#     additional_data_df = pd.read_csv(additional_data_path / f'data.csv')
+#     additional_data_df = additional_data_df[additional_data_df['Policy'] == 'DQN']
+#     additional_data_df['Policy'] = 'DQN_OPTIMIZED'
+
+#     for j in [3]:
+#         # base_path = Path(f'/home/jonas/projects/absim/outputs/{EXPERIMENT}/{i}/{MODE}')
+#         base_path = Path(f'/home/jonas/projects/absim/outputs/{EXPERIMENT}/{j}/base_45.00_util_{long_tasks}_long_tasks')
+
+#         data_folder = base_path / 'data'
+#         plot_folder = base_path / 'plots'
+
+#         plotter = ExperimentPlot(plot_folder=plot_folder, data_folder=data_folder)
+
+#         plotter.from_csv()
+#         plotter.add_data_from_df(additional_data=additional_data_df)
+
+#         plotter.generate_plots()
+#         plotter.save_stats_to_file()
+
+
+# [('0.00', 18), ('10.00', 19), ('20.00', 20), ('30.00', 21), ('40.00', 22), ('50.00', 23), ('60.00', 24), ('70.00', 25), ('80.00', 26)]
+# for (long_tasks, i) in [('0.00', 18), ('20.00', 20), ('40.00', 22), ('60.00', 24), ('80.00', 26)]:  # [('10.00', 1),
+#     additional_data_path = Path(
+#         f'/home/jonas/projects/absim/outputs/new_benchmarks/{i}/base_45.00_util_{long_tasks}_long_tasks/data')
+#     additional_data_df = pd.read_csv(additional_data_path / f'data.csv')
+#     additional_data_df = additional_data_df[additional_data_df['Policy'] == 'DQN']
+#     additional_data_df['Policy'] = 'DQN_OPTIMIZED'
+
+#     for j in [4]:
+#         # base_path = Path(f'/home/jonas/projects/absim/outputs/{EXPERIMENT}/{i}/{MODE}')
+#         base_path = Path(f'/home/jonas/projects/absim/outputs/{EXPERIMENT}/{j}/base_45.00_util_{long_tasks}_long_tasks')
+
+#         data_folder = base_path / 'data'
+#         plot_folder = base_path / 'plots'
+
+#         plotter = ExperimentPlot(plot_folder=plot_folder, data_folder=data_folder)
+
+#         plotter.from_csv()
+#         plotter.add_data_from_df(additional_data=additional_data_df)
+
+#         plotter.generate_plots()
+#         plotter.save_stats_to_file()
+
+
+# for (long_tasks, i) in [('0.00', 18), ('10.00', 19), ('20.00', 20), ('30.00', 21), ('40.00', 22), ('50.00', 23), ('60.00', 24), ('70.00', 25), ('80.00', 26)]:  # [('10.00', 1),
+#     # additional_data_path = Path(
+#     #     f'/home/jonas/projects/absim/outputs/new_benchmarks/{i}/base_45.00_util_{long_tasks}_long_tasks/data')
+#     # additional_data_df = pd.read_csv(additional_data_path / f'data.csv')
+#     # additional_data_df = additional_data_df[additional_data_df['Policy'] == 'DQN']
+#     # additional_data_df['Policy'] = 'DQN_OPTIMIZED'
+
+#     for j in [1]:
+#         # base_path = Path(f'/home/jonas/projects/absim/outputs/{EXPERIMENT}/{i}/{MODE}')
+#         base_path = Path(f'/home/jonas/projects/absim/outputs/{EXPERIMENT}/{j}/base_45.00_util_{long_tasks}_long_tasks')
+
+#         data_folder = base_path / 'data'
+#         plot_folder = base_path / 'plots'
+
+#         plotter = ExperimentPlot(plot_folder=plot_folder, data_folder=data_folder)
+
+#         plotter.from_csv()
+#         # plotter.add_data_from_df(additional_data=additional_data_df)
+
+#         plotter.generate_plots()
+#         plotter.save_stats_to_file()

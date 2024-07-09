@@ -83,7 +83,7 @@ class StateParser:
 
         return torch.tensor([state_features], dtype=torch.float32)
 
-    def state_to_tensor(self, state: State, server_permutation: List[int] | None = None) -> torch.Tensor:
+    def state_to_tensor(self, state: State, server_permutation: List[int] | None = None, degree: int = None) -> torch.Tensor:
         if server_permutation is None:
             server_permutation = [i for i in range(len(state.node_states))]
 
@@ -96,6 +96,9 @@ class StateParser:
         state_tensor = torch.cat((general_state_tensor, node_state_tensor), 1)
 
         # Add polynomial and interaction features
-        poly = PolynomialFeatures(self.poly_feat_degree)
+        if degree is None:
+            poly = PolynomialFeatures(self.poly_feat_degree)
+        else:
+            poly = PolynomialFeatures(degree=degree)
         poly_state = poly.fit_transform(state_tensor)
         return torch.tensor(poly_state, dtype=torch.float32, device=self.device)
