@@ -54,7 +54,7 @@ class SimulationArgs:
         # Folders
         parser.add_argument('--data_folder', nargs='?', type=str, default="data")
         parser.add_argument('--plot_folder', nargs='?', type=str, default="plots")
-        parser.add_argument('--output_folder',  nargs='?', type=str, default="outputs")
+        parser.add_argument('--output_folder',  nargs='?', type=str, default="/dev/shm/outputs")
         parser.add_argument('--model_folder', nargs='?', type=str, default="")
 
         parser.add_argument('--demand_skew', nargs='?',
