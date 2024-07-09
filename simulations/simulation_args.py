@@ -128,7 +128,7 @@ class SimulationArgs:
 
         # RL Training
         parser.add_argument('--epochs', nargs='?',
-                            type=int, default=200, help='Number of training epochs')
+                            type=int, default=10, help='Number of training epochs')
 
         # RL Model evaluation
         parser.add_argument('--test_epochs', nargs='?',
@@ -177,6 +177,8 @@ class SimulationArgs:
                             default=False, help='If true, log and save all data collected for offline training later')
         parser.add_argument('--from_expert_data_epoch_size', nargs='?',
                             type=int, default=15000, help='Number of requests after which the model is retrained')
+        parser.add_argument('--train_policy', nargs='?',
+                            type=str, default=None, help='Policy used during training')
 
         # ReplayMemory parametes
         parser.add_argument('--replay_memory_size', nargs='?',
