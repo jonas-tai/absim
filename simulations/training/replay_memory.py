@@ -57,17 +57,18 @@ class ReplayMemory(object):
             pickle.dump(self, f)
 
     @staticmethod
-    def load_from_file(model_folder: Path, size: int):
+    def load_from_file(model_folder: Path, size: int, replay_always_use_newest: bool):
         file_path = model_folder / 'replay_memory_state.pkl'
         with open(file_path, 'rb') as f:
             replay_memory = pickle.load(f)
+            replay_memory.always_use_newest = replay_always_use_newest
             if size < replay_memory.max_size:
                 replay_memory.memory = replay_memory.memory[:size]
             elif size > replay_memory.max_size:
-                replay_memory.memory = replay_memory.memory + [None] * (size - replay_memory.max_size)
+                replay_memory.memory = replay_memory.memory + ([None] * (size - replay_memory.max_size))
             replay_memory.max_size = size
-            replay_memory.size = min(replay_memory.max_size, replay_memory.size)
-            replay_memory.index = 0
+            replay_memory.size = min(size, replay_memory.size)
+            replay_memory.index = min(size, replay_memory.index)
             replay_memory.to_device()
             return replay_memory
 

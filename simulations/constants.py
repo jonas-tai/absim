@@ -1,3 +1,10 @@
+# File name constants
+TRAINING_DATA_COLLECTOR_JSON = 'training_data_collector.json'
+STATE_FILE = 'state_data.csv'
+ACTION_REWARD_POLICY_FILE = 'action_reward_policy_data.csv'
+NEXT_STATE_FILE = 'next_state_data.csv'
+
+
 # These are defaults.
 NW_LATENCY_BASE = 0.960
 NW_LATENCY_MU = 0.040

@@ -2,6 +2,7 @@ import json
 import os
 import random
 import pandas as pd
+import constants as const
 import torch
 
 from pathlib import Path
@@ -11,11 +12,6 @@ from simulations.task import Task
 from simulations.training.norm_stats import NormStats
 from simulations.training.offline_model_trainer import OfflineTrainer
 from simulations.training.replay_memory import Transition
-
-MODEL_TRAINER_JSON = 'training_data_collector.json'
-STATE_FILE = 'state_data.csv'
-ACTION_REWARD_POLICY_FILE = 'action_reward_policy_data.csv'
-NEXT_STATE_FILE = 'next_state_data.csv'
 
 
 class TrainingDataCollector:
@@ -65,11 +61,11 @@ class TrainingDataCollector:
         }
 
         # To get the final JSON string
-        with open(self.data_folder / MODEL_TRAINER_JSON, 'w') as f:
+        with open(self.data_folder / const.TRAINING_DATA_COLLECTOR_JSON, 'w') as f:
             json.dump(model_trainer_json, f)
 
     def load_stats_from_file(self) -> None:
-        with open(self.data_folder / MODEL_TRAINER_JSON, 'r') as f:
+        with open(self.data_folder / const.TRAINING_DATA_COLLECTOR_JSON, 'r') as f:
             data = json.load(f)
 
         self.logged_transitions = data['logged_transitions']
@@ -153,47 +149,18 @@ class TrainingDataCollector:
         }
 
         action_reward_policy_df = pd.DataFrame(data)
-        file_path = self.data_folder / ACTION_REWARD_POLICY_FILE
+        file_path = self.data_folder / const.ACTION_REWARD_POLICY_FILE
         action_reward_policy_df.to_csv(file_path, index=False)
 
         data = [state.squeeze().cpu().numpy() for state in self.all_states]
         state_df = pd.DataFrame(data)
-        file_path = self.data_folder / STATE_FILE
+        file_path = self.data_folder / const.STATE_FILE
         state_df.to_csv(file_path, index=False)
 
         data = [next_state.squeeze().cpu().numpy() for next_state in self.all_next_states]
         next_state_df = pd.DataFrame(data)
-        file_path = self.data_folder / NEXT_STATE_FILE
+        file_path = self.data_folder / const.NEXT_STATE_FILE
         next_state_df.to_csv(file_path, index=False)
-
-    def read_training_data_from_csv(self, train_data_folder: Path) -> Tuple[List[Transition], NormStats]:
-        action_reward_policy_df = pd.read_csv(train_data_folder / ACTION_REWARD_POLICY_FILE)
-        state_df = pd.read_csv(train_data_folder / STATE_FILE)
-        next_state_df = pd.read_csv(train_data_folder / NEXT_STATE_FILE)
-
-        # Make sure that data is aligned properly
-        assert len(action_reward_policy_df) == len(state_df) and len(state_df) == len(next_state_df)
-
-        transitions = []
-
-        reward_mean = torch.tensor([action_reward_policy_df['reward'].mean()], dtype=torch.float32, device=self.device)
-        reward_std = torch.tensor([action_reward_policy_df['reward'].std()], dtype=torch.float32, device=self.device)
-
-        feature_mean = torch.tensor(state_df.mean(), dtype=torch.float32, device=self.device)
-        feature_std = torch.tensor(state_df.std(), dtype=torch.float32, device=self.device)
-
-        norm_stats = NormStats(reward_mean=reward_mean, reward_std=reward_std,
-                               feature_mean=feature_mean, feature_std=feature_std)
-
-        for action_reward_policy_row, state_row, next_state_row in zip(action_reward_policy_df.itertuples(index=False), state_df.itertuples(index=False), next_state_df.itertuples(index=False)):
-            action = torch.tensor([[action_reward_policy_row.action]], device=self.device)
-            reward = torch.tensor([[action_reward_policy_row.reward]], dtype=torch.float32, device=self.device)
-            state = torch.tensor([state_row], dtype=torch.float32, device=self.device)
-            next_state = torch.tensor([next_state_row], dtype=torch.float32, device=self.device)
-
-            transition = Transition(state=state, action=action, next_state=next_state, reward=reward)
-            transitions.append(transition)
-        return transitions, norm_stats
 
     def log_state_and_action(self, simulation, task: Task, action: int, policy: str) -> None:
         state = state = task.get_state()
@@ -269,7 +236,7 @@ class TrainingDataCollector:
             print('Retraining')
             train_batch_transitions = self.end_train_batch()
             print(len(train_batch_transitions))
-            self.offline_trainer.run_offline_training_epoch(transitions=train_batch_transitions)
+            self.offline_trainer.run_offline_retraining_epoch(transitions=train_batch_transitions)
 
     def clean_up_transition(self, task: Task) -> None:
         del self.task_id_to_action[task.id]

@@ -3,8 +3,10 @@ import os
 import math
 from collections import namedtuple
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
+import constants as const
 
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -44,6 +46,7 @@ class OfflineTrainer:
         # self.lr_scheduler_gamma = lr_scheduler_gamma
 
         self.model_folder: Path | None = None
+        self.expert_data_folder: Path | None = None
 
         self.explore_actions_episode = 0
         self.exploit_actions_episode = 0
@@ -73,10 +76,19 @@ class OfflineTrainer:
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
         # self.scheduler = optim.lr_scheduler.StepLR(
         #     self.optimizer, step_size=self.lr_scheduler_step_size, gamma=self.lr_scheduler_gamma)
-        self.memory = ReplayMemory(max_size=replay_memory_size, always_use_newest=replay_always_use_newest)
+        self.retrain_memory = ReplayMemory(max_size=replay_memory_size, always_use_newest=replay_always_use_newest)
+        self.expert_memory = None
+        self.replay_always_use_newest = replay_always_use_newest
 
         self.steps_done = 0
         self.actions_chosen = defaultdict(int)
+
+    def save_models_and_stats(self, model_folder: Path):
+        torch.save(self.policy_net.state_dict(), model_folder / 'policy_model_weights.pth')
+        torch.save(self.policy_net.state_dict(), model_folder / 'target_model_weights.pth')
+
+        self.save_model_trainer_stats(model_folder)
+        self.retrain_memory.save_to_file(model_folder=model_folder)
 
     def save_model_trainer_stats(self, data_folder: Path):
         model_trainer_json = {
@@ -84,29 +96,13 @@ class OfflineTrainer:
             "feature_mean": self.feature_mean.tolist(),
             "feature_std": self.feature_std.tolist(),
             "reward_mean": self.reward_mean.tolist(),
-            "reward_std": self.reward_std.tolist()
+            "reward_std": self.reward_std.tolist(),
+            "expert_data_folder": str(self.expert_data_folder)
         }
 
         # To get the final JSON string
         with open(data_folder / MODEL_TRAINER_JSON, 'w') as f:
             json.dump(model_trainer_json, f)
-
-    def load_stats_from_file(self, data_folder: Path):
-        with open(data_folder / MODEL_TRAINER_JSON, 'r') as f:
-            data = json.load(f)
-
-        self.steps_done = data['steps_done']
-        self.feature_mean = torch.tensor(data['feature_mean'], dtype=torch.float32, device=self.device)
-        self.feature_std = torch.tensor(data['feature_std'], dtype=torch.float32, device=self.device)
-        self.reward_mean = torch.tensor(data['reward_mean'], dtype=torch.float32, device=self.device)
-        self.reward_std = torch.tensor(data['reward_std'], dtype=torch.float32, device=self.device)
-
-    def save_models_and_stats(self, model_folder: Path):
-        torch.save(self.policy_net.state_dict(), model_folder / 'policy_model_weights.pth')
-        torch.save(self.policy_net.state_dict(), model_folder / 'target_model_weights.pth')
-
-        self.save_model_trainer_stats(model_folder)
-        self.memory.save_to_file(model_folder=model_folder)
 
     def set_model_folder(self, model_folder: Path) -> None:
         self.model_folder = model_folder
@@ -118,7 +114,14 @@ class OfflineTrainer:
 
     def load_models_from_file(self, model_folder: Path):
         self.load_stats_from_file(model_folder)
-        self.memory = ReplayMemory.load_from_file(model_folder=model_folder, size=self.replay_memory_size)
+
+        # Load expert data if not preset
+        if self.expert_memory is None and self.do_active_retraining:
+            self.init_expert_data_from_csv()
+
+        # Reinit retrain memory
+        self.retrain_memory = ReplayMemory(max_size=self.replay_memory_size,
+                                           always_use_newest=self.replay_always_use_newest)
 
         policy_net = DQN(self.n_observations, self.n_actions,
                          model_structure=self.model_structure).to(self.device)
@@ -136,6 +139,17 @@ class OfflineTrainer:
         # Note: Learning rate scheduler is currently not called in test epochs!
         # self.scheduler = optim.lr_scheduler.StepLR(
         #     self.optimizer, step_size=self.lr_scheduler_step_size, gamma=self.lr_scheduler_gamma)
+
+    def load_stats_from_file(self, data_folder: Path):
+        with open(data_folder / MODEL_TRAINER_JSON, 'r') as f:
+            data = json.load(f)
+
+        self.steps_done = data['steps_done']
+        self.expert_data_folder = Path(data['expert_data_folder'])
+        self.feature_mean = torch.tensor(data['feature_mean'], dtype=torch.float32, device=self.device)
+        self.feature_std = torch.tensor(data['feature_std'], dtype=torch.float32, device=self.device)
+        self.reward_mean = torch.tensor(data['reward_mean'], dtype=torch.float32, device=self.device)
+        self.reward_std = torch.tensor(data['reward_std'], dtype=torch.float32, device=self.device)
 
     def select_action(self, state: State, simulation, random_decision: int, task: Task) -> torch.Tensor:
         # random_decision int handed in from outside to ensure its the same decision that random strategy would take
@@ -164,35 +178,59 @@ class OfflineTrainer:
         self.actions_chosen[action_chosen.item()] += 1
         return action_chosen
 
-    def run_offline_training_epoch(self, transitions: List[Transition], norm_stats: NormStats = None) -> None:
+    def run_offline_retraining_epoch(self, transitions: List[Transition], norm_stats: NormStats = None) -> None:
         if norm_stats is not None:
             self.reward_mean = norm_stats.reward_mean
             self.feature_mean = norm_stats.feature_mean
             self.reward_std = norm_stats.reward_std
             self.feature_std = norm_stats.feature_std
 
-        # print(len(transitions))
-
-        # print(self.reward_mean)
-        # print(self.feature_mean)
-        # print(self.reward_std)
-        # print(self.feature_std)
-
-        # print(len(self.memory))
-        # print(transitions[0])
-        # print(transitions[100])
-        # print('Starting offline Epoch')
-        # print(self.BATCH_SIZE)
-        # print(self.GAMMA)
-        # print(self.EPS_START)
-        # print(self.EPS_END)
-        # print(self.EPS_DECAY)
-        # print(self.TAU)
-        # print(self.TAU_DECAY)
-        # print(self.LR)
-
         for transition in transitions:
-            self.training_step(transition=transition)
+            norm_transition = self.normalize_transition(transition=transition)
+
+            # Store the normalized transition in memory
+            self.retrain_memory.push_transition(transition=norm_transition)
+            self.training_step(memory=self.retrain_memory)
+        # print('Offline epoch finished')
+
+    def init_expert_data_from_csv(self, expert_data_folder: Path = None) -> None:
+        if expert_data_folder is not None:
+            self.expert_data_folder = expert_data_folder
+
+        action_reward_policy_df = pd.read_csv(expert_data_folder / const.ACTION_REWARD_POLICY_FILE)
+        state_df = pd.read_csv(expert_data_folder / const.STATE_FILE)
+        next_state_df = pd.read_csv(expert_data_folder / const.NEXT_STATE_FILE)
+
+        # Make sure that data is aligned properly
+        assert len(action_reward_policy_df) == len(state_df) and len(state_df) == len(next_state_df)
+
+        reward_mean = torch.tensor([action_reward_policy_df['reward'].mean()], dtype=torch.float32, device=self.device)
+        reward_std = torch.tensor([action_reward_policy_df['reward'].std()], dtype=torch.float32, device=self.device)
+
+        feature_mean = torch.tensor(state_df.mean(), dtype=torch.float32, device=self.device)
+        feature_std = torch.tensor(state_df.std(), dtype=torch.float32, device=self.device)
+
+        self.norm_stats = NormStats(reward_mean=reward_mean, reward_std=reward_std,
+                                    feature_mean=feature_mean, feature_std=feature_std)
+
+        self.expert_memory = ReplayMemory(max_size=len(state_df),
+                                          always_use_newest=self.replay_always_use_newest)
+
+        for action_reward_policy_row, state_row, next_state_row in zip(action_reward_policy_df.itertuples(index=False), state_df.itertuples(index=False), next_state_df.itertuples(index=False)):
+            action = torch.tensor([[action_reward_policy_row.action]], device=self.device)
+            reward = torch.tensor([[action_reward_policy_row.reward]], dtype=torch.float32, device=self.device)
+            state = torch.tensor([state_row], dtype=torch.float32, device=self.device)
+            next_state = torch.tensor([next_state_row], dtype=torch.float32, device=self.device)
+
+            transition = Transition(state=state, action=action, next_state=next_state, reward=reward)
+            norm_transition = self.normalize_transition(transition=transition)
+
+            # Store the normalized transition in memory
+            self.expert_memory.push_transition(transition=norm_transition)
+
+    def train_model_from_expert_data_epoch(self, train_steps: int) -> None:
+        for _ in range(train_steps):
+            self.training_step(memory=self.expert_memory)
         # print('Offline epoch finished')
 
     def normalize_state(self, state):
@@ -206,14 +244,9 @@ class OfflineTrainer:
         norm_reward = (transition.reward - self.reward_mean) / self.reward_std
         return Transition(state=norm_state, action=transition.action, next_state=norm_next_state, reward=norm_reward)
 
-    def training_step(self, transition: Transition):
-        norm_transition = self.normalize_transition(transition=transition)
-
-        # Store the normalized transition in memory
-        self.memory.push_transition(transition=norm_transition)
-
+    def training_step(self, memory: ReplayMemory):
         # Perform one step of the optimization (on the policy network)
-        self.optimize_model()
+        self.optimize_model(memory=memory)
 
         # Soft update of the target network's weights
         # θ′ ← τ θ + (1 −τ )θ′
@@ -225,10 +258,10 @@ class OfflineTrainer:
             target_net_state_dict[key] = policy_net_state_dict[key] * tau + target_net_state_dict[key] * (1 - tau)
         self.target_net.load_state_dict(target_net_state_dict)
 
-    def optimize_model(self):
-        if len(self.memory) < self.BATCH_SIZE:
+    def optimize_model(self, memory: ReplayMemory):
+        if len(memory) < self.BATCH_SIZE:
             return
-        transitions = self.memory.sample(self.BATCH_SIZE)
+        transitions = memory.sample(self.BATCH_SIZE)
         # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
         # detailed explanation). This converts batch-array of Transitions
         # to Transition of batch-arrays.

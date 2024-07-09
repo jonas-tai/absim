@@ -167,24 +167,28 @@ class SimulationArgs:
         # Offline training parameters
         parser.add_argument('--offline_train_batch_size', nargs='?',
                             type=int, default=2000, help='Number of requests after which the model is retrained')
-        parser.add_argument('--offline_train_data', nargs='?', type=str, default="",
-                            help='Location of the train data for offline training.')
+        parser.add_argument('--offline_expert_data', nargs='?', type=str, default="",
+                            help='Location of the expert data for offline training.')
         parser.add_argument('--offline_model', nargs='?', type=str, default="",
                             help='Location of the offline model.')
+        parser.add_argument('--collect_train_data', action='store_true',
+                            default=False, help='If true, log and save all data collected for offline training later')
+        parser.add_argument('--train_from_expert_data', action='store_true',
+                            default=False, help='If true, log and save all data collected for offline training later')
+        parser.add_argument('--from_expert_data_epoch_size', nargs='?',
+                            type=int, default=15000, help='Number of requests after which the model is retrained')
 
         # ReplayMemory parametes
         parser.add_argument('--replay_memory_size', nargs='?',
                             type=int, default=10000, help='Number of stats collected for normalizing')
         parser.add_argument('--replay_always_use_newest', action='store_true',
                             default=False, help='if true, always add newest transition to sample (see https://arxiv.org/pdf/1712.01275)')
-        parser.add_argument('--collect_train_data', action='store_true',
-                            default=False, help='If true, log and save all data collected for offline training later')
 
         parser.add_argument('--duplication_rate', nargs='?',
                             type=float, default=0.1, help='Number of requests to duplicate')
 
         parser.add_argument('--num_permutations', nargs='?',
-                            type=int, default=5, help='Number of permutations added per request')
+                            type=int, default=1, help='Number of permutations added per request')
 
         parser.add_argument('--clipping_value', nargs='?',
                             type=int, default=1, help='Gradient clipping value')
