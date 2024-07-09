@@ -121,7 +121,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
     if simulation_args.args.train_from_expert_data:
         expert_data_folder = training_data_folder
         offline_model_folder = train_model_from_expert_data(
-            simulation_args=simulation_args, offline_trainer=offline_trainer, out_path=out_path, expert_data_folder=expert_data_folder)
+            simulation_args=simulation_args, offline_trainer=offline_trainer, out_path=out_path, expert_data_folder=expert_data_folder, train_data_collector=training_data_collector)
     else:
         offline_model_folder = Path(simulation_args.args.offline_model)
 
@@ -135,7 +135,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
     return 0
 
 
-def train_model_from_expert_data(simulation_args: SimulationArgs, offline_trainer: OfflineTrainer, out_path: Path, expert_data_folder: Path) -> None:
+def train_model_from_expert_data(simulation_args: SimulationArgs, offline_trainer: OfflineTrainer, out_path: Path, expert_data_folder: Path, train_data_collector: TrainingDataCollector) -> None:
     offline_train_out_folder = out_path / 'offline_train' / simulation_args.args.data_folder
     offline_plot_folder = out_path / 'offline_train' / simulation_args.args.plot_folder
 
@@ -143,7 +143,9 @@ def train_model_from_expert_data(simulation_args: SimulationArgs, offline_traine
     os.makedirs(offline_plot_folder, exist_ok=True)
 
     # Offline training data given, load data and train model on it
-    offline_trainer.init_expert_data_from_csv(expert_data_folder=expert_data_folder)
+    # TODO: Change
+    # offline_trainer.init_expert_data_from_csv(expert_data_folder=expert_data_folder)
+    train_data_collector.init_expert_data_from_data_collector()
 
     for _ in range(simulation_args.args.epochs):
         offline_trainer.train_model_from_expert_data_epoch(train_steps=simulation_args.args.from_expert_data_epoch_size)
@@ -186,6 +188,7 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
     duplication_rate = 0.0
 
     print('Starting experiments')
+    print(const.TRAIN_POLICIES_TO_RUN)
     for policy in const.TRAIN_POLICIES_TO_RUN:
         simulation_args.set_policy(policy)
         for i_episode in range(NUM_EPSIODES):
@@ -222,7 +225,8 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
     train_plotter.export_data()
 
     if simulation_args.args.collect_train_data:
-        training_data_collector.save_training_data()
+        # TODO: Change this
+        # training_data_collector.save_training_data()
         training_data_collector.save_training_data_collector_stats()
 
     trainer.plot_grads_and_losses(plot_path=plot_path, file_prefix='train')
@@ -453,7 +457,7 @@ def main(input_args=None) -> None:
     test_workloads = test_workloads = workload_builder.create_test_base_workloads(
         utilizations=[0.45, 0.7],
         long_tasks_fractions=[0.0, 0.1, 0.3, 0.5, 0.7],
-        num_requests=16000) + workload_builder.create_test_var_long_tasks_workloads(num_requests=35000)
+        num_requests=16000) + workload_builder.create_test_var_long_tasks_workloads(num_requests=350000)
 
     # test_workloads = workload_builder.create_test_base_workloads(utilizations=[0.6, 0.7, 0.8], long_tasks_fractions=[
     #     0.0, 0.1, 0.3, 0.6, 0.7], num_requests=8000)

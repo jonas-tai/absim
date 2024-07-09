@@ -20,6 +20,7 @@ from collections import defaultdict
 
 from simulations.task import Task
 from simulations.training.norm_stats import NormStats
+# from simulations.training.training_data_collector import TrainingDataCollector
 
 MODEL_TRAINER_JSON = 'model_trainer.json'
 

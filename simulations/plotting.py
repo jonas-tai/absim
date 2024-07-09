@@ -20,7 +20,7 @@ FONT_SIZE = 10
 class ExperimentPlot:
     def __init__(self, plot_folder: Path, data_folder: Path, state_parser: StateParser, long_tasks_fraction: float = None, utilization: float | None = None, use_log_scale: bool = False) -> None:
         self.df = None
-        self.feature_df = None
+        # self.feature_df = None
         self.plot_folder: Path = plot_folder
         self.data_folder: Path = data_folder
         self.use_log_scale: bool = use_log_scale
@@ -68,8 +68,8 @@ class ExperimentPlot:
             'Long_tasks_fraction': data_point.long_tasks_fraction
         } for (data_point, time) in data_point_time_tuples]
 
-        feature_df = pd.DataFrame(np.concatenate([self.state_parser.state_to_tensor(state=data_point.state, degree=1).cpu().numpy()
-                                                  for (data_point, time) in data_point_time_tuples]))
+        # feature_df = pd.DataFrame(np.concatenate([self.state_parser.state_to_tensor(state=data_point.state, degree=1).cpu().numpy()
+        #                                           for (data_point, time) in data_point_time_tuples]))
 
         df = pd.DataFrame(df_entries)
 
@@ -81,11 +81,11 @@ class ExperimentPlot:
             self.df = pd.concat((self.df, df), axis=0).reset_index(drop=True)
             self.policy_order = [policy for policy in const.POLICY_ORDER if policy in self.df['Policy'].unique()]
 
-        if self.feature_df is None:
-            self.feature_df = feature_df.reset_index(drop=True)
-        else:
-            feature_df = feature_df.reset_index(drop=True)  # Reset the index of the new dataframe before concatenation
-            self.feature_df = pd.concat((self.feature_df, feature_df), axis=0).reset_index(drop=True)
+        # if self.feature_df is None:
+        #     self.feature_df = feature_df.reset_index(drop=True)
+        # else:
+        #     feature_df = feature_df.reset_index(drop=True)  # Reset the index of the new dataframe before concatenation
+        #     self.feature_df = pd.concat((self.feature_df, feature_df), axis=0).reset_index(drop=True)
 
     def get_autotuner_objective(self):
         if len(self.df) == 0:
@@ -97,8 +97,8 @@ class ExperimentPlot:
         out_path_df = self.data_folder / 'data.csv'
         self.df.to_csv(out_path_df)
 
-        out_path_feature_df = self.data_folder / 'feature_data.csv'
-        self.feature_df.to_csv(out_path_feature_df)
+        # out_path_feature_df = self.data_folder / 'feature_data.csv'
+        # self.feature_df.to_csv(out_path_feature_df)
 
     def export_plots(self, file_name: str) -> None:
         plt.savefig(self.plot_folder / f'pdfs/{file_name}.pdf')
