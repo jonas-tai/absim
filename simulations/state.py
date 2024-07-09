@@ -83,7 +83,7 @@ class StateParser:
 
         return torch.tensor([state_features], dtype=torch.float32)
 
-    def state_to_tensor(self, state: State, server_permutation: List[int] | None = None, degree: int = None) -> torch.Tensor:
+    def state_to_tensor(self, state: State, server_permutation: List[int] | None = None, degree: int | None = None) -> torch.Tensor:
         if server_permutation is None:
             server_permutation = [i for i in range(len(state.node_states))]
 
