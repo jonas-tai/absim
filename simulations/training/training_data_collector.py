@@ -206,18 +206,18 @@ class TrainingDataCollector:
 
         action_reward_policy_df = pd.DataFrame(data)
         file_path = self.data_folder / const.ACTION_REWARD_POLICY_FILE
-        action_reward_policy_df.to_csv(file_path, index=False)
+        action_reward_policy_df.to_csv(file_path, index=False, compression='gzip')
 
         data = [state.squeeze().cpu().numpy() for state in self.all_states]
         state_df = pd.DataFrame(data)
         file_path = self.data_folder / const.STATE_FILE
-        state_df.to_csv(file_path, index=False)
+        state_df.to_csv(file_path, index=False, compression='gzip')
 
         data = [next_state.squeeze().cpu().numpy() for next_state in self.all_next_states]
         next_state_df = pd.DataFrame(data)
         file_path = self.data_folder / const.NEXT_STATE_FILE
         print(len(next_state_df))
-        next_state_df.to_csv(file_path, index=False)
+        next_state_df.to_csv(file_path, index=False, compression='gzip')
 
     def log_state_and_action(self, simulation, task: Task, action: int, policy: str) -> None:
         state = state = task.get_state()

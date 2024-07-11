@@ -49,10 +49,10 @@ class FeatureDataCollector:
         for analysis_data in self.data:
             if analysis_data.epoch != epoch:
                 continue
-            out_path = self.out_folder / f'{analysis_data.epoch}_{analysis_data.policy}_data.csv'
+            out_path = self.out_folder / f'{analysis_data.epoch}_{analysis_data.policy}_data.csv.gz'
             combined_df = pd.concat(objs=[analysis_data.reward_data, analysis_data.feature_data], axis=1)
             combined_df.reset_index(drop=True, inplace=True)
-            combined_df.to_csv(out_path)
+            combined_df.to_csv(out_path, compression='gzip')
 
     def export_training_data(self) -> None:
         train_data_df = pd.DataFrame()
@@ -61,7 +61,7 @@ class FeatureDataCollector:
             combined_df.reset_index(drop=True, inplace=True)
             train_data_df = pd.concat([train_data_df, combined_df], ignore_index=True)
 
-        train_data_df.to_csv(self.out_folder / 'feature_data.csv', index=False)
+        train_data_df.to_csv(self.out_folder / 'feature_data.csv.gz', index=False, compression='gzip')
 
     def run_latency_lin_reg(self, epoch: int) -> None:
         prefix = 'train' if self.is_train_data else 'test'

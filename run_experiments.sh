@@ -47,149 +47,94 @@
 
 
 
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/0/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 16 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/8/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 64 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/0/collected_training_data/" --test_service_time_model "pareto" --batch_size 16 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/8/collected_training_data/" --test_service_time_model "pareto" --batch_size 64 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/0/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 16 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/8/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 64 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/0/collected_training_data/" --test_service_time_model "pareto" --batch_size 16 & echo $! >> pids.txt
-sleep 5
-
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/0/collected_training_data/"  --test_service_time_model "random.expovariate" --batch_size 32 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/0/collected_training_data/" --test_service_time_model "pareto" --batch_size 32 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/0/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 32 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/0/collected_training_data/" --test_service_time_model "pareto" --batch_size 32 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/8/collected_training_data/" --test_service_time_model "pareto" --batch_size 64 & echo $! >> pids.txt
 sleep 5
 
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/0/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 64 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/8/collected_training_data/"  --test_service_time_model "random.expovariate" --batch_size 128 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/0/collected_training_data/" --test_service_time_model "pareto" --batch_size 64 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/8/collected_training_data/" --test_service_time_model "pareto" --batch_size 128 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/0/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 64 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/8/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 128 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/0/collected_training_data/" --test_service_time_model "pareto" --batch_size 64 & echo $! >> pids.txt
-sleep 5
-
-
-
-
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/2/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 16 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/2/collected_training_data/" --test_service_time_model "pareto" --batch_size 16 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/2/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 16 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/2/collected_training_data/" --test_service_time_model "pareto" --batch_size 16 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/8/collected_training_data/" --test_service_time_model "pareto" --batch_size 128 & echo $! >> pids.txt
 sleep 5
 
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/2/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 32 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/8/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 256 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/--offline_expert_data "/dev/shm/outputs/expert_data/4/collected_training_data/"data" --test_service_time_model "pareto" --batch_size 32 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/8/collected_training_data/" --test_service_time_model "pareto" --batch_size 256 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/2/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 32 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/8/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 256 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/2/collected_training_data/" --test_service_time_model "pareto" --batch_size 32 & echo $! >> pids.txt
-sleep 5
-
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/2/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 64 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/2/collected_training_data/" --test_service_time_model "pareto" --batch_size 64 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/2/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 64 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/2/collected_training_data/" --test_service_time_model "pareto" --batch_size 64 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/8/collected_training_data/" --test_service_time_model "pareto" --batch_size 256 & echo $! >> pids.txt
 sleep 5
 
 
 
 
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/4/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 16 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/10/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 64 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/4/collected_training_data/" --test_service_time_model "pareto" --batch_size 16 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/10/collected_training_data/" --test_service_time_model "pareto" --batch_size 64 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/4/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 16 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/10/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 64 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/4/collected_training_data/" --test_service_time_model "pareto" --batch_size 16 & echo $! >> pids.txt
-sleep 5
-
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/4/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 32 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/4/collected_training_data/" --test_service_time_model "pareto" --batch_size 32 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/4/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 32 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/4/collected_training_data/" --test_service_time_model "pareto" --batch_size 32 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/10/collected_training_data/" --test_service_time_model "pareto" --batch_size 64 & echo $! >> pids.txt
 sleep 5
 
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/4/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 64 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/10/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 128 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/4/collected_training_data/" --test_service_time_model "pareto" --batch_size 64 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/10/collected_training_data/" --test_service_time_model "pareto" --batch_size 128 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/4/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 64 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/10/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 128 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/4/collected_training_data/" --test_service_time_model "pareto" --batch_size 64 & echo $! >> pids.txt
-sleep 5
-
-
-
-
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/--offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/"" --test_service_time_model "random.expovariate" --batch_size 16 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/6/collected_training_data/" --test_service_time_model "pareto" --batch_size 16 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/6/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 16 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/6/collected_training_data/" --test_service_time_model "pareto" --batch_size 16 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/10/collected_training_data/" --test_service_time_model "pareto" --batch_size 128 & echo $! >> pids.txt
 sleep 5
 
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/6/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 32 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/10/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 256 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/6/collected_training_data/" --test_service_time_model "pareto" --batch_size 32 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/10/collected_training_data/" --test_service_time_model "pareto" --batch_size 256 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/6/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 32 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/10/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 256 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/6/collected_training_data/" --test_service_time_model "pareto" --batch_size 32 & echo $! >> pids.txt
-sleep 5
-
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/6/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 64 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/6/collected_training_data/" --test_service_time_model "pareto" --batch_size 64 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/6/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 64 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/6/collected_training_data/" --test_service_time_model "pareto" --batch_size 64 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/10/collected_training_data/" --test_service_time_model "pareto" --batch_size 256 & echo $! >> pids.txt
 sleep 5
 
 
 
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 16 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "pareto" --batch_size 16 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 16 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "pareto" --batch_size 16 & echo $! >> pids.txt
-sleep 5
 
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 32 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "pareto" --batch_size 32 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 32 & echo $! >> pids.txt
-sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "pareto" --batch_size 32 & echo $! >> pids.txt
-sleep 5
 
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 64 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 64 & echo $! >> pids.txt
 sleep 5
-PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 15000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "pareto" --batch_size 64 & echo $! >> pids.txt
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "pareto" --batch_size 64 & echo $! >> pids.txt
 sleep 5
 PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 64 & echo $! >> pids.txt
 sleep 5
 PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "pareto" --batch_size 64 & echo $! >> pids.txt
 sleep 5
+
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 128 & echo $! >> pids.txt
+sleep 5
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "pareto" --batch_size 128 & echo $! >> pids.txt
+sleep 5
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 128 & echo $! >> pids.txt
+sleep 5
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "pareto" --batch_size 128 & echo $! >> pids.txt
+sleep 5
+
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 256 & echo $! >> pids.txt
+sleep 5
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 45000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "pareto" --batch_size 256 & echo $! >> pids.txt
+sleep 5
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "random.expovariate" --batch_size 256 & echo $! >> pids.txt
+sleep 5
+PYTHONPATH=./ python3 simulations/experiment.py --from_expert_data_epoch_size 30000 --offline_expert_data "/dev/shm/outputs/expert_data/12/collected_training_data/" --test_service_time_model "pareto" --batch_size 256 & echo $! >> pids.txt
+sleep 5
+
+
+
 

@@ -36,7 +36,7 @@ class ExperimentPlot:
         os.makedirs(plot_folder / 'pdfs/episode', exist_ok=True)
 
     def from_csv(self) -> None:
-        self.df = pd.read_csv(self.data_folder / f'data.csv')
+        self.df = pd.read_csv(self.data_folder / f'data.csv.gz')
         self.policy_order = [policy for policy in const.POLICY_ORDER if policy in self.df['Policy'].unique()]
 
         # Get the value for utilization
@@ -94,11 +94,11 @@ class ExperimentPlot:
         return - self.df[self.df['Policy'] == 'DQN']['Latency'].quantile(0.99)
 
     def export_data(self) -> None:
-        out_path_df = self.data_folder / 'data.csv'
-        self.df.to_csv(out_path_df)
+        out_path_df = self.data_folder / 'data.csv.gz'
+        self.df.to_csv(out_path_df, compression='gzip')
 
-        out_path_feature_df = self.data_folder / 'feature_data.csv'
-        self.feature_df.to_csv(out_path_feature_df)
+        out_path_feature_df = self.data_folder / 'feature_data.csv.gz'
+        self.feature_df.to_csv(out_path_feature_df, compression='gzip')
 
     def export_plots(self, file_name: str) -> None:
         plt.savefig(self.plot_folder / f'pdfs/{file_name}.pdf')

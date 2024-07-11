@@ -42,7 +42,7 @@ def supervised_learning_wrapper(simulation_args: SimulationArgs):
     os.makedirs(plot_path, exist_ok=True)
     os.makedirs(plot_path / 'pdfs', exist_ok=True)
 
-    data_path = Path('/home/jonas/projects/absim/plots/112/data/train_data_points.csv')
+    data_path = Path('/home/jonas/projects/absim/plots/112/data/train_data_points.csv.gz')
 
     trainer = SupervisedModelTrainer(state_parser=state_parser, lr=args.args.lr, batch_size=args.args.batch_size,
                                      n_labels=simulation_args.args.num_servers, out_folder=plot_path, data_path=data_path, seed=1)

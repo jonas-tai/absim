@@ -1,8 +1,8 @@
 # File name constants
 TRAINING_DATA_COLLECTOR_JSON = 'training_data_collector.json'
-STATE_FILE = 'state_data.csv'
-ACTION_REWARD_POLICY_FILE = 'action_reward_policy_data.csv'
-NEXT_STATE_FILE = 'next_state_data.csv'
+STATE_FILE = 'state_data.csv.gz'
+ACTION_REWARD_POLICY_FILE = 'action_reward_policy_data.csv.gz'
+NEXT_STATE_FILE = 'next_state_data.csv.gz'
 
 
 # These are defaults.

@@ -452,7 +452,7 @@ def main(input_args=None) -> None:
     config_folder = Path('./', 'configs')
     workload_builder = WorkloadBuilder(config_folder=config_folder)
 
-    EXPERIMENT_NAME = 'story_experiments'
+    EXPERIMENT_NAME = 'story_experiments_2'
 
     train_workloads = [] 
     # workload_builder.create_train_base_workloads(
