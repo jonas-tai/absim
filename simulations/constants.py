@@ -11,9 +11,9 @@ NW_LATENCY_MU = 0.040
 NW_LATENCY_SIGMA = 0.0
 NUMBER_OF_CLIENTS = 1
 
-ARS_MAPPING = {f'ARS_{i}': (i / 100.0) for i in range(101)}
+ARS_MAPPING = {f'ARS_EXPLR_{i}': (i / 100.0) for i in range(101)}
 
-ARS_SETTINGS = [item for i in range(101) for item in [f'ARS_{i}']]
+ARS_SETTINGS = [item for i in range(101) for item in [f'ARS_EXPLR_{i}', f'ARS_DUPL_{i}']]
 
 DQN_EXPLR_SETTINGS = [item for i in range(
     101) for item in [f'DQN_EXPLR_{i}_TRAIN', f'DQN_EXPLR_{i}', f'OFFLINE_DQN_EXPLR_{i}_TRAIN', f'OFFLINE_DQN_EXPLR_{i}']]
@@ -53,7 +53,8 @@ POLICY_COLORS.update({f'DQN_EXPLR_{i}': 'C4' for i in range(101)})
 POLICY_COLORS.update({f'DQN_EXPLR_{i}_TRAIN': 'C4' for i in range(101)})
 POLICY_COLORS.update({f'DQN_DUPL_{i}': f'C{5 + i % 10}' for i in range(101)})
 POLICY_COLORS.update({f'DQN_DUPL_{i}_TRAIN': f'C{5 + i % 10}' for i in range(101)})
-POLICY_COLORS.update({f'ARS_{i}': 'C0' for i in range(101)})
+POLICY_COLORS.update({f'ARS_EXPLR_{i}': 'C0' for i in range(101)})
+POLICY_COLORS.update({f'ARS_DUPL_{i}': 'C2' for i in range(101)})
 
 # Add 'OFFLINE_' prefix variations
 POLICY_COLORS.update({f'OFFLINE_{policy}': color for policy, color in POLICY_COLORS.items()})

@@ -6,10 +6,15 @@ import seaborn as sns
 import pandas as pd
 
 from simulations.plotting import ExperimentPlot
+from simulations.state import StateParser
 
 
 MODE = 'same_workload_seed'
 EXPERIMENT = 'same_workload_seed_long'
+
+state_parser = StateParser(num_servers=5,
+                               num_request_rates=3,
+                               poly_feat_degree=2)
 
 
 def get_directory_paths(folder_path):
@@ -18,20 +23,37 @@ def get_directory_paths(folder_path):
     return directory_paths
 
 
-for i in range(0, 24):
-    directories = get_directory_paths(f'/home/jonas/projects/absim/outputs/{EXPERIMENT}/{i}/')
+def run_plots():
+    for i in range(0, 24):
+        directories = get_directory_paths(f'/home/jonas/projects/absim/outputs/{EXPERIMENT}/{i}/')
 
-    # base_path = Path(
-    # f'/home/jonas/projects/absim/outputs/{EXPERIMENT}/{i}/variable_long_task_fraction_updated_long_tasks_20.00_util_20.00_long_tasks')
-    for base_path in directories:
-        data_folder = base_path / 'data'
-        plot_folder = base_path / 'plots'
+        # base_path = Path(
+        # f'/home/jonas/projects/absim/outputs/{EXPERIMENT}/{i}/variable_long_task_fraction_updated_long_tasks_20.00_util_20.00_long_tasks')
+        for base_path in directories:
+            data_folder = base_path / 'data'
+            plot_folder = base_path / 'plots'
 
-        plotter = ExperimentPlot(plot_folder=plot_folder, data_folder=data_folder)
+            plotter = ExperimentPlot(plot_folder=plot_folder, data_folder=data_folder)
 
-        plotter.from_csv()
-        plotter.plot_latency_over_time_short_long_request(
-            policies=['OFFLINE_DQN', 'ARS', 'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_DUPL_30_TRAIN', 'OFFLINE_DQN_EXPLR_10_TRAIN', 'OFFLINE_DQN_EXPLR_20_TRAIN', 'OFFLINE_DQN_EXPLR_30_TRAIN'])
+            plotter.from_csv()
+            plotter.plot_latency_over_time_short_long_request(
+                policies=['OFFLINE_DQN', 'ARS', 'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_DUPL_30_TRAIN', 'OFFLINE_DQN_EXPLR_10_TRAIN', 'OFFLINE_DQN_EXPLR_20_TRAIN', 'OFFLINE_DQN_EXPLR_30_TRAIN'])
+
+
+# base_path = Path(
+# f'/home/jonas/projects/absim/outputs/{EXPERIMENT}/{i}/variable_long_task_fraction_updated_long_tasks_20.00_util_20.00_long_tasks')
+for base_path in ['/dev/shm/outputs/story_experiments/58/base_45.00_util_30.00_long_tasks_532508/', '/dev/shm/outputs/story_experiments/58/base_45.00_util_0.00_long_tasks_532508/', 
+                    '/dev/shm/outputs/story_experiments/10/base_45.00_util_30.00_long_tasks_532508/']:
+    base_path = Path(base_path)
+    data_folder = base_path / 'data'
+    plot_folder = base_path / 'plots'
+
+    plotter = ExperimentPlot(plot_folder=plot_folder, data_folder=data_folder, state_parser=state_parser)
+
+    plotter.from_csv()
+    plotter.generate_plots()
+    # plotter.plot_latency_over_time_short_long_request(
+    #     policies=['OFFLINE_DQN', 'ARS', 'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_DUPL_30_TRAIN', 'OFFLINE_DQN_EXPLR_10_TRAIN', 'OFFLINE_DQN_EXPLR_20_TRAIN', 'OFFLINE_DQN_EXPLR_30_TRAIN'])
 
 
 # for (long_tasks, i) in [('0.00', 9), ('10.00', 10), ('20.00', 11), ('30.00', 12), ('40.00', 13), ('50.00', 14), ('60.00', 15), ('70.00', 16), ('80.00', 17)]:  # [('10.00', 1),

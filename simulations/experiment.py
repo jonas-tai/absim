@@ -29,6 +29,9 @@ DQN_DUPL_MAPPING.update({f'DQN_DUPL_{i}_TRAIN': i / 100 for i in range(101)})
 DQN_DUPL_MAPPING.update({f'OFFLINE_DQN_DUPL_{i}': i / 100.0 for i in range(101)})
 DQN_DUPL_MAPPING.update({f'OFFLINE_DQN_DUPL_{i}_TRAIN': i / 100 for i in range(101)})
 
+
+ARS_DUPL_MAPPING = {f'ARS_DUPL_{i}': i / 100.0 for i in range(101)}
+
 BASE_TEST_SEED = 111111
 BASE_TEST_EXPLR_SEED = 222222
 
@@ -281,10 +284,12 @@ def run_rl_tests(simulation_args: SimulationArgs, workloads: List[BaseWorkload],
                 run_rl_dqn_test(simulation_args=simulation_args, workload=test_workload, policy=policy,
                                 plot_folder=plot_path, data_folder=data_folder, trainer=trainer, experiment_runner=experiment_runner, training_data_collector=training_data_collector, test_plotter=test_plotter)
             else:
-                duplication_rate = 0
                 for i_episode in range(const.NUM_TEST_EPSIODES):
+                    duplication_rate = 0
                     seed = BASE_TEST_SEED + i_episode
-
+                    
+                    if policy.startswith('ARS_DUPL_'):
+                        duplication_rate = ARS_DUPL_MAPPING[policy]
                     random.seed(seed)
                     np.random.seed(seed)
                     torch.manual_seed(seed)
@@ -452,24 +457,26 @@ def main(input_args=None) -> None:
     config_folder = Path('./', 'configs')
     workload_builder = WorkloadBuilder(config_folder=config_folder)
 
-    EXPERIMENT_NAME = 'story_experiments_2'
+    EXPERIMENT_NAME = 'retrain'
 
     train_workloads = [] 
     # workload_builder.create_train_base_workloads(
         # long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.7], num_requests=48000)
 
-    test_workloads = workload_builder.create_test_base_workloads(
-        utilizations=[0.45, 0.7],
-        long_tasks_fractions=[0.0, 0.1, 0.3, 0.5, 0.7],
-        num_requests=16000) + workload_builder.create_test_var_long_tasks_workloads(num_requests=350000)
+    test_workloads = workload_builder.create_test_var_long_tasks_workloads(num_requests=350000)
+    # workload_builder.create_test_base_workloads(
+    #     utilizations=[0.45, 0.7],
+    #     long_tasks_fractions=[0.0, 0.1, 0.3, 0.5, 0.7],
+    #     num_requests=16000)
 
     # test_workloads = workload_builder.create_test_base_workloads(utilizations=[0.6, 0.7, 0.8], long_tasks_fractions=[
     #     0.0, 0.1, 0.3, 0.6, 0.7], num_requests=8000)
 
     const.EVAL_POLICIES_TO_RUN = [
         'ARS', 'OFFLINE_DQN',
-        'OFFLINE_DQN_EXPLR_10', 'OFFLINE_DQN_EXPLR_15', 'OFFLINE_DQN_EXPLR_20',
-        'OFFLINE_DQN_DUPL_10', 'OFFLINE_DQN_DUPL_15', 'OFFLINE_DQN_DUPL_20',]
+        'OFFLINE_DQN_EXPLR_0_TRAIN',
+        'OFFLINE_DQN_EXPLR_10_TRAIN', 'OFFLINE_DQN_EXPLR_15_TRAIN', 'OFFLINE_DQN_EXPLR_20_TRAIN',
+        'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_15_TRAIN', 'OFFLINE_DQN_DUPL_20_TRAIN',]
     # 'ARS', 'OFFLINE_DQN',
     # 'OFFLINE_DQN_EXPLR_20_TRAIN', 'OFFLINE_DQN_EXPLR_30_TRAIN',
     # 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_DUPL_30_TRAIN'
@@ -486,7 +493,7 @@ def main(input_args=None) -> None:
     args.args.lr_scheduler_step_size = 30
     args.args.replay_always_use_newest = False
     args.args.collect_train_data = False
-    args.args.train_from_expert_data =  True
+    args.args.train_from_expert_data =  False
     args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
     # args.args.offline_model = ''  # '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
     args.args.lr = 1e-6

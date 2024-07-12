@@ -117,8 +117,9 @@ class OfflineTrainer:
         self.load_stats_from_file(model_folder)
 
         # Load expert data if not preset
-        if self.expert_memory is None and self.do_active_retraining:
-            self.init_expert_data_from_csv()
+        print('Warning, not loading expert data!')
+        # if self.expert_memory is None and self.do_active_retraining:
+        #     self.init_expert_data_from_csv()
 
         # Reinit retrain memory
         self.retrain_memory = ReplayMemory(max_size=self.replay_memory_size,

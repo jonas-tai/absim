@@ -263,9 +263,9 @@ class Client:
                           * replica.serviceTime
                           for replica in original_replica_set}
             replica_set.sort(key=oracle_map.get)
-        elif self.REPLICA_SELECTION_STRATEGY == "ARS":
+        elif self.REPLICA_SELECTION_STRATEGY == "ARS" or self.REPLICA_SELECTION_STRATEGY.startswith('ARS_DUPL'):
             replica_set = ars_replica_ranking
-        elif self.REPLICA_SELECTION_STRATEGY.startswith('ARS_'):
+        elif self.REPLICA_SELECTION_STRATEGY.startswith('ARS_EXPLR'):
             # ARS with some exploration, used for collecting training
             explr_fraction = const.ARS_MAPPING[self.REPLICA_SELECTION_STRATEGY]
 
