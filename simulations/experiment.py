@@ -91,7 +91,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
                                      model_structure=simulation_args.args.model_structure,
                                      n_actions=simulation_args.args.num_servers,
                                      replay_always_use_newest=simulation_args.args.replay_always_use_newest,
-                                     replay_memory_size=simulation_args.args.replay_memory_size,
+                                     offline_train_epoch_len=simulation_args.args.offline_train_epoch_len,
                                      gamma=simulation_args.args.gamma,
                                      eps_decay=simulation_args.args.eps_decay,
                                      eps_start=simulation_args.args.eps_start,
@@ -155,7 +155,7 @@ def train_model_from_expert_data(simulation_args: SimulationArgs, offline_traine
     # train_data_collector.init_expert_data_from_data_collector()
 
     for _ in range(simulation_args.args.epochs):
-        offline_trainer.train_model_from_expert_data_epoch(train_steps=simulation_args.args.from_expert_data_epoch_size)
+        offline_trainer.train_model_from_expert_data_epoch(train_steps=simulation_args.args.offline_train_epoch_len)
         # TODO: Add eval of Offline_DQN as test here to monitor performance
     offline_trainer.save_models_and_stats(offline_train_out_folder)
     offline_trainer.plot_grads_and_losses(plot_path=offline_plot_folder, file_prefix='offline_train')
@@ -287,7 +287,7 @@ def run_rl_tests(simulation_args: SimulationArgs, workloads: List[BaseWorkload],
                 for i_episode in range(const.NUM_TEST_EPSIODES):
                     duplication_rate = 0
                     seed = BASE_TEST_SEED + i_episode
-                    
+
                     if policy.startswith('ARS_DUPL_'):
                         duplication_rate = ARS_DUPL_MAPPING[policy]
                     random.seed(seed)
@@ -457,13 +457,19 @@ def main(input_args=None) -> None:
     config_folder = Path('./', 'configs')
     workload_builder = WorkloadBuilder(config_folder=config_folder)
 
-    EXPERIMENT_NAME = 'retrain'
+    EXPERIMENT_NAME = 'chained_wl_parameter_search'
 
-    train_workloads = [] 
+    train_workloads = []
     # workload_builder.create_train_base_workloads(
-        # long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.7], num_requests=48000)
+    # long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.7], num_requests=48000)
 
-    test_workloads = workload_builder.create_test_var_long_tasks_workloads(num_requests=350000)
+    lhs_workloads = workload_builder.create_test_base_workloads(
+        long_tasks_fractions=[0.3], utilizations=[0.7], num_requests=10000)
+    rhs_workloads = workload_builder.create_test_base_workloads(
+        long_tasks_fractions=[0.0, 0.1, 0.2, 0.5, 0.6, 0.7, 0.8], utilizations=[0.5, 0.7], num_requests=64000)
+    test_workloads = workload_builder.create_chained_workloads(
+        first_workloads=lhs_workloads, second_workloads=rhs_workloads)
+    # workload_builder.create_test_var_long_tasks_workloads(num_requests=350000)
     # workload_builder.create_test_base_workloads(
     #     utilizations=[0.45, 0.7],
     #     long_tasks_fractions=[0.0, 0.1, 0.3, 0.5, 0.7],
@@ -476,7 +482,7 @@ def main(input_args=None) -> None:
         'ARS', 'OFFLINE_DQN',
         'OFFLINE_DQN_EXPLR_0_TRAIN',
         'OFFLINE_DQN_EXPLR_10_TRAIN', 'OFFLINE_DQN_EXPLR_15_TRAIN', 'OFFLINE_DQN_EXPLR_20_TRAIN',
-        'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_15_TRAIN', 'OFFLINE_DQN_DUPL_20_TRAIN',]
+        'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_15_TRAIN', 'OFFLINE_DQN_DUPL_20_TRAIN']
     # 'ARS', 'OFFLINE_DQN',
     # 'OFFLINE_DQN_EXPLR_20_TRAIN', 'OFFLINE_DQN_EXPLR_30_TRAIN',
     # 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_DUPL_30_TRAIN'
@@ -493,7 +499,7 @@ def main(input_args=None) -> None:
     args.args.lr_scheduler_step_size = 30
     args.args.replay_always_use_newest = False
     args.args.collect_train_data = False
-    args.args.train_from_expert_data =  False
+    args.args.train_from_expert_data = False
     args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
     # args.args.offline_model = ''  # '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
     args.args.lr = 1e-6

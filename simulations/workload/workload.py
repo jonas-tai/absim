@@ -33,7 +33,6 @@ class BaseWorkload:
         self.client_delay_mean = -1
         self.num_requests = num_requests
         self.executed_requests = 0
-        self.req_since_last_workload_change = 0
 
         self.long_tasks_fraction = long_tasks_fraction
         self.workload_type: str = 'base'
@@ -44,7 +43,6 @@ class BaseWorkload:
     def reset_workload(self):
         self.executed_requests = 0
         self.client_delay_mean = -1
-        self.req_since_last_workload_change = 0
         # TODO: Make this use separate randomState generators instead of reseeding the library
         self.random = random.Random(self.workload_seed)
         self.np_random = np.random.default_rng(self.workload_seed)
@@ -123,7 +121,6 @@ class BaseWorkload:
                 yield simulation.timeout(self.np_random.pareto(ALPHA) * scale)
 
             self.executed_requests += 1
-            self.req_since_last_workload_change += 1
         self.reset_workload()
 
     def weighted_choice(self, simulation, clients: List[Client]) -> Client:
@@ -147,12 +144,15 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
         super().__init__(id_=id_, workload_seed=workload_seed, arrival_model=arrival_model,
                          num_requests=num_requests, long_tasks_fraction=long_tasks_fraction, utilization=utilization)
         self.trigger_threshold_mean = trigger_threshold_mean
+        self.trigger_threshold_sigma = int(trigger_threshold_mean / 8)
         self.next_trigger_threshold = int(self.random.normalvariate(self.trigger_threshold_mean, 8000))
         self.updated_long_tasks_fractions = updated_long_tasks_fractions
         self.updated_utilizations = updated_utilizations
 
         self.long_tasks_fraction = self.random.choice(self.updated_long_tasks_fractions)
         self.utilization = self.random.choice(self.updated_utilizations)
+
+        self.req_since_last_trigger = 0
 
         self.workload_type: str = 'variable_long_task_fraction'
 
@@ -161,12 +161,13 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
         self.next_trigger_threshold = int(self.random.normalvariate(self.trigger_threshold_mean, 8000))
         self.long_tasks_fraction = self.random.choice(self.updated_long_tasks_fractions)
         self.utilization = self.random.choice(self.updated_utilizations)
+        self.req_since_last_trigger = 0
 
     def to_file_name(self) -> str:
         return f'{self.workload_type}_{self.workload_seed}'
 
     def before_task_creation(self, servers: List[Server]):
-        if self.req_since_last_workload_change > 0 and self.req_since_last_workload_change % self.next_trigger_threshold == 0:
+        if self.req_since_last_trigger > 0 and self.req_since_last_trigger % self.next_trigger_threshold == 0:
 
             new_long_task_fraction = self.random.choice(self.updated_long_tasks_fractions)
             print(
@@ -184,14 +185,15 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
             self.utilization = new_utilization
             self.client_delay_mean = updated_client_delay_mean
 
-            self.req_since_last_workload_change = 0
+            self.req_since_last_trigger = 0
             self.next_trigger_threshold = int(self.random.normalvariate(self.trigger_threshold_mean, sigma=8000))
+        self.req_since_last_trigger += 1
 
     @classmethod
     def from_dict(cls, id_: int, config: Dict[str, Any]) -> 'VariableLongTaskFractionWorkload':
         num_requests = config['num_requests']
         long_tasks_fraction = config['long_tasks_fraction']
-        trigger_threshold = config['trigger_threshold']
+        trigger_threshold_mean = config['trigger_threshold_mean']
         updated_long_tasks_fractions = config['updated_long_tasks_fractions']
         updated_utilizations = config['updated_utilizations']
         arrival_model = config['arrival_model']
@@ -202,7 +204,7 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
         return cls(
             id_=id_,  # You can set a proper id here
             workload_seed=workload_seed,
-            trigger_threshold_mean=trigger_threshold,
+            trigger_threshold_mean=trigger_threshold_mean,
             updated_long_tasks_fractions=updated_long_tasks_fractions,
             updated_utilizations=updated_utilizations,
             arrival_model=arrival_model,
@@ -214,9 +216,74 @@ class VariableLongTaskFractionWorkload(BaseWorkload):
     def to_json(self) -> str:
         base_data = json.loads(super().to_json())
         additional_data = {
-            'trigger_threshold': self.trigger_threshold_mean,
+            'trigger_threshold_mean': self.trigger_threshold_mean,
             'updated_long_tasks_fractions': self.updated_long_tasks_fractions,
             'updated_utilizations': self.updated_utilizations,
+        }
+        base_data.update(additional_data)
+        return json.dumps(base_data, indent=4)
+
+    def to_json_file(self, out_folder: Path, prefix: str = ''):
+        json_data = self.to_json()
+        with open(out_folder / f'{prefix}{WORKLOAD_CONFIG_FILE_NAME}', 'w') as file:
+            file.write(json_data)
+
+
+class ChainedWorkload(BaseWorkload):
+    def __init__(self, id_, workload_seed: int, workloads: List[BaseWorkload]):
+        num_requests = sum([workload.num_requests for workload in workloads])
+        assert len(workloads) > 0
+
+        self.workload_iter = iter(workloads)
+        self.current_workload = next(self.workload_iter)
+        super().__init__(id_=id_, workload_seed=workload_seed, arrival_model=self.current_workload.arrival_model,
+                         num_requests=num_requests, long_tasks_fraction=self.current_workload.long_tasks_fraction,
+                         utilization=self.current_workload.utilization)
+
+        self.workloads = workloads
+        self.next_workload_change = self.current_workload.num_requests
+        self.req_since_last_workload_change = 0
+
+        # TODO make file name unique!
+        self.workload_type: str = 'chained_workload'
+
+    def switch_to_next_workload(self) -> None:
+        try:
+            self.current_workload = next(self.workload_iter)
+            self.arrival_model = self.current_workload.arrival_model
+            self.long_tasks_fraction = self.current_workload.long_tasks_fraction
+            self.utilization = self.current_workload.utilization
+            self.next_workload_change = self.current_workload.num_requests
+            self.req_since_last_workload_change = 0
+        except StopIteration:
+            print('Reached end of chained workloads')
+
+    def reset_workload(self) -> None:
+        super().reset_workload()
+        self.workload_iter = iter(self.workloads)
+        self.switch_to_next_workload()
+
+    def to_file_name(self) -> str:
+        return f'{self.workload_type}_{"_".join([wl.to_file_name() for wl in self.workloads])}'
+
+    def before_task_creation(self, servers: List[Server]):
+        if self.req_since_last_workload_change > 0 and self.req_since_last_workload_change % self.next_workload_change == 0:
+            self.switch_to_next_workload()
+
+            updated_client_delay_mean = calculate_client_delay_mean(
+                servers=servers, utilization=self.utilization, long_tasks_fraction=self.long_tasks_fraction)
+            print(f'Changing client delay from {self.client_delay_mean} to {updated_client_delay_mean}')
+            self.client_delay_mean = updated_client_delay_mean
+
+        self.req_since_last_workload_change += 1
+        self.current_workload.before_task_creation(servers=servers)
+
+    def to_json(self) -> str:
+        workload_json_list = [json.loads(workload.to_json()) for workload in self.workloads]
+
+        base_data = json.loads(super().to_json())
+        additional_data = {
+            'workloads': workload_json_list,
         }
         base_data.update(additional_data)
         return json.dumps(base_data, indent=4)

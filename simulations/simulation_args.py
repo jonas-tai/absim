@@ -54,7 +54,7 @@ class SimulationArgs:
         # Folders
         parser.add_argument('--data_folder', nargs='?', type=str, default="data")
         parser.add_argument('--plot_folder', nargs='?', type=str, default="plots")
-        parser.add_argument('--output_folder',  nargs='?', type=str, default="/dev/shm/outputs")
+        parser.add_argument('--output_folder',  nargs='?', type=str, default="/data1/outputs")
         parser.add_argument('--model_folder', nargs='?', type=str, default="")
 
         parser.add_argument('--demand_skew', nargs='?',
@@ -175,14 +175,15 @@ class SimulationArgs:
                             default=False, help='If true, log and save all data collected for offline training later')
         parser.add_argument('--train_from_expert_data', action='store_true',
                             default=False, help='If true, log and save all data collected for offline training later')
-        parser.add_argument('--from_expert_data_epoch_size', nargs='?',
-                            type=int, default=15000, help='Number of requests after which the model is retrained')
+        parser.add_argument('--offline_train_epoch_len', nargs='?',
+                            type=int, default=4000, help='Number of training steps done per offline training / retraining')
         parser.add_argument('--train_policy', nargs='?',
                             type=str, default=None, help='Policy used during training')
 
         # ReplayMemory parametes
+        # TODO: Remove or reactive
         parser.add_argument('--replay_memory_size', nargs='?',
-                            type=int, default=10000, help='Number of stats collected for normalizing')
+                            type=int, default=10000, help='Replay memory size for online training, offline training uses all collected data!')
         parser.add_argument('--replay_always_use_newest', action='store_true',
                             default=False, help='if true, always add newest transition to sample (see https://arxiv.org/pdf/1712.01275)')
 

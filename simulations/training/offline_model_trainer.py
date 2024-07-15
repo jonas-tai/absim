@@ -27,12 +27,12 @@ MODEL_TRAINER_JSON = 'model_trainer.json'
 
 class OfflineTrainer:
     def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int,
-                 replay_always_use_newest: bool, replay_memory_size: int,
+                 replay_always_use_newest: bool, offline_train_epoch_len: int,
                  batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2, eps_decay=1000, tau=0.005, lr=1e-4,
                  tau_decay=10, clipping_value=1):
         self.device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
         self.state_parser = state_parser
-        self.replay_memory_size = replay_memory_size
+        self.offline_train_epoch_len = offline_train_epoch_len
 
         self.BATCH_SIZE = batch_size
         self.GAMMA = gamma
@@ -77,7 +77,8 @@ class OfflineTrainer:
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
         # self.scheduler = optim.lr_scheduler.StepLR(
         #     self.optimizer, step_size=self.lr_scheduler_step_size, gamma=self.lr_scheduler_gamma)
-        self.retrain_memory = ReplayMemory(max_size=replay_memory_size, always_use_newest=replay_always_use_newest)
+        self.retrain_memory = ReplayMemory(max_size=self.offline_train_epoch_len,
+                                           always_use_newest=replay_always_use_newest)
         self.expert_memory = None
         self.replay_always_use_newest = replay_always_use_newest
 
@@ -89,7 +90,7 @@ class OfflineTrainer:
         torch.save(self.policy_net.state_dict(), model_folder / 'target_model_weights.pth')
 
         self.save_model_trainer_stats(model_folder)
-        self.retrain_memory.save_to_file(model_folder=model_folder)
+        # self.retrain_memory.save_to_file(model_folder=model_folder)
 
     def save_model_trainer_stats(self, data_folder: Path):
         model_trainer_json = {
@@ -116,13 +117,13 @@ class OfflineTrainer:
     def load_models_from_file(self, model_folder: Path):
         self.load_stats_from_file(model_folder)
 
-        # Load expert data if not preset
-        print('Warning, not loading expert data!')
-        # if self.expert_memory is None and self.do_active_retraining:
-        #     self.init_expert_data_from_csv()
+        if self.expert_memory is None and self.do_active_retraining:
+            self.init_expert_data_from_csv()
 
         # Reinit retrain memory
-        self.retrain_memory = ReplayMemory(max_size=self.replay_memory_size,
+        # TODO: Change
+        # This does not account for duplication, is later initialized with correct value
+        self.retrain_memory = ReplayMemory(max_size=self.offline_train_epoch_len,
                                            always_use_newest=self.replay_always_use_newest)
 
         policy_net = DQN(self.n_observations, self.n_actions,
@@ -187,11 +188,16 @@ class OfflineTrainer:
             self.reward_std = norm_stats.reward_std
             self.feature_std = norm_stats.feature_std
 
+        self.retrain_memory = ReplayMemory(max_size=len(transitions), always_use_newest=self.replay_always_use_newest)
         for transition in transitions:
             norm_transition = self.normalize_transition(transition=transition)
 
             # Store the normalized transition in memory
             self.retrain_memory.push_transition(transition=norm_transition)
+
+        # TODO: Change!
+        print(f'Number of steps: {len(transitions)}')
+        for _ in range(len(transitions)):
             self.training_step(memory=self.retrain_memory)
         # print('Offline epoch finished')
 
@@ -199,15 +205,17 @@ class OfflineTrainer:
         if expert_data_folder is not None:
             self.expert_data_folder = expert_data_folder
 
-        action_reward_policy_df = pd.read_csv(expert_data_folder / const.ACTION_REWARD_POLICY_FILE)
-        state_df = pd.read_csv(expert_data_folder / const.STATE_FILE)
-        next_state_df = pd.read_csv(expert_data_folder / const.NEXT_STATE_FILE)
+        action_reward_policy_df = pd.read_csv(self.expert_data_folder / const.ACTION_REWARD_POLICY_FILE)
+        state_df = pd.read_csv(self.expert_data_folder / const.STATE_FILE)
+        next_state_df = pd.read_csv(self.expert_data_folder / const.NEXT_STATE_FILE)
 
         # Make sure that data is aligned properly
         assert len(action_reward_policy_df) == len(state_df) and len(state_df) == len(next_state_df)
 
-        self.reward_mean = torch.tensor([action_reward_policy_df['reward'].mean()], dtype=torch.float32, device=self.device)
-        self.reward_std = torch.tensor([action_reward_policy_df['reward'].std()], dtype=torch.float32, device=self.device)
+        self.reward_mean = torch.tensor([action_reward_policy_df['reward'].mean()],
+                                        dtype=torch.float32, device=self.device)
+        self.reward_std = torch.tensor([action_reward_policy_df['reward'].std()],
+                                       dtype=torch.float32, device=self.device)
 
         self.feature_mean = torch.tensor(state_df.mean(), dtype=torch.float32, device=self.device)
         self.feature_std = torch.tensor(state_df.std(), dtype=torch.float32, device=self.device)

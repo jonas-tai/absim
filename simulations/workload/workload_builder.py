@@ -3,7 +3,7 @@ from typing import Any, Dict, List
 
 import yaml
 
-from simulations.workload.workload import BaseWorkload, VariableLongTaskFractionWorkload
+from simulations.workload.workload import BaseWorkload, ChainedWorkload, VariableLongTaskFractionWorkload
 
 
 class WorkloadBuilder:
@@ -81,5 +81,15 @@ class WorkloadBuilder:
                 workload = VariableLongTaskFractionWorkload.from_dict(id_=1, config=config)
 
                 workloads.append(workload)
+        return workloads
 
+    def create_chained_workloads(self, first_workloads: List[BaseWorkload], second_workloads: List[BaseWorkload], workload_seed: int | None = None) -> List[ChainedWorkload]:
+        workloads = []
+        if workload_seed is None:
+            workload_seed = first_workloads[0].workload_seed
+        for lhs_workload in first_workloads:
+            for rhs_workload in second_workloads:
+                chained_workload = ChainedWorkload(id_=1, workload_seed=workload_seed,
+                                                   workloads=[lhs_workload, rhs_workload])
+                workloads.append(chained_workload)
         return workloads

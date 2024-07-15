@@ -7,7 +7,7 @@ workload:
   workload_seed: 532508
 
 variable_long_task_fraction_workload:
-  trigger_threshold: 64000
+  trigger_threshold_mean: 64000
   updated_long_tasks_fractions: 
     - 0.0
     - 0.05
