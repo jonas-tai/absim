@@ -97,6 +97,7 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
                                      eps_start=simulation_args.args.eps_start,
                                      eps_end=simulation_args.args.eps_end,
                                      tau=simulation_args.args.tau,
+                                     replay_mem_retrain_expert_fraction=simulation_args.args.replay_mem_retrain_expert_fraction,
                                      tau_decay=simulation_args.args.tau_decay,
                                      lr=simulation_args.args.lr,
                                      batch_size=simulation_args.args.batch_size, clipping_value=simulation_args.args.clipping_value)
@@ -457,7 +458,7 @@ def main(input_args=None) -> None:
     config_folder = Path('./', 'configs')
     workload_builder = WorkloadBuilder(config_folder=config_folder)
 
-    EXPERIMENT_NAME = 'chained_wl_parameter_search'
+    EXPERIMENT_NAME = 'expert_frac_test_fixed'
 
     train_workloads = []
     # workload_builder.create_train_base_workloads(

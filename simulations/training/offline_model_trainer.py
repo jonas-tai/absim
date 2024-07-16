@@ -27,7 +27,7 @@ MODEL_TRAINER_JSON = 'model_trainer.json'
 
 class OfflineTrainer:
     def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int,
-                 replay_always_use_newest: bool, offline_train_epoch_len: int,
+                 replay_always_use_newest: bool, offline_train_epoch_len: int, replay_mem_retrain_expert_fraction: float,
                  batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2, eps_decay=1000, tau=0.005, lr=1e-4,
                  tau_decay=10, clipping_value=1):
         self.device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
@@ -43,6 +43,10 @@ class OfflineTrainer:
         self.TAU_DECAY = tau_decay
         self.LR = lr
         self.CLIPPING_VALUE = clipping_value
+        self.replay_mem_retrain_expert_fraction = replay_mem_retrain_expert_fraction
+
+        self.expert_batch_size = int(self.BATCH_SIZE * self.replay_mem_retrain_expert_fraction)
+        self.retrain_batch_size = self.BATCH_SIZE - self.expert_batch_size
         # self.lr_scheduler_step_size = lr_scheduler_step_size
         # self.lr_scheduler_gamma = lr_scheduler_gamma
 
@@ -195,10 +199,9 @@ class OfflineTrainer:
             # Store the normalized transition in memory
             self.retrain_memory.push_transition(transition=norm_transition)
 
-        # TODO: Change!
         print(f'Number of steps: {len(transitions)}')
         for _ in range(len(transitions)):
-            self.training_step(memory=self.retrain_memory)
+            self.training_step()
         # print('Offline epoch finished')
 
     def init_expert_data_from_csv(self, expert_data_folder: Path = None) -> None:
@@ -236,7 +239,7 @@ class OfflineTrainer:
 
     def train_model_from_expert_data_epoch(self, train_steps: int) -> None:
         for _ in range(train_steps):
-            self.training_step(memory=self.expert_memory)
+            self.training_step()
         # print('Offline epoch finished')
 
     def normalize_state(self, state):
@@ -250,9 +253,9 @@ class OfflineTrainer:
         norm_reward = (transition.reward - self.reward_mean) / self.reward_std
         return Transition(state=norm_state, action=transition.action, next_state=norm_next_state, reward=norm_reward)
 
-    def training_step(self, memory: ReplayMemory):
+    def training_step(self):
         # Perform one step of the optimization (on the policy network)
-        self.optimize_model(memory=memory)
+        self.optimize_model()
 
         # Soft update of the target network's weights
         # θ′ ← τ θ + (1 −τ )θ′
@@ -264,10 +267,17 @@ class OfflineTrainer:
             target_net_state_dict[key] = policy_net_state_dict[key] * tau + target_net_state_dict[key] * (1 - tau)
         self.target_net.load_state_dict(target_net_state_dict)
 
-    def optimize_model(self, memory: ReplayMemory):
-        if len(memory) < self.BATCH_SIZE:
-            return
-        transitions = memory.sample(self.BATCH_SIZE)
+    def optimize_model(self):
+        if self.do_active_retraining:
+            if len(self.retrain_memory) < self.retrain_batch_size:
+                return
+            transitions = self.expert_memory.sample(self.expert_batch_size) + \
+                self.retrain_memory.sample(self.retrain_batch_size)
+        else:
+            if len(self.expert_memory) < self.BATCH_SIZE:
+                return
+            transitions = self.expert_memory.sample(self.BATCH_SIZE)
+
         # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
         # detailed explanation). This converts batch-array of Transitions
         # to Transition of batch-arrays.

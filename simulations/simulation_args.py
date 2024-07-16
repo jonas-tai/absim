@@ -184,6 +184,8 @@ class SimulationArgs:
         # TODO: Remove or reactive
         parser.add_argument('--replay_memory_size', nargs='?',
                             type=int, default=10000, help='Replay memory size for online training, offline training uses all collected data!')
+        parser.add_argument('--replay_mem_retrain_expert_fraction', nargs='?',
+                            type=float, default=0.0, help='Fraction of expert data used for offline training during retraining adaptation')
         parser.add_argument('--replay_always_use_newest', action='store_true',
                             default=False, help='if true, always add newest transition to sample (see https://arxiv.org/pdf/1712.01275)')
 
