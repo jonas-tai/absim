@@ -2,6 +2,7 @@ from pathlib import Path
 import pickle
 import random
 from collections import namedtuple, deque
+from typing import List
 
 import torch
 
@@ -26,7 +27,6 @@ class ReplayMemory(object):
         self.newest = None
         self.always_use_newest = always_use_newest  # Use https://arxiv.org/pdf/1712.01275
         self.device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
-
         # self.memory = deque([], maxlen=capacity)
 
     def push(self, state: torch.Tensor, action: torch.Tensor, next_state: torch.Tensor, latency: torch.Tensor) -> None:
@@ -39,9 +39,22 @@ class ReplayMemory(object):
         self.index = (self.index + 1) % self.max_size
         self.newest = transition
 
+    def get_stored_transitions(self) -> List[Transition]:
+        return self.memory[:self.size]
+
+    def extend_buffer(self, transitions: List[Transition]) -> None:
+        # Fills empty slots of the memory with new elements and extends the buffer to the size needed
+        num_trans_fittig = min(self.max_size - self.size, len(transitions))
+        self.memory[self.size:(self.size + num_trans_fittig)] = transitions[:num_trans_fittig]
+        self.size += num_trans_fittig
+
+        added_len = len(transitions) - num_trans_fittig
+        self.max_size += added_len
+        self.size += added_len
+        self.memory += transitions[num_trans_fittig:]
+
     def sample(self, batch_size):
         if self.always_use_newest:
-
             indices = random.sample(range(self.size), int(batch_size) - 1)
             return [self.newest] + [self.memory[index] for index in indices]
         else:

@@ -26,7 +26,7 @@ MODEL_TRAINER_JSON = 'model_trainer.json'
 
 
 class OfflineTrainer:
-    def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int,
+    def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int, add_retrain_to_expert_buffer: bool,
                  replay_always_use_newest: bool, offline_train_epoch_len: int, replay_mem_retrain_expert_fraction: float,
                  batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2, eps_decay=1000, tau=0.005, lr=1e-4,
                  tau_decay=10, clipping_value=1):
@@ -44,6 +44,7 @@ class OfflineTrainer:
         self.LR = lr
         self.CLIPPING_VALUE = clipping_value
         self.replay_mem_retrain_expert_fraction = replay_mem_retrain_expert_fraction
+        self.add_retrain_to_expert_buffer = add_retrain_to_expert_buffer
 
         self.expert_batch_size = int(self.BATCH_SIZE * self.replay_mem_retrain_expert_fraction)
         self.retrain_batch_size = self.BATCH_SIZE - self.expert_batch_size
@@ -203,6 +204,10 @@ class OfflineTrainer:
         for _ in range(len(transitions)):
             self.training_step()
         # print('Offline epoch finished')
+
+        if self.add_retrain_to_expert_buffer:
+            # Add retrain data to expert buffer for next retraining
+            self.expert_memory.extend_buffer(transitions=self.retrain_memory.get_stored_transitions())
 
     def init_expert_data_from_csv(self, expert_data_folder: Path = None) -> None:
         if expert_data_folder is not None:

@@ -188,6 +188,8 @@ class SimulationArgs:
                             type=float, default=0.0, help='Fraction of expert data used for offline training during retraining adaptation')
         parser.add_argument('--replay_always_use_newest', action='store_true',
                             default=False, help='if true, always add newest transition to sample (see https://arxiv.org/pdf/1712.01275)')
+        parser.add_argument('--add_retrain_to_expert_buffer', action='store_true',
+                            default=True, help='if true, add batch of retrain data to expert data after training is finished')
 
         parser.add_argument('--duplication_rate', nargs='?',
                             type=float, default=0.1, help='Number of requests to duplicate')
