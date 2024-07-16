@@ -40,7 +40,7 @@ POLICY_ORDER = ["DQN", 'OFFLINE_DQN', 'DQN_OPTIMIZED', "DQN_DUPL_TRAIN", "DQN_DU
 POLICY_COLORS = {
     "ARS": "C0",
     "random": "C1",
-    "DQN": "C2",
+    "DQN": "C5",
     "DQN_OPTIMIZED": "C2",
     "round_robin": "C3",
     'DQN_EXPLR': "C4",
@@ -49,12 +49,12 @@ POLICY_COLORS = {
 }
 
 # Extend POLICY_COLORS with additional keys
-POLICY_COLORS.update({f'DQN_EXPLR_{i}': 'C4' for i in range(101)})
-POLICY_COLORS.update({f'DQN_EXPLR_{i}_TRAIN': 'C4' for i in range(101)})
-POLICY_COLORS.update({f'DQN_DUPL_{i}': f'C{5 + i % 10}' for i in range(101)})
-POLICY_COLORS.update({f'DQN_DUPL_{i}_TRAIN': f'C{5 + i % 10}' for i in range(101)})
-POLICY_COLORS.update({f'ARS_EXPLR_{i}': 'C0' for i in range(101)})
-POLICY_COLORS.update({f'ARS_DUPL_{i}': 'C2' for i in range(101)})
+POLICY_COLORS.update({f'DQN_EXPLR_{i}': 'C2' for i in range(101)})
+POLICY_COLORS.update({f'DQN_EXPLR_{i}_TRAIN': 'C2' for i in range(101)})
+POLICY_COLORS.update({f'DQN_DUPL_{i}': f'C4' for i in range(101)})
+POLICY_COLORS.update({f'DQN_DUPL_{i}_TRAIN': f'C4' for i in range(101)})
+POLICY_COLORS.update({f'ARS_EXPLR_{i}': 'C6' for i in range(101)})
+POLICY_COLORS.update({f'ARS_DUPL_{i}': 'C7' for i in range(101)})
 
 # Add 'OFFLINE_' prefix variations
 POLICY_COLORS.update({f'OFFLINE_{policy}': color for policy, color in POLICY_COLORS.items()})

@@ -14,7 +14,7 @@ from matplotlib.patches import Patch
 from simulations.state import StateParser
 
 
-FONT_SIZE = 10
+FONT_SIZE = 20
 
 
 class ExperimentPlot:
@@ -34,6 +34,17 @@ class ExperimentPlot:
 
         os.makedirs(plot_folder / 'episode', exist_ok=True)
         os.makedirs(plot_folder / 'pdfs/episode', exist_ok=True)
+        plt.rcParams['font.weight'] = 'bold'
+        plt.rcParams['axes.titleweight'] = 'bold'
+        plt.rcParams['axes.labelweight'] = 'bold'
+
+        plt.rcParams['font.size'] = 14
+        plt.rcParams['axes.titlesize'] = 14
+        plt.rcParams['axes.labelsize'] = 14
+        plt.rcParams['xtick.labelsize'] = 10
+        plt.rcParams['ytick.labelsize'] = 10
+        plt.rcParams['legend.fontsize'] = 10
+        plt.rcParams['legend.title_fontsize'] = 12
 
     def from_csv(self) -> None:
         self.df = pd.read_csv(self.data_folder / f'data.csv.gz')
@@ -143,7 +154,6 @@ class ExperimentPlot:
 
     # TODO: Write decorator for before and after plotting settings
     def plot_latency(self):
-        plt.rcParams.update({'font.size': FONT_SIZE})
         fig, axes = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
 
         sns.lineplot(self.df, x="Epoch", y="Latency", hue="Policy", ax=axes, palette=const.POLICY_COLORS)
@@ -158,7 +168,6 @@ class ExperimentPlot:
         self.export_plots(file_name=f'latency_line')
 
     def boxplot_latency(self) -> None:
-        plt.rcParams.update({'font.size': FONT_SIZE})
         fig, axes = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         # Plotting boxplot
         sns.boxplot(x="Policy", y="Latency", data=self.df, ax=axes,
@@ -176,8 +185,6 @@ class ExperimentPlot:
 
     def plot_episode(self, epoch: int):
         # Plots the specified epoch of all policies
-        plt.rcParams.update({'font.size': FONT_SIZE})
-
         fig, axes = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
 
         sns.scatterplot(self.df[self.df['Epoch'] == epoch], x="Time", y="Latency",
@@ -190,8 +197,6 @@ class ExperimentPlot:
         self.export_plots(file_name=f'episode/output_{epoch}_epoch')
 
     def plot_policy_episode(self, epoch: int, policy: str):
-        plt.rcParams.update({'font.size': FONT_SIZE})
-
         fig, axes = plt.subplots(figsize=(8, 4), dpi=200, nrows=1, ncols=1, sharex='all')
         sns.scatterplot(self.df[(self.df['Epoch'] == epoch) & (self.df['Policy'] == policy)], x="Time", y="Latency",
                         hue="Replica", ax=axes)
@@ -201,8 +206,6 @@ class ExperimentPlot:
         self.export_plots(file_name=f'episode/request_distribution_{policy}_{epoch}_epoch')
 
     def plot_quantile(self, quantile: float):
-        plt.rcParams.update({'font.size': FONT_SIZE})
-
         fig, axes = plt.subplots(figsize=(16, 8), dpi=200, nrows=1, ncols=1, sharex='all')
         quantiles = self.df.groupby(['Policy', 'Epoch'])['Latency'].quantile(quantile).reset_index()
 
@@ -235,7 +238,6 @@ class ExperimentPlot:
         if order is None:
             order = self.policy_order
 
-        plt.rcParams.update({'font.size': FONT_SIZE})
         fig, axes = plt.subplots(figsize=(10, 6), dpi=200)
 
         # Calculate the quantile latency for each policy and epoch
@@ -248,8 +250,17 @@ class ExperimentPlot:
         sns.barplot(data=mean_quantile_latency, x='Policy', hue='Policy', y='Latency',
                     palette=const.POLICY_COLORS, ax=axes, order=order)
         axes.set_title(
-            f'Average {quantile*100:.1f}th Quantile Latency {title_request_types} at {self.utilization * 100}% utilization with {self.long_tasks_fraction * 100}% long tasks')
+            f'Average P{quantile*100:.1f} {title_request_types} at {self.utilization * 100}% util with {self.long_tasks_fraction * 100}% long tasks')
         plt.setp(axes.get_xticklabels(), rotation=45, ha='right')
+
+        if 'ARS' in mean_quantile_latency['Policy'].values:
+            ars_latency = mean_quantile_latency[mean_quantile_latency['Policy'] == 'ARS']['Latency'].values[0]
+            axes.axhline(y=ars_latency, color='C0', linestyle='--', label='ARS Latency')
+
+        if 'OFFLINE_DQN' in mean_quantile_latency['Policy'].values:
+            offline_dqn_latency = mean_quantile_latency[mean_quantile_latency['Policy']
+                                                        == 'OFFLINE_DQN']['Latency'].values[0]
+            axes.axhline(y=offline_dqn_latency, color='C5', linestyle='--', label='OFFLINE_DQN Latency')
 
         plt.tight_layout()
 
@@ -259,8 +270,6 @@ class ExperimentPlot:
         if len(df) == 0:
             print(f'Empty df, not continuing in plot_cdf_quantile()')
             return
-
-        plt.rcParams.update({'font.size': FONT_SIZE})
 
         fig, axes = plt.subplots(figsize=(16, 8), dpi=200, nrows=1, ncols=1, sharex='all')
 
@@ -313,7 +322,6 @@ class ExperimentPlot:
         if order is None:
             order = self.policy_order
 
-        plt.rcParams.update({'font.size': FONT_SIZE})
         fig, axes = plt.subplots(figsize=(10, 6), dpi=200)
 
         # Calculate the mean of the quantile latency over all epochs for each policy
@@ -323,7 +331,7 @@ class ExperimentPlot:
         sns.barplot(data=mean_quantile_latency, x='Policy', hue='Policy', y='Latency',
                     palette=const.POLICY_COLORS, ax=axes, order=order)
         axes.set_title(
-            f'Average Latency {title_request_types} at {self.utilization * 100}% utilization with {self.long_tasks_fraction * 100}% long tasks')
+            f'Average Latency {title_request_types} at {self.utilization * 100}% util with {self.long_tasks_fraction * 100}% long tasks')
         plt.setp(axes.get_xticklabels(), rotation=45, ha='right')
 
         plt.tight_layout()
@@ -346,7 +354,7 @@ class ExperimentPlot:
         for epoch in df['Epoch'].unique():
             print(epoch)
             epoch_df = df[df['Epoch'] == epoch]
-            AGGREGATION_FACTOR = 40  # Define your aggregation factor
+            AGGREGATION_FACTOR = 4000  # Define your aggregation factor
 
             fig, axes = plt.subplots(figsize=(14, 8), dpi=200)
 
@@ -471,7 +479,6 @@ class ExperimentPlot:
             aggregated = epoch_df.groupby(['Policy', 'Aggregated_num_requests']).agg(
                 Latency=('Latency', lambda x: np.percentile(x, percentile)),
             ).reset_index()
-            print(aggregated['Latency'])
             if aggregated_df is None:
                 # Collect the workload changes
                 workload_change_df = epoch_df.groupby(['Policy', 'Workload_key']).agg(
@@ -484,8 +491,6 @@ class ExperimentPlot:
                 aggregated_df['Latency'] += aggregated['Latency']
 
         aggregated_df['Latency'] = aggregated_df['Latency'] / len(df['Epoch'].unique())
-        print('Final')
-        print(aggregated_df['Latency'])
 
         workload_changes = list(zip(workload_change_df['Workload_key'],
                                 workload_change_df['Start_req'], workload_change_df['End_req']))
