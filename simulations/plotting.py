@@ -342,10 +342,11 @@ class ExperimentPlot:
     def plot_latency_over_time(self, df: pd.DataFrame, order: List[str], title_request_types: staticmethod = 'all requests', file_prefix='all_', quantile=0.99):
         percentile = quantile * 100
         df = df[df['Is_faster_response']]
+
         for epoch in df['Epoch'].unique():
             print(epoch)
             epoch_df = df[df['Epoch'] == epoch]
-            AGGREGATION_FACTOR = 4000  # Define your aggregation factor
+            AGGREGATION_FACTOR = 40  # Define your aggregation factor
 
             fig, axes = plt.subplots(figsize=(14, 8), dpi=200)
 
@@ -430,10 +431,121 @@ class ExperimentPlot:
 
             self.export_plots(file_name=f'{epoch}_{file_prefix}latency_over_time')
 
+    def plot_latency_episode_average_short_long_request(self, policies: List[str]) -> None:
+        df = self.df[self.df['Policy'].isin(policies) & self.df['Is_long_request']]
+        self.plot_latency_over_time_episode_average(df, title_request_types='long requests',
+                                                    file_prefix=f'long_req_')
+
+        df = self.df[self.df['Policy'].isin(policies) & (self.df['Is_long_request'] == False)]
+        self.plot_latency_over_time_episode_average(df, title_request_types='short requests',
+                                                    file_prefix=f'short_req_')
+
+    def plot_latency_over_time_episode_average(self, df: pd.DataFrame, title_request_types: staticmethod = 'all requests', file_prefix='all_', quantile=0.99):
+        percentile = quantile * 100
+        df = df[df['Is_faster_response']]
+
+        aggregated_df = None
+        workload_change_df = None
+
+        for epoch in df['Epoch'].unique():
+            print(epoch)
+            epoch_df = df[df['Epoch'] == epoch]
+            AGGREGATION_FACTOR = 4000  # Define your aggregation factor
+
+            fig, axes = plt.subplots(figsize=(14, 8), dpi=200)
+
+            epoch_df = epoch_df.sort_values(by=['Policy', 'Task_time_sent']).reset_index(drop=True)
+            epoch_df['Num_request'] = epoch_df.groupby('Policy').cumcount()
+            epoch_df['Aggregated_num_requests'] = (epoch_df['Num_request'] // AGGREGATION_FACTOR) * AGGREGATION_FACTOR
+            epoch_df['Aggregated_num_requests'] += AGGREGATION_FACTOR
+
+            # Adjust the last group to reflect the actual number of requests
+            max_num_request = epoch_df.groupby('Policy')['Num_request'].transform('max')
+            epoch_df.loc[epoch_df['Aggregated_num_requests'] == (AGGREGATION_FACTOR + (
+                max_num_request // AGGREGATION_FACTOR) * AGGREGATION_FACTOR), 'Aggregated_num_requests'] = max_num_request
+
+            # Combine Utilization and Long_tasks_fraction into a single feature
+            epoch_df['Workload_key'] = list(zip(epoch_df['Utilization'], epoch_df['Long_tasks_fraction']))
+
+            # Aggregate latency over groups of data points per policy
+            aggregated = epoch_df.groupby(['Policy', 'Aggregated_num_requests']).agg(
+                Latency=('Latency', lambda x: np.percentile(x, percentile)),
+            ).reset_index()
+            print(aggregated['Latency'])
+            if aggregated_df is None:
+                # Collect the workload changes
+                workload_change_df = epoch_df.groupby(['Policy', 'Workload_key']).agg(
+                    Start_req=('Num_request', 'min'),
+                    End_req=('Num_request', 'max')
+                ).reset_index()
+
+                aggregated_df = aggregated
+            else:
+                aggregated_df['Latency'] += aggregated['Latency']
+
+        aggregated_df['Latency'] = aggregated_df['Latency'] / len(df['Epoch'].unique())
+        print('Final')
+        print(aggregated_df['Latency'])
+
+        workload_changes = list(zip(workload_change_df['Workload_key'],
+                                workload_change_df['Start_req'], workload_change_df['End_req']))
+
+        # Plot latency over time for each policy
+        sns.lineplot(data=aggregated_df, x='Aggregated_num_requests', y='Latency',
+                     hue='Policy', style='Policy')  # palette=const.POLICY_COLORS,
+
+        # Adding color indicators for long_tasks_fraction
+        workload_keys = workload_change_df['Workload_key'].values
+
+        # Create a colormap to represent the combined Utilization and Long_tasks_fraction
+        unique_combinations = list(set(workload_keys))
+        color_map = plt.cm.get_cmap('crest', len(unique_combinations))
+        norm = plt.Normalize(vmin=0, vmax=len(unique_combinations) - 1)
+
+        # Map each unique combination to a color
+        combination_to_color = {combination: color_map(norm(i))
+                                for i, combination in enumerate(unique_combinations)}
+
+        for (workload_key, start, end) in workload_changes:
+            # Add a vertical line at the change point
+            plt.axvline(x=end, color='grey', linestyle='--', alpha=0.7)
+            color = combination_to_color[workload_key]
+            plt.axvspan(start, end, color=color, ymin=0.95, ymax=1.0, alpha=0.8)
+
+        # Adding a color bar for the long_tasks_fractions
+        # sm = plt.cm.ScalarMappable(cmap=color_map, norm=norm)
+        # cbar = plt.colorbar(sm, orientation='horizontal', pad=0.1, ax=axes)
+        # cbar.set_label('Utilization and Long Tasks Fraction')
+
+        plt.xlabel('Number of requests')
+        plt.ylabel('Latency (ms)')
+        plt.yscale('log')
+
+        axes.set_title(f'P{percentile} latency for {title_request_types}')
+        handles, labels = axes.get_legend_handles_labels()
+        # Add the color bar as a patch in the legend
+        # cbar_patch = Patch(facecolor=color_map(norm(np.mean(long_tasks_fractions))), edgecolor='black')
+
+        # Create a patch for each unique combination of Utilization and Long_tasks_fraction
+        for combination, color in combination_to_color.items():
+            utilization, long_tasks_fraction = combination
+            label = f'Utilization: {utilization:.2f}, Long Tasks Fraction: {long_tasks_fraction:.2f}'
+            patch = Patch(facecolor=color, edgecolor='black', label=label)
+            handles.append(patch)
+
+        # Place the legend below the graph
+        axes.legend(handles=handles, title='Policy and Settings',
+                    loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=3)
+
+        plt.tight_layout()
+
+        self.export_plots(file_name=f'episode_average_{file_prefix}latency_over_time_')
+
     def generate_plots(self) -> None:
         # reduced_policies = ['ARS', 'DQN', 'DQN_DUPL'] + ['DQN_EXPLR_0',
         #                                                 'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20', 'DQN_EXPLR_25']
-        reduced_policies = [policy for policy in self.policy_order if policy not in ['random', 'DQN_DUPL']]
+        # reduced_policies = [policy for policy in self.policy_order if policy not in ['random', 'DQN_DUPL']]
+        reduced_policies = ['OFFLINE_DQN', 'ARS', ]
         print(reduced_policies)
 
         print('Before')
