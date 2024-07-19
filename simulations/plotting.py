@@ -18,7 +18,7 @@ FONT_SIZE = 20
 
 
 class ExperimentPlot:
-    def __init__(self, plot_folder: Path, data_folder: Path, state_parser: StateParser, long_tasks_fraction: float = None, utilization: float | None = None, use_log_scale: bool = False) -> None:
+    def __init__(self, plot_folder: Path, data_folder: Path, state_parser: StateParser, retrain_interval: int, long_tasks_fraction: float = None, utilization: float | None = None, use_log_scale: bool = False) -> None:
         self.df = None
         self.feature_df = None
         self.plot_folder: Path = plot_folder
@@ -28,6 +28,7 @@ class ExperimentPlot:
         self.utilization = utilization
         self.long_tasks_fraction = long_tasks_fraction
         self.state_parser = state_parser
+        self.retrain_interval = retrain_interval
 
         os.makedirs(plot_folder / 'cdf', exist_ok=True)
         os.makedirs(plot_folder / 'pdfs/cdf', exist_ok=True)
@@ -52,12 +53,17 @@ class ExperimentPlot:
 
         # Get the value for utilization
         base_folder = self.data_folder.parent
-        args_file = base_folder / 'workload_config.json'
+        workload_args_file = base_folder / 'workload_config.json'
+        with open(workload_args_file, 'r') as file:
+            workload_args_data = json.load(file)
+
+        self.utilization = workload_args_data['utilization']
+        self.long_tasks_fraction = workload_args_data['long_tasks_fraction']
+
+        args_file = base_folder / 'arguments.json'
         with open(args_file, 'r') as file:
             args_data = json.load(file)
-
-        self.utilization = args_data['utilization']
-        self.long_tasks_fraction = args_data['long_tasks_fraction']
+        self.retrain_interval = args_data['offline_train_batch_size']
 
     def add_data_from_df(self, additional_data: pd.DataFrame) -> None:
         self.df = pd.concat((self.df, additional_data), axis=0)
@@ -371,6 +377,8 @@ class ExperimentPlot:
             # Combine Utilization and Long_tasks_fraction into a single feature
             epoch_df['Workload_key'] = list(zip(epoch_df['Utilization'], epoch_df['Long_tasks_fraction']))
 
+            num_total_req = epoch_df['Num_request'].max()
+
             # Collect the workload changes
             workload_change_df = epoch_df.groupby(['Policy', 'Workload_key']).agg(
                 Start_req=('Num_request', 'min'),
@@ -406,9 +414,12 @@ class ExperimentPlot:
             previous_utl_ltf = workload_keys[0]
             for (workload_key, start, end) in workload_changes:
                 # Add a vertical line at the change point
-                plt.axvline(x=end, color='grey', linestyle='--', alpha=0.7)
+                plt.axvline(x=end, color='black', linestyle='-', alpha=0.9)
                 color = combination_to_color[workload_key]
                 plt.axvspan(start, end, color=color, ymin=0.95, ymax=1.0, alpha=0.8)
+
+            for i in range(self.retrain_interval, num_total_req, self.retrain_interval):
+                plt.axvline(x=i, color='grey', linestyle='--', alpha=0.5)
 
             # Adding a color bar for the long_tasks_fractions
             # sm = plt.cm.ScalarMappable(cmap=color_map, norm=norm)
@@ -454,6 +465,7 @@ class ExperimentPlot:
 
         aggregated_df = None
         workload_change_df = None
+        num_total_req = 0
 
         for epoch in df['Epoch'].unique():
             print(epoch)
@@ -486,6 +498,8 @@ class ExperimentPlot:
                     End_req=('Num_request', 'max')
                 ).reset_index()
 
+                num_total_req = epoch_df['Num_request'].max()
+
                 aggregated_df = aggregated
             else:
                 aggregated_df['Latency'] += aggregated['Latency']
@@ -513,14 +527,12 @@ class ExperimentPlot:
 
         for (workload_key, start, end) in workload_changes:
             # Add a vertical line at the change point
-            plt.axvline(x=end, color='grey', linestyle='--', alpha=0.7)
+            plt.axvline(x=end, color='black', linestyle='-', alpha=0.9)
             color = combination_to_color[workload_key]
             plt.axvspan(start, end, color=color, ymin=0.95, ymax=1.0, alpha=0.8)
 
-        # Adding a color bar for the long_tasks_fractions
-        # sm = plt.cm.ScalarMappable(cmap=color_map, norm=norm)
-        # cbar = plt.colorbar(sm, orientation='horizontal', pad=0.1, ax=axes)
-        # cbar.set_label('Utilization and Long Tasks Fraction')
+        for i in range(self.retrain_interval, num_total_req, self.retrain_interval):
+            plt.axvline(x=i, color='grey', linestyle='--', alpha=0.5)
 
         plt.xlabel('Number of requests')
         plt.ylabel('Latency (ms)')
