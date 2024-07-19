@@ -28,6 +28,7 @@ MODEL_TRAINER_JSON = 'model_trainer.json'
 class OfflineTrainer:
     def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int, add_retrain_to_expert_buffer: bool,
                  replay_always_use_newest: bool, offline_train_epoch_len: int, replay_mem_retrain_expert_fraction: float,
+                 use_sliding_retrain_memory: bool, sliding_window_mem_size: int,
                  batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2, eps_decay=1000, tau=0.005, lr=1e-4,
                  tau_decay=10, clipping_value=1):
         self.device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
@@ -44,7 +45,12 @@ class OfflineTrainer:
         self.LR = lr
         self.CLIPPING_VALUE = clipping_value
         self.replay_mem_retrain_expert_fraction = replay_mem_retrain_expert_fraction
+
+        # Make sure we dont add data to expert data if using sliding retrain memory
+        assert not (add_retrain_to_expert_buffer and use_sliding_retrain_memory)
         self.add_retrain_to_expert_buffer = add_retrain_to_expert_buffer
+        self.use_sliding_retrain_memory = use_sliding_retrain_memory
+        self.sliding_replay_mem_size = sliding_window_mem_size
 
         self.expert_batch_size = int(self.BATCH_SIZE * self.replay_mem_retrain_expert_fraction)
         self.retrain_batch_size = self.BATCH_SIZE - self.expert_batch_size
@@ -82,8 +88,15 @@ class OfflineTrainer:
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
         # self.scheduler = optim.lr_scheduler.StepLR(
         #     self.optimizer, step_size=self.lr_scheduler_step_size, gamma=self.lr_scheduler_gamma)
-        self.retrain_memory = ReplayMemory(max_size=self.offline_train_epoch_len,
-                                           always_use_newest=replay_always_use_newest)
+
+        if self.use_sliding_retrain_memory:
+            self.retrain_memory = ReplayMemory(max_size=self.sliding_replay_mem_size,
+                                               always_use_newest=replay_always_use_newest)
+        else:
+            self.retrain_memory = ReplayMemory(max_size=self.offline_train_epoch_len,
+                                               always_use_newest=replay_always_use_newest)
+        # Cached copy to avoid loading the expert memory from file multiple times
+        self.expert_memory_unmodified = None
         self.expert_memory = None
         self.replay_always_use_newest = replay_always_use_newest
 
@@ -122,14 +135,25 @@ class OfflineTrainer:
     def load_models_from_file(self, model_folder: Path):
         self.load_stats_from_file(model_folder)
 
-        if self.expert_memory is None and self.do_active_retraining:
+        if self.expert_memory_unmodified is None and self.do_active_retraining:
             self.init_expert_data_from_csv()
+        elif self.expert_memory_unmodified is not None and self.add_retrain_to_expert_buffer:
+            self.expert_memory = self.expert_memory_unmodified.copy()
 
         # Reinit retrain memory
         # TODO: Change
         # This does not account for duplication, is later initialized with correct value
-        self.retrain_memory = ReplayMemory(max_size=self.offline_train_epoch_len,
-                                           always_use_newest=self.replay_always_use_newest)
+        if self.use_sliding_retrain_memory:
+            self.retrain_memory = ReplayMemory(max_size=self.sliding_replay_mem_size,
+                                               always_use_newest=self.replay_always_use_newest)
+        else:
+            self.retrain_memory = ReplayMemory(max_size=self.offline_train_epoch_len,
+                                               always_use_newest=self.replay_always_use_newest)
+
+        if self.expert_memory_unmodified is not None and self.use_sliding_retrain_memory:
+            # TODO: Change into using lastest element
+            for i in range(self.sliding_replay_mem_size):
+                self.retrain_memory.push_transition(self.expert_memory_unmodified.memory[i])
 
         policy_net = DQN(self.n_observations, self.n_actions,
                          model_structure=self.model_structure).to(self.device)
@@ -193,7 +217,9 @@ class OfflineTrainer:
             self.reward_std = norm_stats.reward_std
             self.feature_std = norm_stats.feature_std
 
-        self.retrain_memory = ReplayMemory(max_size=len(transitions), always_use_newest=self.replay_always_use_newest)
+        if not self.use_sliding_retrain_memory:
+            self.retrain_memory = ReplayMemory(max_size=len(
+                transitions), always_use_newest=self.replay_always_use_newest)
         for transition in transitions:
             norm_transition = self.normalize_transition(transition=transition)
 
@@ -201,7 +227,7 @@ class OfflineTrainer:
             self.retrain_memory.push_transition(transition=norm_transition)
 
         print(f'Number of steps: {len(transitions)}')
-        for _ in range(len(transitions)):
+        for _ in range(self.offline_train_epoch_len):
             self.training_step()
         # print('Offline epoch finished')
 
@@ -228,8 +254,8 @@ class OfflineTrainer:
         self.feature_mean = torch.tensor(state_df.mean(), dtype=torch.float32, device=self.device)
         self.feature_std = torch.tensor(state_df.std(), dtype=torch.float32, device=self.device)
 
-        self.expert_memory = ReplayMemory(max_size=len(state_df),
-                                          always_use_newest=self.replay_always_use_newest)
+        self.expert_memory_unmodified = ReplayMemory(max_size=len(state_df),
+                                                     always_use_newest=self.replay_always_use_newest)
 
         for action_reward_policy_row, state_row, next_state_row in zip(action_reward_policy_df.itertuples(index=False), state_df.itertuples(index=False), next_state_df.itertuples(index=False)):
             action = torch.tensor([[action_reward_policy_row.action]], device=self.device)
@@ -240,7 +266,8 @@ class OfflineTrainer:
             norm_transition = self.normalize_transition(transition=transition)
 
             # Store the normalized transition in memory
-            self.expert_memory.push_transition(transition=norm_transition)
+            self.expert_memory_unmodified.push_transition(transition=norm_transition)
+        self.expert_memory = self.expert_memory_unmodified.copy()
 
     def train_model_from_expert_data_epoch(self, train_steps: int) -> None:
         for _ in range(train_steps):

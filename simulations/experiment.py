@@ -96,7 +96,10 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
                                      eps_decay=simulation_args.args.eps_decay,
                                      eps_start=simulation_args.args.eps_start,
                                      eps_end=simulation_args.args.eps_end,
+                                     use_sliding_retrain_memory=simulation_args.args.use_sliding_retrain_memory,
+                                     sliding_window_mem_size=simulation_args.args.replay_memory_size,
                                      tau=simulation_args.args.tau,
+                                     add_retrain_to_expert_buffer=simulation_args.args.add_retrain_to_expert_buffer,
                                      replay_mem_retrain_expert_fraction=simulation_args.args.replay_mem_retrain_expert_fraction,
                                      tau_decay=simulation_args.args.tau_decay,
                                      lr=simulation_args.args.lr,
@@ -186,7 +189,7 @@ def run_rl_training(simulation_args: SimulationArgs, workloads: List[BaseWorkloa
     experiment_runner = ExperimentRunner(state_parser=state_parser, trainer=trainer, offline_trainer=offline_trainer)
 
     train_plotter = ExperimentPlot(plot_folder=plot_path, data_folder=data_folder, state_parser=state_parser,
-                                   utilization=utilization, long_tasks_fraction=long_tasks_fraction)
+                                   utilization=utilization, long_tasks_fraction=long_tasks_fraction, retrain_interval=simulation_args.args.offline_train_batch_size)
 
     # Log arguments and workload config
     log_arguments(experiment_folder, simulation_args)
@@ -265,7 +268,8 @@ def run_rl_tests(simulation_args: SimulationArgs, workloads: List[BaseWorkload],
         utilization = test_workload.utilization
 
         test_plotter = ExperimentPlot(plot_folder=plot_path, data_folder=data_folder, state_parser=state_parser,
-                                      utilization=utilization, long_tasks_fraction=test_workload.long_tasks_fraction)
+                                      utilization=utilization, long_tasks_fraction=test_workload.long_tasks_fraction,
+                                      retrain_interval=simulation_args.args.offline_train_batch_size)
 
         experiment_runner = ExperimentRunner(
             state_parser=state_parser, trainer=trainer, offline_trainer=offline_trainer)
@@ -458,7 +462,7 @@ def main(input_args=None) -> None:
     config_folder = Path('./', 'configs')
     workload_builder = WorkloadBuilder(config_folder=config_folder)
 
-    EXPERIMENT_NAME = 'expert_frac_test_fixed'
+    EXPERIMENT_NAME = 'sliding_window_experiment'
 
     train_workloads = []
     # workload_builder.create_train_base_workloads(
@@ -467,7 +471,7 @@ def main(input_args=None) -> None:
     lhs_workloads = workload_builder.create_test_base_workloads(
         long_tasks_fractions=[0.3], utilizations=[0.7], num_requests=10000)
     rhs_workloads = workload_builder.create_test_base_workloads(
-        long_tasks_fractions=[0.0, 0.1, 0.2, 0.5, 0.6, 0.7, 0.8], utilizations=[0.5, 0.7], num_requests=64000)
+        long_tasks_fractions=[0.0, 0.2, 0.5, 0.8], utilizations=[0.5, 0.7], num_requests=64000)
     test_workloads = workload_builder.create_chained_workloads(
         first_workloads=lhs_workloads, second_workloads=rhs_workloads)
     # workload_builder.create_test_var_long_tasks_workloads(num_requests=350000)
@@ -483,7 +487,8 @@ def main(input_args=None) -> None:
         'ARS', 'OFFLINE_DQN',
         'OFFLINE_DQN_EXPLR_0_TRAIN',
         'OFFLINE_DQN_EXPLR_10_TRAIN', 'OFFLINE_DQN_EXPLR_15_TRAIN', 'OFFLINE_DQN_EXPLR_20_TRAIN',
-        'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_15_TRAIN', 'OFFLINE_DQN_DUPL_20_TRAIN']
+        'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_15_TRAIN',
+        'OFFLINE_DQN_DUPL_20_TRAIN']
     # 'ARS', 'OFFLINE_DQN',
     # 'OFFLINE_DQN_EXPLR_20_TRAIN', 'OFFLINE_DQN_EXPLR_30_TRAIN',
     # 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_DUPL_30_TRAIN'

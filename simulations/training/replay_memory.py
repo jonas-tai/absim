@@ -1,3 +1,4 @@
+import copy
 from pathlib import Path
 import pickle
 import random
@@ -106,6 +107,9 @@ class ReplayMemory(object):
                 next_state=self.newest.next_state.to(device),
                 reward=self.newest.reward.to(device)
             )
+
+    def copy(self):
+        return copy.deepcopy(self)
 
 
 class ReplayMemoryWithSummary(ReplayMemory):

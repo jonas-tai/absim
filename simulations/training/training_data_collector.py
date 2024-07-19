@@ -163,8 +163,10 @@ class TrainingDataCollector:
         # Make sure that data is aligned properly
         assert len(action_reward_policy_df) == len(state_df) and len(state_df) == len(next_state_df)
 
-        self.offline_trainer.reward_mean = torch.tensor([action_reward_policy_df['reward'].mean()], dtype=torch.float32, device=self.device)
-        self.offline_trainer.reward_std = torch.tensor([action_reward_policy_df['reward'].std()], dtype=torch.float32, device=self.device)
+        self.offline_trainer.reward_mean = torch.tensor(
+            [action_reward_policy_df['reward'].mean()], dtype=torch.float32, device=self.device)
+        self.offline_trainer.reward_std = torch.tensor(
+            [action_reward_policy_df['reward'].std()], dtype=torch.float32, device=self.device)
 
         self.offline_trainer.feature_mean = torch.tensor(state_df.mean(), dtype=torch.float32, device=self.device)
         self.offline_trainer.feature_std = torch.tensor(state_df.std(), dtype=torch.float32, device=self.device)
@@ -172,8 +174,8 @@ class TrainingDataCollector:
         # self.norm_stats = NormStats(reward_mean=reward_mean, reward_std=reward_std,
         #                                             feature_mean=feature_mean, feature_std=feature_std)
 
-        self.offline_trainer.expert_memory = ReplayMemory(max_size=len(state_df),
-                                                          always_use_newest=self.offline_trainer.replay_always_use_newest)
+        self.offline_trainer.expert_memory_unmodified = ReplayMemory(max_size=len(state_df),
+                                                                     always_use_newest=self.offline_trainer.replay_always_use_newest)
 
         for action_reward_policy_row, state_row, next_state_row in zip(action_reward_policy_df.itertuples(index=False), state_df.itertuples(index=False), next_state_df.itertuples(index=False)):
             action = torch.tensor([[action_reward_policy_row.action]], device=self.device)
@@ -183,9 +185,10 @@ class TrainingDataCollector:
 
             transition = Transition(state=state, action=action, next_state=next_state, reward=reward)
             norm_transition = self.offline_trainer.normalize_transition(transition=transition)
-            
+
             # Store the normalized transition in memory
-            self.offline_trainer.expert_memory.push_transition(transition=norm_transition)
+            self.offline_trainer.expert_memory_unmodified.push_transition(transition=norm_transition)
+        self.offline_trainer.expert_memory = self.offline_trainer.expert_memory_unmodified.copy()
 
     def save_training_data(self) -> None:
         os.makedirs(self.data_folder, exist_ok=True)

@@ -262,6 +262,8 @@ class ChainedWorkload(BaseWorkload):
         super().reset_workload()
         self.workload_iter = iter(self.workloads)
         self.switch_to_next_workload()
+        for workload in self.workloads:
+            workload.reset_workload()
 
     def to_file_name(self) -> str:
         return f'{self.workload_type}_{"_".join([wl.to_file_name() for wl in self.workloads])}'

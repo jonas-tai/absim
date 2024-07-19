@@ -183,13 +183,15 @@ class SimulationArgs:
         # ReplayMemory parametes
         # TODO: Remove or reactive
         parser.add_argument('--replay_memory_size', nargs='?',
-                            type=int, default=10000, help='Replay memory size for online training, offline training uses all collected data!')
+                            type=int, default=15000, help='Replay memory size for online training, offline training uses all collected data!')
         parser.add_argument('--replay_mem_retrain_expert_fraction', nargs='?',
                             type=float, default=0.0, help='Fraction of expert data used for offline training during retraining adaptation')
         parser.add_argument('--replay_always_use_newest', action='store_true',
                             default=False, help='if true, always add newest transition to sample (see https://arxiv.org/pdf/1712.01275)')
         parser.add_argument('--add_retrain_to_expert_buffer', action='store_true',
-                            default=True, help='if true, add batch of retrain data to expert data after training is finished')
+                            default=False, help='if true, add batch of retrain data to expert data after training is finished')
+        parser.add_argument('--use_sliding_retrain_memory', action='store_true',
+                            default=True, help='if true, use retrain memory of size replay_memory_size, phasing out data that does not fit')
 
         parser.add_argument('--duplication_rate', nargs='?',
                             type=float, default=0.1, help='Number of requests to duplicate')
