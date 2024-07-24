@@ -146,13 +146,13 @@ class SimulationArgs:
         parser.add_argument('--lr', nargs='?',
                             type=float, default=1e-5, help='Model trainer argument')
         parser.add_argument('--tau', nargs='?',
-                            type=float, default=0.005, help='Model trainer argument')
+                            type=float, default=1.0, help='Model trainer argument')
         parser.add_argument('--eps_decay', nargs='?',
                             type=int, default=40000, help='Model trainer argument')
         parser.add_argument('--batch_size', nargs='?',
                             type=int, default=32, help='Model trainer argument')
         parser.add_argument('--tau_decay', nargs='?',
-                            type=int, default=10000000, help='Model trainer argument')
+                            type=int, default=0, help='Model trainer argument')
         parser.add_argument('--eps_start', nargs='?',
                             type=float, default=0.9, help='Model trainer argument')
         parser.add_argument('--eps_end', nargs='?',
@@ -163,10 +163,12 @@ class SimulationArgs:
                             type=float, default=0.5, help='Model trainer argument')
         parser.add_argument('--summary_stats_max_size', nargs='?',
                             type=int, default=1000, help='Number of stats collected for normalizing')
+        parser.add_argument('--target_update_frequency', nargs='?',
+                            type=int, default=500, help='Frequency of updating the target to the policy network')
 
         # Offline training parameters
         parser.add_argument('--offline_train_batch_size', nargs='?',
-                            type=int, default=2000, help='Number of requests after which the model is retrained')
+                            type=int, default=4000, help='Number of requests after which the model is retrained')
         parser.add_argument('--offline_expert_data', nargs='?', type=str, default="",
                             help='Location of the expert data for offline training.')
         parser.add_argument('--offline_model', nargs='?', type=str, default="",
@@ -191,7 +193,12 @@ class SimulationArgs:
         parser.add_argument('--add_retrain_to_expert_buffer', action='store_true',
                             default=False, help='if true, add batch of retrain data to expert data after training is finished')
         parser.add_argument('--use_sliding_retrain_memory', action='store_true',
-                            default=True, help='if true, use retrain memory of size replay_memory_size, phasing out data that does not fit')
+                            default=False, help='if true, use retrain memory of size replay_memory_size, phasing out data that does not fit')
+        parser.add_argument('--reset_models_before_retrain', action='store_true',
+                            help='if true, retrain the model from scratch at each retrain epoch')
+
+        parser.add_argument('--expert_replay_mem_size', nargs='?',
+                            type=int, default=None, help='If set to int, downsamples the replay memory to the specified size')
 
         parser.add_argument('--duplication_rate', nargs='?',
                             type=float, default=0.1, help='Number of requests to duplicate')
