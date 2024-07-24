@@ -193,7 +193,8 @@ class Trainer:
 
         # Soft update of the target network's weights
         # θ′ ← τ θ + (1 −τ )θ′
-        tau = self.TAU + (1 - self.TAU) * math.exp(-1. * self.steps_done / self.TAU_DECAY)
+        assert self.TAU_DECAY == 0
+        tau = self.TAU  # + (1 - self.TAU) * math.exp(-1. * self.steps_done / self.TAU_DECAY)
 
         target_net_state_dict = self.target_net.state_dict()
         policy_net_state_dict = self.policy_net.state_dict()
