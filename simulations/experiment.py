@@ -93,11 +93,14 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
                                      replay_always_use_newest=simulation_args.args.replay_always_use_newest,
                                      offline_train_epoch_len=simulation_args.args.offline_train_epoch_len,
                                      gamma=simulation_args.args.gamma,
+                                     expert_replay_mem_size=simulation_args.args.expert_replay_mem_size,
                                      eps_decay=simulation_args.args.eps_decay,
                                      eps_start=simulation_args.args.eps_start,
                                      eps_end=simulation_args.args.eps_end,
+                                     target_update_frequency=simulation_args.args.target_update_frequency,
                                      use_sliding_retrain_memory=simulation_args.args.use_sliding_retrain_memory,
                                      sliding_window_mem_size=simulation_args.args.replay_memory_size,
+                                     reset_models_before_retrain=simulation_args.args.reset_models_before_retrain,
                                      tau=simulation_args.args.tau,
                                      add_retrain_to_expert_buffer=simulation_args.args.add_retrain_to_expert_buffer,
                                      replay_mem_retrain_expert_fraction=simulation_args.args.replay_mem_retrain_expert_fraction,
@@ -462,18 +465,31 @@ def main(input_args=None) -> None:
     config_folder = Path('./', 'configs')
     workload_builder = WorkloadBuilder(config_folder=config_folder)
 
-    EXPERIMENT_NAME = 'sliding_window_experiment'
+    EXPERIMENT_NAME = 'short_long_reward_norm_model_and_adapt'
 
     train_workloads = []
     # workload_builder.create_train_base_workloads(
-    # long_tasks_fractions=[0.3, 0.35, 0.4], utilizations=[0.7], num_requests=48000)
+    #    long_tasks_fractions=[0.0], utilizations=[0.7], num_requests=48000)
+
+    # lhs_workloads = workload_builder.create_test_base_workloads(
+    #     long_tasks_fractions=[0.3], utilizations=[0.7], num_requests=10000)
+    # rhs_workloads = workload_builder.create_test_base_workloads(
+    #     long_tasks_fractions=[0.0, 0.2, 0.5, 0.8], utilizations=[0.5, 0.7], num_requests=48000)  #
 
     lhs_workloads = workload_builder.create_test_base_workloads(
         long_tasks_fractions=[0.3], utilizations=[0.7], num_requests=10000)
     rhs_workloads = workload_builder.create_test_base_workloads(
-        long_tasks_fractions=[0.0, 0.2, 0.5, 0.8], utilizations=[0.5, 0.7], num_requests=64000)
-    test_workloads = workload_builder.create_chained_workloads(
-        first_workloads=lhs_workloads, second_workloads=rhs_workloads)
+        long_tasks_fractions=[0.0], utilizations=[0.5, 0.7], num_requests=48000)  #
+
+    test_workloads = workload_builder.create_test_base_workloads(
+        utilizations=[0.5, 0.7],
+        long_tasks_fractions=[0.0, 0.1, 0.3, 0.4, 0.6, 0.8],
+        num_requests=48000)
+    # + workload_builder.create_chained_workloads(
+    #    first_workloads=lhs_workloads, second_workloads=rhs_workloads)
+
+    # test_workloads = workload_builder.create_chained_workloads(
+    #     first_workloads=lhs_workloads, second_workloads=rhs_workloads)  # + workload_builder.create_test_var_long_tasks_workloads(num_requests=180000)
     # workload_builder.create_test_var_long_tasks_workloads(num_requests=350000)
     # workload_builder.create_test_base_workloads(
     #     utilizations=[0.45, 0.7],
@@ -488,7 +504,8 @@ def main(input_args=None) -> None:
         'OFFLINE_DQN_EXPLR_0_TRAIN',
         'OFFLINE_DQN_EXPLR_10_TRAIN', 'OFFLINE_DQN_EXPLR_15_TRAIN', 'OFFLINE_DQN_EXPLR_20_TRAIN',
         'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_15_TRAIN',
-        'OFFLINE_DQN_DUPL_20_TRAIN']
+        'OFFLINE_DQN_DUPL_20_TRAIN'
+    ]
     # 'ARS', 'OFFLINE_DQN',
     # 'OFFLINE_DQN_EXPLR_20_TRAIN', 'OFFLINE_DQN_EXPLR_30_TRAIN',
     # 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_DUPL_30_TRAIN'
@@ -505,10 +522,10 @@ def main(input_args=None) -> None:
     args.args.lr_scheduler_step_size = 30
     args.args.replay_always_use_newest = False
     args.args.collect_train_data = False
-    args.args.train_from_expert_data = False
+    # args.args.train_from_expert_data = False
     args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
     # args.args.offline_model = ''  # '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
-    args.args.lr = 1e-6
+    # args.args.lr = 1e-6
     # args.args.replay_memory_size = 5000
 
     # '/home/jonas/projects/absim/outputs/collect_offline_data/0/collected_training_data'

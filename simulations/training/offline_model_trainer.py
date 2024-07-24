@@ -27,7 +27,8 @@ MODEL_TRAINER_JSON = 'model_trainer.json'
 
 class OfflineTrainer:
     def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int, add_retrain_to_expert_buffer: bool,
-                 replay_always_use_newest: bool, offline_train_epoch_len: int, replay_mem_retrain_expert_fraction: float,
+                 replay_always_use_newest: bool, target_update_frequency: int, offline_train_epoch_len: int, replay_mem_retrain_expert_fraction: float,
+                 reset_models_before_retrain: bool, expert_replay_mem_size: int | None,
                  use_sliding_retrain_memory: bool, sliding_window_mem_size: int,
                  batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2, eps_decay=1000, tau=0.005, lr=1e-4,
                  tau_decay=10, clipping_value=1):
@@ -45,6 +46,9 @@ class OfflineTrainer:
         self.LR = lr
         self.CLIPPING_VALUE = clipping_value
         self.replay_mem_retrain_expert_fraction = replay_mem_retrain_expert_fraction
+        self.reset_models_before_retrain = reset_models_before_retrain
+        self.target_update_frequency = target_update_frequency
+        self.expert_replay_mem_size = expert_replay_mem_size
 
         # Make sure we dont add data to expert data if using sliding retrain memory
         assert not (add_retrain_to_expert_buffer and use_sliding_retrain_memory)
@@ -75,6 +79,11 @@ class OfflineTrainer:
 
         self.reward_mean = torch.zeros(1)
         self.reward_std = torch.ones(1)
+
+        self.short_reward_mean = torch.zeros(1)
+        self.short_reward_std = torch.ones(1)
+        self.long_reward_mean = torch.zeros(1)
+        self.long_reward_std = torch.ones(1)
 
         self.feature_mean = torch.zeros(self.n_observations)
         self.feature_std = torch.ones(self.n_observations)
@@ -152,7 +161,7 @@ class OfflineTrainer:
 
         if self.expert_memory_unmodified is not None and self.use_sliding_retrain_memory:
             # TODO: Change into using lastest element
-            for i in range(self.sliding_replay_mem_size):
+            for i in range(min(self.sliding_replay_mem_size, self.expert_memory_unmodified.size)):
                 self.retrain_memory.push_transition(self.expert_memory_unmodified.memory[i])
 
         policy_net = DQN(self.n_observations, self.n_actions,
@@ -164,6 +173,22 @@ class OfflineTrainer:
         target_net = DQN(self.n_observations, self.n_actions,
                          model_structure=self.model_structure).to(self.device)
         target_net.load_state_dict(torch.load(model_folder / 'target_model_weights.pth'))
+        self.target_net = target_net
+
+        # Set optimizer to new model
+        self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
+        # Note: Learning rate scheduler is currently not called in test epochs!
+        # self.scheduler = optim.lr_scheduler.StepLR(
+        #     self.optimizer, step_size=self.lr_scheduler_step_size, gamma=self.lr_scheduler_gamma)
+
+    def reset_models(self):
+        policy_net = DQN(self.n_observations, self.n_actions,
+                         model_structure=self.model_structure).to(self.device)
+        self.policy_net = policy_net
+
+        # Target net gets normalized values so should not normalize!
+        target_net = DQN(self.n_observations, self.n_actions,
+                         model_structure=self.model_structure).to(self.device)
         self.target_net = target_net
 
         # Set optimizer to new model
@@ -206,7 +231,6 @@ class OfflineTrainer:
             action_chosen = torch.tensor([[random_decision]], device=self.device,
                                          dtype=torch.long)
 
-        self.steps_done += 1
         self.actions_chosen[action_chosen.item()] += 1
         return action_chosen
 
@@ -225,6 +249,9 @@ class OfflineTrainer:
 
             # Store the normalized transition in memory
             self.retrain_memory.push_transition(transition=norm_transition)
+
+        if self.reset_models_before_retrain:
+            self.reset_models()
 
         print(f'Number of steps: {len(transitions)}')
         for _ in range(self.offline_train_epoch_len):
@@ -251,6 +278,15 @@ class OfflineTrainer:
         self.reward_std = torch.tensor([action_reward_policy_df['reward'].std()],
                                        dtype=torch.float32, device=self.device)
 
+        self.short_reward_mean = torch.tensor([action_reward_policy_df[state_df['5'] == 0]['reward'].mean()],
+                                              dtype=torch.float32, device=self.device)
+        self.short_reward_std = torch.tensor([action_reward_policy_df[state_df['5'] == 0]['reward'].std()],
+                                             dtype=torch.float32, device=self.device)
+        self.long_reward_mean = torch.tensor([action_reward_policy_df[state_df['5'] == 1]['reward'].mean()],
+                                             dtype=torch.float32, device=self.device)
+        self.long_reward_std = torch.tensor([action_reward_policy_df[state_df['5'] == 1]['reward'].std()],
+                                            dtype=torch.float32, device=self.device)
+
         self.feature_mean = torch.tensor(state_df.mean(), dtype=torch.float32, device=self.device)
         self.feature_std = torch.tensor(state_df.std(), dtype=torch.float32, device=self.device)
 
@@ -267,6 +303,11 @@ class OfflineTrainer:
 
             # Store the normalized transition in memory
             self.expert_memory_unmodified.push_transition(transition=norm_transition)
+
+        if self.expert_replay_mem_size is not None:
+            self.expert_memory_unmodified.downsize_to_random_samples(new_size=self.expert_replay_mem_size)
+            print(f'Downsizing to {self.expert_replay_mem_size}: {len(self.expert_memory_unmodified.memory)}')
+
         self.expert_memory = self.expert_memory_unmodified.copy()
 
     def train_model_from_expert_data_epoch(self, train_steps: int) -> None:
@@ -280,24 +321,37 @@ class OfflineTrainer:
         return norm_state
 
     def normalize_transition(self, transition: Transition) -> Transition:
+        # norm_reward = (transition.reward - self.reward_mean) / self.reward_std
+        if transition.state[0, 5] == 0:
+            print(f'Short: {self.short_reward_mean}, {self.short_reward_std}')
+            norm_reward = (transition.reward - self.short_reward_mean) / self.short_reward_std
+        else:
+            print(f'Long: {self.long_reward_mean}, {self.long_reward_std}')
+            norm_reward = (transition.reward - self.long_reward_mean) / self.long_reward_std
+
         norm_state = self.normalize_state(state=transition.state)
         norm_next_state = self.normalize_state(state=transition.next_state)
-        norm_reward = (transition.reward - self.reward_mean) / self.reward_std
+
         return Transition(state=norm_state, action=transition.action, next_state=norm_next_state, reward=norm_reward)
 
     def training_step(self):
         # Perform one step of the optimization (on the policy network)
         self.optimize_model()
 
+        self.steps_done += 1
+
         # Soft update of the target network's weights
         # θ′ ← τ θ + (1 −τ )θ′
-        tau = self.TAU + (1 - self.TAU) * math.exp(-1. * self.steps_done / self.TAU_DECAY)
+        # TODO: Disable Tau decay if not needed anymore
+        assert self.TAU_DECAY == 0
+        tau = self.TAU  # + (1 - self.TAU) * math.exp(-1. * self.steps_done / self.TAU_DECAY)
 
-        target_net_state_dict = self.target_net.state_dict()
-        policy_net_state_dict = self.policy_net.state_dict()
-        for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key] * tau + target_net_state_dict[key] * (1 - tau)
-        self.target_net.load_state_dict(target_net_state_dict)
+        if self.steps_done % self.target_update_frequency == 0:
+            target_net_state_dict = self.target_net.state_dict()
+            policy_net_state_dict = self.policy_net.state_dict()
+            for key in policy_net_state_dict:
+                target_net_state_dict[key] = policy_net_state_dict[key] * tau + target_net_state_dict[key] * (1 - tau)
+            self.target_net.load_state_dict(target_net_state_dict)
 
     def optimize_model(self):
         if self.do_active_retraining:
