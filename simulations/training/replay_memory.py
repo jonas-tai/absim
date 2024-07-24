@@ -54,6 +54,14 @@ class ReplayMemory(object):
         self.size += added_len
         self.memory += transitions[num_trans_fittig:]
 
+    def downsize_to_random_samples(self, new_size: int):
+        if new_size > self.size:
+            raise Exception('Can only downsize if new size is smaller than current size')
+        self.memory = self.sample(batch_size=new_size)
+        self.size = new_size
+        self.index = 0
+        self.max_size = new_size
+
     def sample(self, batch_size):
         if self.always_use_newest:
             indices = random.sample(range(self.size), int(batch_size) - 1)
