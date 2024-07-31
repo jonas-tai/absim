@@ -353,6 +353,8 @@ class OfflineTrainer:
 
     def normalize_batch(self, state_batch: torch.Tensor, reward_batch: torch.Tensor, next_state_batch: torch.Tensor) -> Transition:
         if self.norm_per_req_type:
+            # TODO: Change this after code is adapted to store the raw transitions instead of interaction features
+            assert len(state_batch[0]) == 666
             short_mask = state_batch[:, 5] == 0
             long_mask = state_batch[:, 5] != 0
 
