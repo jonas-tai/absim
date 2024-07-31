@@ -45,7 +45,7 @@ class SimulationArgs:
         parser.add_argument('--exp_name', nargs='?', type=str, default="Name of a set of experiments")
 
         parser.add_argument('--seed', nargs='?',
-                            type=int, default=25072014)
+                            type=int, default=55072014)
         parser.add_argument('--simulation_duration', nargs='?',
                             type=int, default=10000000, help='Time that experiment takes, '
                                                            'note that if this is too low and numRequests is too high, '
@@ -196,6 +196,10 @@ class SimulationArgs:
                             default=False, help='if true, use retrain memory of size replay_memory_size, phasing out data that does not fit')
         parser.add_argument('--reset_models_before_retrain', action='store_true',
                             help='if true, retrain the model from scratch at each retrain epoch')
+        parser.add_argument('--norm_per_req_type', action='store_true',
+                            default=False, help='if true, normalize reward for request types separately')
+        parser.add_argument('--recalculate_reward_stats', action='store_true',
+                            default=False, help='if true, recalculate the reward normalization at every retrain step with data in retrain memory')
 
         parser.add_argument('--expert_replay_mem_size', nargs='?',
                             type=int, default=None, help='If set to int, downsamples the replay memory to the specified size')

@@ -4,6 +4,8 @@ import math
 from collections import namedtuple
 from pathlib import Path
 from typing import List, Tuple
+
+import numpy as np
 import constants as const
 
 import pandas as pd
@@ -28,8 +30,8 @@ MODEL_TRAINER_JSON = 'model_trainer.json'
 class OfflineTrainer:
     def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int, add_retrain_to_expert_buffer: bool,
                  replay_always_use_newest: bool, target_update_frequency: int, offline_train_epoch_len: int, replay_mem_retrain_expert_fraction: float,
-                 reset_models_before_retrain: bool, expert_replay_mem_size: int | None,
-                 use_sliding_retrain_memory: bool, sliding_window_mem_size: int,
+                 reset_models_before_retrain: bool, expert_replay_mem_size: int | None, norm_per_req_type: bool,
+                 recalculate_reward_stats: bool, use_sliding_retrain_memory: bool, sliding_window_mem_size: int,
                  batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2, eps_decay=1000, tau=0.005, lr=1e-4,
                  tau_decay=10, clipping_value=1):
         self.device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
@@ -76,6 +78,9 @@ class OfflineTrainer:
         self.n_actions = n_actions
         self.n_observations = self.state_parser.get_state_size()
         self.model_structure = model_structure
+
+        self.norm_per_req_type = norm_per_req_type
+        self.recalculate_reward_stats = recalculate_reward_stats
 
         self.reward_mean = torch.zeros(1)
         self.reward_std = torch.ones(1)
@@ -245,13 +250,14 @@ class OfflineTrainer:
             self.retrain_memory = ReplayMemory(max_size=len(
                 transitions), always_use_newest=self.replay_always_use_newest)
         for transition in transitions:
-            norm_transition = self.normalize_transition(transition=transition)
-
             # Store the normalized transition in memory
-            self.retrain_memory.push_transition(transition=norm_transition)
+            self.retrain_memory.push_transition(transition=transition)
 
         if self.reset_models_before_retrain:
             self.reset_models()
+
+        if self.recalculate_reward_stats:
+            self.recalculate_reward_norm_from_retrain_memory()
 
         print(f'Number of steps: {len(transitions)}')
         for _ in range(self.offline_train_epoch_len):
@@ -261,6 +267,31 @@ class OfflineTrainer:
         if self.add_retrain_to_expert_buffer:
             # Add retrain data to expert buffer for next retraining
             self.expert_memory.extend_buffer(transitions=self.retrain_memory.get_stored_transitions())
+
+    def recalculate_reward_norm_from_retrain_memory(self):
+        # Recaluclate the reward normlization based on the data in the retrain memory
+        transitions = self.retrain_memory.get_stored_transitions()
+        all_rewards = np.array([transition.reward[0, 0] for transition in transitions])
+
+        short_req_rewards = np.array([transition.reward[0, 0]
+                                     for transition in transitions if transition.state[0, 5] == 0])
+        long_req_rewards = np.array([transition.reward[0, 0]
+                                    for transition in transitions if transition.state[0, 5] == 1])
+
+        print(f'Before: {self.reward_mean}, {self.reward_std}')
+        self.reward_mean = all_rewards.mean()
+        self.reward_std = all_rewards.std()
+        print(f'After: {self.reward_mean}, {self.reward_std}')
+
+        print(f'Before: {self.short_reward_mean}, {self.short_reward_std}')
+        self.short_reward_mean = short_req_rewards.mean()
+        self.short_reward_std = short_req_rewards.std()
+        print(f'After: {self.short_reward_mean}, {self.short_reward_std}')
+
+        print(f'Before: {self.long_reward_mean}, {self.long_reward_std}')
+        self.long_reward_mean = long_req_rewards.mean()
+        self.long_reward_std = long_req_rewards.std()
+        print(f'After: {self.long_reward_mean}, {self.long_reward_std}')
 
     def init_expert_data_from_csv(self, expert_data_folder: Path = None) -> None:
         if expert_data_folder is not None:
@@ -278,6 +309,7 @@ class OfflineTrainer:
         self.reward_std = torch.tensor([action_reward_policy_df['reward'].std()],
                                        dtype=torch.float32, device=self.device)
 
+        # TODO: Make this nicer! (Transition to repaly memory with nodestate)
         self.short_reward_mean = torch.tensor([action_reward_policy_df[state_df['5'] == 0]['reward'].mean()],
                                               dtype=torch.float32, device=self.device)
         self.short_reward_std = torch.tensor([action_reward_policy_df[state_df['5'] == 0]['reward'].std()],
@@ -299,10 +331,9 @@ class OfflineTrainer:
             state = torch.tensor([state_row], dtype=torch.float32, device=self.device)
             next_state = torch.tensor([next_state_row], dtype=torch.float32, device=self.device)
             transition = Transition(state=state, action=action, next_state=next_state, reward=reward)
-            norm_transition = self.normalize_transition(transition=transition)
 
             # Store the normalized transition in memory
-            self.expert_memory_unmodified.push_transition(transition=norm_transition)
+            self.expert_memory_unmodified.push_transition(transition=transition)
 
         if self.expert_replay_mem_size is not None:
             self.expert_memory_unmodified.downsize_to_random_samples(new_size=self.expert_replay_mem_size)
@@ -320,19 +351,24 @@ class OfflineTrainer:
         norm_state = (state - self.feature_mean) / (self.feature_std + epsilon)
         return norm_state
 
-    def normalize_transition(self, transition: Transition) -> Transition:
-        # norm_reward = (transition.reward - self.reward_mean) / self.reward_std
-        if transition.state[0, 5] == 0:
-            print(f'Short: {self.short_reward_mean}, {self.short_reward_std}')
-            norm_reward = (transition.reward - self.short_reward_mean) / self.short_reward_std
+    def normalize_batch(self, state_batch: torch.Tensor, reward_batch: torch.Tensor, next_state_batch: torch.Tensor) -> Transition:
+        if self.norm_per_req_type:
+            short_mask = state_batch[:, 5] == 0
+            long_mask = state_batch[:, 5] != 0
+
+            norm_reward_batch = torch.zeros_like(reward_batch)
+            norm_reward_batch[short_mask] = (reward_batch[short_mask] -
+                                             self.short_reward_mean) / self.short_reward_std
+            # print(norm_reward_batch[short_mask])
+            norm_reward_batch[long_mask] = (reward_batch[long_mask] - self.long_reward_mean) / self.long_reward_std
+            # print(norm_reward_batch[long_mask])
         else:
-            print(f'Long: {self.long_reward_mean}, {self.long_reward_std}')
-            norm_reward = (transition.reward - self.long_reward_mean) / self.long_reward_std
+            norm_reward_batch = (reward_batch - self.reward_mean) / self.reward_std
 
-        norm_state = self.normalize_state(state=transition.state)
-        norm_next_state = self.normalize_state(state=transition.next_state)
+        norm_state_batch = self.normalize_state(state=state_batch)
+        norm_next_state_batch = self.normalize_state(state=next_state_batch)
 
-        return Transition(state=norm_state, action=transition.action, next_state=norm_next_state, reward=norm_reward)
+        return norm_state_batch, norm_reward_batch, norm_next_state_batch
 
     def training_step(self):
         # Perform one step of the optimization (on the policy network)
@@ -378,7 +414,8 @@ class OfflineTrainer:
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
 
-        # reward_batch = (reward_batch - self.reward_mean) / self.reward_std
+        state_batch, reward_batch, non_final_next_states = self.normalize_batch(
+            state_batch=state_batch, reward_batch=reward_batch, next_state_batch=non_final_next_states)
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken

@@ -97,7 +97,9 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
                                      eps_decay=simulation_args.args.eps_decay,
                                      eps_start=simulation_args.args.eps_start,
                                      eps_end=simulation_args.args.eps_end,
+                                     norm_per_req_type=simulation_args.args.norm_per_req_type,
                                      target_update_frequency=simulation_args.args.target_update_frequency,
+                                     recalculate_reward_stats=simulation_args.args.recalculate_reward_stats,
                                      use_sliding_retrain_memory=simulation_args.args.use_sliding_retrain_memory,
                                      sliding_window_mem_size=simulation_args.args.replay_memory_size,
                                      reset_models_before_retrain=simulation_args.args.reset_models_before_retrain,
@@ -465,7 +467,7 @@ def main(input_args=None) -> None:
     config_folder = Path('./', 'configs')
     workload_builder = WorkloadBuilder(config_folder=config_folder)
 
-    EXPERIMENT_NAME = 'short_long_reward_norm_model_and_adapt'
+    EXPERIMENT_NAME = 'end_to_end_test_3'  # 'short_long_reward_norm_model_and_adapt'
 
     train_workloads = []
     # workload_builder.create_train_base_workloads(
@@ -481,16 +483,16 @@ def main(input_args=None) -> None:
     rhs_workloads = workload_builder.create_test_base_workloads(
         long_tasks_fractions=[0.0], utilizations=[0.5, 0.7], num_requests=48000)  #
 
-    test_workloads = workload_builder.create_test_base_workloads(
-        utilizations=[0.5, 0.7],
-        long_tasks_fractions=[0.0, 0.1, 0.3, 0.4, 0.6, 0.8],
-        num_requests=48000)
+    # test_workloads = workload_builder.create_test_base_workloads(
+    #     utilizations=[0.5, 0.7],
+    #     long_tasks_fractions=[0.0, 0.1, 0.3, 0.4, 0.6, 0.8],
+    #     num_requests=64000)
     # + workload_builder.create_chained_workloads(
     #    first_workloads=lhs_workloads, second_workloads=rhs_workloads)
 
     # test_workloads = workload_builder.create_chained_workloads(
     #     first_workloads=lhs_workloads, second_workloads=rhs_workloads)  # + workload_builder.create_test_var_long_tasks_workloads(num_requests=180000)
-    # workload_builder.create_test_var_long_tasks_workloads(num_requests=350000)
+    test_workloads = workload_builder.create_test_var_long_tasks_workloads(num_requests=350000)
     # workload_builder.create_test_base_workloads(
     #     utilizations=[0.45, 0.7],
     #     long_tasks_fractions=[0.0, 0.1, 0.3, 0.5, 0.7],
