@@ -4,7 +4,7 @@ workload:
   utilization: 0.45 # Arrival rate of requests
   arrival_model: "poisson" # Arrival model of requests from client (constant | poisson)
   workload_type: "base"
-  workload_seed: 532508
+  workload_seed: 732504
 
 variable_long_task_fraction_workload:
   trigger_threshold_mean: 8000
@@ -35,5 +35,4 @@ variable_long_task_fraction_workload:
     - 0.65
     - 0.7
     - 0.75
-    - 0.8
   workload_type: "variable_long_task_fraction"
