@@ -9,8 +9,8 @@ from simulations.plotting import ExperimentPlot
 from simulations.state import StateParser
 
 
-MODE = 'same_workload_seed'
-EXPERIMENT = 'retrain'
+MODE = 'recalculate_norm'
+EXPERIMENT = 'end_to_end_test_2'  # 'short_long_reward_norm_model_and_adapt'
 
 state_parser = StateParser(num_servers=5,
                            num_request_rates=3,
@@ -19,12 +19,13 @@ state_parser = StateParser(num_servers=5,
 
 def get_directory_paths(folder_path):
     directory_paths = [Path(os.path.join(folder_path, d)) for d in os.listdir(folder_path)
-                       if os.path.isdir(os.path.join(folder_path, d)) and (d.startswith('variable_long_task_fraction') or d.startswith('chained'))]
+                       if os.path.isdir(os.path.join(folder_path, d)) and (d.startswith('variable_long_task_fraction') or d.startswith('chained') or d.startswith('base'))]
     return directory_paths
+# /data1/outputs/short_long_reward_norm_model_and_adapt/1/base_50.00_util_0.00_long_tasks_532508
 
 
 def run_plots():
-    for i in range(41, 42):
+    for i in range(27, 36):
         directories = get_directory_paths(f'/data1/outputs/{EXPERIMENT}/{i}/')
 
         # base_path = Path(
@@ -33,13 +34,21 @@ def run_plots():
             data_folder = base_path / 'data'
             plot_folder = base_path / 'plots'
 
-            plotter = ExperimentPlot(plot_folder=plot_folder, data_folder=data_folder, state_parser=state_parser)
+            plotter = ExperimentPlot(plot_folder=plot_folder, data_folder=data_folder,
+                                     state_parser=state_parser, retrain_interval=None)
 
-            plotter.from_csv()
-            plotter.plot_latency_episode_average_short_long_request(
-                policies=['OFFLINE_DQN', 'ARS', 'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_EXPLR_0_TRAIN', 'OFFLINE_DQN_EXPLR_10_TRAIN', 'OFFLINE_DQN_EXPLR_20_TRAIN', ])
-            plotter.plot_latency_over_time_short_long_request(
-                policies=['OFFLINE_DQN', 'ARS', 'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_EXPLR_0_TRAIN', 'OFFLINE_DQN_EXPLR_10_TRAIN', 'OFFLINE_DQN_EXPLR_20_TRAIN', ])
+            try:
+                plotter.from_csv()
+
+                plotter.plot_latency_episode_average_short_long_request(
+                    policies=['OFFLINE_DQN', 'ARS', 'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_EXPLR_0_TRAIN', 'OFFLINE_DQN_EXPLR_10_TRAIN', 'OFFLINE_DQN_EXPLR_20_TRAIN', ])
+                plotter.plot_latency_over_time_short_long_request(
+                    policies=['OFFLINE_DQN', 'ARS', 'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_20_TRAIN', 'OFFLINE_DQN_EXPLR_0_TRAIN', 'OFFLINE_DQN_EXPLR_10_TRAIN', 'OFFLINE_DQN_EXPLR_20_TRAIN', ])
+                plotter.generate_plots()
+            except Exception as e:
+                print(e)
+                print(f'Warning, import failed for {base_path}, continuing')
+                continue
 
 
 run_plots()

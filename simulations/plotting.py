@@ -354,6 +354,10 @@ class ExperimentPlot:
                                     file_prefix=f'short_req_', order=policies)
 
     def plot_latency_over_time(self, df: pd.DataFrame, order: List[str], title_request_types: staticmethod = 'all requests', file_prefix='all_', quantile=0.99):
+        if len(df) == 0:
+            print('Empty df, not continuing')
+            return
+
         percentile = quantile * 100
         df = df[df['Is_faster_response']]
 
@@ -460,6 +464,9 @@ class ExperimentPlot:
                                                     file_prefix=f'short_req_')
 
     def plot_latency_over_time_episode_average(self, df: pd.DataFrame, title_request_types: staticmethod = 'all requests', file_prefix='all_', quantile=0.99):
+        if len(df) == 0:
+            print('Empty df, not continuing')
+            return
         percentile = quantile * 100
         df = df[df['Is_faster_response']]
 
@@ -562,7 +569,8 @@ class ExperimentPlot:
         # reduced_policies = ['ARS', 'DQN', 'DQN_DUPL'] + ['DQN_EXPLR_0',
         #                                                 'DQN_EXPLR_10', 'DQN_EXPLR_15', 'DQN_EXPLR_20', 'DQN_EXPLR_25']
         # reduced_policies = [policy for policy in self.policy_order if policy not in ['random', 'DQN_DUPL']]
-        reduced_policies = ['OFFLINE_DQN', 'ARS', ]
+        reduced_policies = ['OFFLINE_DQN', 'ARS', 'OFFLINE_DQN_DUPL_10_TRAIN', 'OFFLINE_DQN_DUPL_20_TRAIN',
+                            'OFFLINE_DQN_EXPLR_0_TRAIN', 'OFFLINE_DQN_EXPLR_10_TRAIN', 'OFFLINE_DQN_EXPLR_20_TRAIN', ]
         print(reduced_policies)
 
         print('Before')
