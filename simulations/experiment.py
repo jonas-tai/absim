@@ -100,6 +100,9 @@ def rl_experiment_wrapper(simulation_args: SimulationArgs, train_workloads: List
                                      norm_per_req_type=simulation_args.args.norm_per_req_type,
                                      target_update_frequency=simulation_args.args.target_update_frequency,
                                      recalculate_reward_stats=simulation_args.args.recalculate_reward_stats,
+                                     reward_function=simulation_args.args.reward_function,
+                                     exp_latency_reward_k=simulation_args.args.exp_latency_reward_k,
+                                     combined_reward_function_alpha=simulation_args.args.combined_reward_function_alpha,
                                      use_sliding_retrain_memory=simulation_args.args.use_sliding_retrain_memory,
                                      sliding_window_mem_size=simulation_args.args.replay_memory_size,
                                      reset_models_before_retrain=simulation_args.args.reset_models_before_retrain,
@@ -467,21 +470,21 @@ def main(input_args=None) -> None:
     config_folder = Path('./', 'configs')
     workload_builder = WorkloadBuilder(config_folder=config_folder)
 
-    EXPERIMENT_NAME = 'end_to_end_test_3'  # 'short_long_reward_norm_model_and_adapt'
+    EXPERIMENT_NAME = 'exp_reward_model'  # 'short_long_reward_norm_model_and_adapt'
 
     train_workloads = []
     # workload_builder.create_train_base_workloads(
     #    long_tasks_fractions=[0.0], utilizations=[0.7], num_requests=48000)
 
-    # lhs_workloads = workload_builder.create_test_base_workloads(
-    #     long_tasks_fractions=[0.3], utilizations=[0.7], num_requests=10000)
-    # rhs_workloads = workload_builder.create_test_base_workloads(
-    #     long_tasks_fractions=[0.0, 0.2, 0.5, 0.8], utilizations=[0.5, 0.7], num_requests=48000)  #
-
     lhs_workloads = workload_builder.create_test_base_workloads(
         long_tasks_fractions=[0.3], utilizations=[0.7], num_requests=10000)
     rhs_workloads = workload_builder.create_test_base_workloads(
-        long_tasks_fractions=[0.0], utilizations=[0.5, 0.7], num_requests=48000)  #
+        long_tasks_fractions=[0.0, 0.2, 0.5, 0.8], utilizations=[0.6], num_requests=48000)  #
+
+    # lhs_workloads = workload_builder.create_test_base_workloads(
+    #     long_tasks_fractions=[0.3], utilizations=[0.7], num_requests=100)
+    # rhs_workloads = workload_builder.create_test_base_workloads(
+    #     long_tasks_fractions=[0.0], utilizations=[0.5, 0.7], num_requests=480)  #
 
     # test_workloads = workload_builder.create_test_base_workloads(
     #     utilizations=[0.5, 0.7],
@@ -490,9 +493,9 @@ def main(input_args=None) -> None:
     # + workload_builder.create_chained_workloads(
     #    first_workloads=lhs_workloads, second_workloads=rhs_workloads)
 
-    # test_workloads = workload_builder.create_chained_workloads(
-    #     first_workloads=lhs_workloads, second_workloads=rhs_workloads)  # + workload_builder.create_test_var_long_tasks_workloads(num_requests=180000)
-    test_workloads = workload_builder.create_test_var_long_tasks_workloads(num_requests=350000)
+    test_workloads = workload_builder.create_chained_workloads(
+        first_workloads=lhs_workloads, second_workloads=rhs_workloads) + workload_builder.create_test_var_long_tasks_workloads(num_requests=180000)
+    # test_workloads = workload_builder.create_test_var_long_tasks_workloads(num_requests=350)
     # workload_builder.create_test_base_workloads(
     #     utilizations=[0.45, 0.7],
     #     long_tasks_fractions=[0.0, 0.1, 0.3, 0.5, 0.7],
@@ -524,7 +527,8 @@ def main(input_args=None) -> None:
     args.args.lr_scheduler_step_size = 30
     args.args.replay_always_use_newest = False
     args.args.collect_train_data = False
-    # args.args.train_from_expert_data = False
+    print('Training new model, setting train_from_expert_data to True!')
+    args.args.train_from_expert_data = True
     args.args.model_folder = '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
     # args.args.offline_model = ''  # '/home/jonas/projects/absim/outputs/fixed_memory_not_use_latest/0/train/data'
     # args.args.lr = 1e-6

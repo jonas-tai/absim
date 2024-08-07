@@ -27,9 +27,19 @@ from simulations.training.norm_stats import NormStats
 MODEL_TRAINER_JSON = 'model_trainer.json'
 
 
+RewardNormStats = namedtuple('RewardNormStats', ('reward_mean', 'reward_std', 'short_reward_mean', 'short_reward_std',
+                                                 'long_reward_mean', 'long_reward_std'))
+
+
+def get_empty_reward_norm_stats() -> RewardNormStats:
+    return RewardNormStats(reward_mean=torch.zeros(1), reward_std=torch.ones(1), short_reward_mean=torch.zeros(1),
+                           short_reward_std=torch.ones(1), long_reward_mean=torch.zeros(1), long_reward_std=torch.ones(1))
+
+
 class OfflineTrainer:
     def __init__(self, state_parser: StateParser, model_structure: str, n_actions: int, add_retrain_to_expert_buffer: bool,
                  replay_always_use_newest: bool, target_update_frequency: int, offline_train_epoch_len: int, replay_mem_retrain_expert_fraction: float,
+                 reward_function: str, exp_latency_reward_k: float, combined_reward_function_alpha: float,
                  reset_models_before_retrain: bool, expert_replay_mem_size: int | None, norm_per_req_type: bool,
                  recalculate_reward_stats: bool, use_sliding_retrain_memory: bool, sliding_window_mem_size: int,
                  batch_size=128, gamma=0.8, eps_start=0.2, eps_end=0.2, eps_decay=1000, tau=0.005, lr=1e-4,
@@ -79,16 +89,44 @@ class OfflineTrainer:
         self.n_observations = self.state_parser.get_state_size()
         self.model_structure = model_structure
 
+        # Reward
+        self.reward_function = reward_function
+        self.exp_latency_reward_k = exp_latency_reward_k
+        self.combined_reward_function_alpha = combined_reward_function_alpha
+
         self.norm_per_req_type = norm_per_req_type
         self.recalculate_reward_stats = recalculate_reward_stats
 
-        self.reward_mean = torch.zeros(1)
-        self.reward_std = torch.ones(1)
+        self.latency_reward_stats = get_empty_reward_norm_stats()
+        self.exp_latency_reward_stats = get_empty_reward_norm_stats()
 
-        self.short_reward_mean = torch.zeros(1)
-        self.short_reward_std = torch.ones(1)
-        self.long_reward_mean = torch.zeros(1)
-        self.long_reward_std = torch.ones(1)
+        # TODO: Move code to separate rewardNormalizer class
+        self.convert_latency_tensor_to_exp_latency = lambda x: - ((- x * self.exp_latency_reward_k / 50.0).exp())
+
+        if self.reward_function == 'latency':
+            self.reward_norm = lambda x: (
+                x - self.latency_reward_stats.reward_mean) / self.latency_reward_stats.reward_std
+            self.short_req_reward_norm = lambda x: (
+                x - self.latency_reward_stats.short_reward_mean) / self.latency_reward_stats.short_reward_std
+            self.long_req_reward_norm = lambda x: (
+                x - self.latency_reward_stats.long_reward_mean) / self.latency_reward_stats.long_reward_std
+        elif self.reward_function == 'exponential_latency':
+            self.reward_norm = lambda x: (
+                self.convert_latency_tensor_to_exp_latency(x) - self.exp_latency_reward_stats.reward_mean) / self.exp_latency_reward_stats.reward_std
+            self.short_req_reward_norm = lambda x: (
+                self.convert_latency_tensor_to_exp_latency(x) - self.exp_latency_reward_stats.short_reward_mean) / self.exp_latency_reward_stats.short_reward_std
+            self.long_req_reward_norm = lambda x: (
+                self.convert_latency_tensor_to_exp_latency(x) - self.exp_latency_reward_stats.long_reward_mean) / self.exp_latency_reward_stats.long_reward_std
+        elif self.reward_function == 'combined':
+            self.reward_norm = lambda x: self.combined_reward_function_alpha * ((
+                self.convert_latency_tensor_to_exp_latency(x) - self.exp_latency_reward_stats.reward_mean) / self.exp_latency_reward_stats.reward_std) + (1 - self.combined_reward_function_alpha) * ((
+                    x - self.latency_reward_stats.reward_mean) / self.latency_reward_stats.reward_std)
+            self.short_req_reward_norm = lambda x: self.combined_reward_function_alpha * ((
+                self.convert_latency_tensor_to_exp_latency(x) - self.exp_latency_reward_stats.short_reward_mean) / self.exp_latency_reward_stats.short_reward_std) + (1 - self.combined_reward_function_alpha) * ((
+                    x - self.latency_reward_stats.short_reward_mean) / self.latency_reward_stats.short_reward_std)
+            self.long_req_reward_norm = lambda x: self.combined_reward_function_alpha * ((
+                self.convert_latency_tensor_to_exp_latency(x) - self.exp_latency_reward_stats.long_reward_mean) / self.exp_latency_reward_stats.long_reward_std) + (1 - self.combined_reward_function_alpha) * ((
+                    x - self.latency_reward_stats.long_reward_mean) / self.latency_reward_stats.long_reward_std)
 
         self.feature_mean = torch.zeros(self.n_observations)
         self.feature_std = torch.ones(self.n_observations)
@@ -117,6 +155,30 @@ class OfflineTrainer:
         self.steps_done = 0
         self.actions_chosen = defaultdict(int)
 
+    def get_exp_latency_df(self, reward_df: pd.DataFrame) -> pd.DataFrame:
+        df = pd.DataFrame()
+        df['reward'] = - np.exp(- reward_df['reward'] / 50.0 * self.exp_latency_reward_k)
+        return df
+
+    def calculate_reward_stats_from_df(self, reward_df: pd.DataFrame) -> Tuple[torch.Tensor, torch.Tensor]:
+        reward_mean = torch.tensor([reward_df['reward'].mean()],
+                                   dtype=torch.float32, device=self.device)
+        reward_std = torch.tensor([reward_df['reward'].std()],
+                                  dtype=torch.float32, device=self.device)
+        return reward_mean, reward_std
+
+    def calculate_reward_norm_stats(self, all_reward_df: pd.DataFrame, short_req_reward_df: pd.DataFrame,
+                                    long_req_reward_df: pd.DataFrame) -> RewardNormStats:
+        reward_mean, reward_std = self.calculate_reward_stats_from_df(all_reward_df)
+        short_reward_mean, short_reward_std = self.calculate_reward_stats_from_df(reward_df=short_req_reward_df)
+        long_reward_mean, long_reward_std = self.calculate_reward_stats_from_df(reward_df=long_req_reward_df)
+
+        return RewardNormStats(reward_mean=reward_mean, reward_std=reward_std,
+                               short_reward_mean=short_reward_mean,
+                               short_reward_std=short_reward_std,
+                               long_reward_mean=long_reward_mean,
+                               long_reward_std=long_reward_std)
+
     def save_models_and_stats(self, model_folder: Path):
         torch.save(self.policy_net.state_dict(), model_folder / 'policy_model_weights.pth')
         torch.save(self.policy_net.state_dict(), model_folder / 'target_model_weights.pth')
@@ -125,12 +187,13 @@ class OfflineTrainer:
         # self.retrain_memory.save_to_file(model_folder=model_folder)
 
     def save_model_trainer_stats(self, data_folder: Path):
+        # TODO: Add reward stats to export after refactoring
         model_trainer_json = {
             "steps_done": self.steps_done,
             "feature_mean": self.feature_mean.tolist(),
             "feature_std": self.feature_std.tolist(),
-            "reward_mean": self.reward_mean.tolist(),
-            "reward_std": self.reward_std.tolist(),
+            # "latency_reward_stats": self.latency_reward_stats._asdict(),
+            # "exp_latency_reward_stats": self.exp_latency_reward_stats._asdict(),
             "expert_data_folder": str(self.expert_data_folder)
         }
 
@@ -210,8 +273,6 @@ class OfflineTrainer:
         self.expert_data_folder = Path(data['expert_data_folder'])
         self.feature_mean = torch.tensor(data['feature_mean'], dtype=torch.float32, device=self.device)
         self.feature_std = torch.tensor(data['feature_std'], dtype=torch.float32, device=self.device)
-        self.reward_mean = torch.tensor(data['reward_mean'], dtype=torch.float32, device=self.device)
-        self.reward_std = torch.tensor(data['reward_std'], dtype=torch.float32, device=self.device)
 
     def select_action(self, state: State, simulation, random_decision: int, task: Task) -> torch.Tensor:
         # random_decision int handed in from outside to ensure its the same decision that random strategy would take
@@ -241,9 +302,7 @@ class OfflineTrainer:
 
     def run_offline_retraining_epoch(self, transitions: List[Transition], norm_stats: NormStats = None) -> None:
         if norm_stats is not None:
-            self.reward_mean = norm_stats.reward_mean
             self.feature_mean = norm_stats.feature_mean
-            self.reward_std = norm_stats.reward_std
             self.feature_std = norm_stats.feature_std
 
         if not self.use_sliding_retrain_memory:
@@ -268,30 +327,28 @@ class OfflineTrainer:
             # Add retrain data to expert buffer for next retraining
             self.expert_memory.extend_buffer(transitions=self.retrain_memory.get_stored_transitions())
 
-    def recalculate_reward_norm_from_retrain_memory(self):
+    def recalculate_reward_norm_from_retrain_memory(self) -> None:
         # Recaluclate the reward normlization based on the data in the retrain memory
         transitions = self.retrain_memory.get_stored_transitions()
-        all_rewards = np.array([transition.reward[0, 0] for transition in transitions])
+        all_rewards = pd.DataFrame(data={'reward': [transition.reward[0, 0].item() for transition in transitions]})
 
-        short_req_rewards = np.array([transition.reward[0, 0]
-                                     for transition in transitions if transition.state[0, 5] == 0])
-        long_req_rewards = np.array([transition.reward[0, 0]
-                                    for transition in transitions if transition.state[0, 5] == 1])
+        short_req_rewards = pd.DataFrame(data={'reward': [transition.reward[0, 0].item()
+                                                          for transition in transitions if transition.state[0, 5] == 0]})
+        long_req_rewards = pd.DataFrame(data={'reward': [transition.reward[0, 0].item()
+                                                         for transition in transitions if transition.state[0, 5] == 1]})
 
-        print(f'Before: {self.reward_mean}, {self.reward_std}')
-        self.reward_mean = all_rewards.mean()
-        self.reward_std = all_rewards.std()
-        print(f'After: {self.reward_mean}, {self.reward_std}')
+        print(f'Before: {self.latency_reward_stats}')
+        self.latency_reward_stats = self.calculate_reward_norm_stats(
+            all_reward_df=all_rewards, short_req_reward_df=short_req_rewards, long_req_reward_df=long_req_rewards)
 
-        print(f'Before: {self.short_reward_mean}, {self.short_reward_std}')
-        self.short_reward_mean = short_req_rewards.mean()
-        self.short_reward_std = short_req_rewards.std()
-        print(f'After: {self.short_reward_mean}, {self.short_reward_std}')
+        print(f'After: {self.latency_reward_stats}')
 
-        print(f'Before: {self.long_reward_mean}, {self.long_reward_std}')
-        self.long_reward_mean = long_req_rewards.mean()
-        self.long_reward_std = long_req_rewards.std()
-        print(f'After: {self.long_reward_mean}, {self.long_reward_std}')
+        all_rewards = self.get_exp_latency_df(reward_df=all_rewards)
+        short_req_rewards = self.get_exp_latency_df(reward_df=short_req_rewards)
+        long_req_rewards = self.get_exp_latency_df(reward_df=long_req_rewards)
+
+        self.exp_latency_reward_stats = self.calculate_reward_norm_stats(
+            all_reward_df=all_rewards, short_req_reward_df=short_req_rewards, long_req_reward_df=long_req_rewards)
 
     def init_expert_data_from_csv(self, expert_data_folder: Path = None) -> None:
         if expert_data_folder is not None:
@@ -304,20 +361,19 @@ class OfflineTrainer:
         # Make sure that data is aligned properly
         assert len(action_reward_policy_df) == len(state_df) and len(state_df) == len(next_state_df)
 
-        self.reward_mean = torch.tensor([action_reward_policy_df['reward'].mean()],
-                                        dtype=torch.float32, device=self.device)
-        self.reward_std = torch.tensor([action_reward_policy_df['reward'].std()],
-                                       dtype=torch.float32, device=self.device)
-
         # TODO: Make this nicer! (Transition to repaly memory with nodestate)
-        self.short_reward_mean = torch.tensor([action_reward_policy_df[state_df['5'] == 0]['reward'].mean()],
-                                              dtype=torch.float32, device=self.device)
-        self.short_reward_std = torch.tensor([action_reward_policy_df[state_df['5'] == 0]['reward'].std()],
-                                             dtype=torch.float32, device=self.device)
-        self.long_reward_mean = torch.tensor([action_reward_policy_df[state_df['5'] == 1]['reward'].mean()],
-                                             dtype=torch.float32, device=self.device)
-        self.long_reward_std = torch.tensor([action_reward_policy_df[state_df['5'] == 1]['reward'].std()],
-                                            dtype=torch.float32, device=self.device)
+        short_req_reward_df = action_reward_policy_df[state_df['5'] == 0]
+        long_req_reward_df = action_reward_policy_df[state_df['5'] == 1]
+        self.latency_reward_stats = self.calculate_reward_norm_stats(
+            all_reward_df=action_reward_policy_df, short_req_reward_df=short_req_reward_df, long_req_reward_df=long_req_reward_df)
+
+        # Calcualate exponential reward stats
+        reward_df = self.get_exp_latency_df(reward_df=action_reward_policy_df)
+        short_req_reward_df = self.get_exp_latency_df(reward_df=short_req_reward_df)
+        long_req_reward_df = self.get_exp_latency_df(reward_df=long_req_reward_df)
+
+        self.exp_latency_reward_stats = self.calculate_reward_norm_stats(
+            all_reward_df=reward_df, short_req_reward_df=short_req_reward_df, long_req_reward_df=long_req_reward_df)
 
         self.feature_mean = torch.tensor(state_df.mean(), dtype=torch.float32, device=self.device)
         self.feature_std = torch.tensor(state_df.std(), dtype=torch.float32, device=self.device)
@@ -359,13 +415,12 @@ class OfflineTrainer:
             long_mask = state_batch[:, 5] != 0
 
             norm_reward_batch = torch.zeros_like(reward_batch)
-            norm_reward_batch[short_mask] = (reward_batch[short_mask] -
-                                             self.short_reward_mean) / self.short_reward_std
+            norm_reward_batch[short_mask] = self.short_req_reward_norm(reward_batch[short_mask])
             # print(norm_reward_batch[short_mask])
-            norm_reward_batch[long_mask] = (reward_batch[long_mask] - self.long_reward_mean) / self.long_reward_std
+            norm_reward_batch[long_mask] = self.long_req_reward_norm(reward_batch[long_mask])
             # print(norm_reward_batch[long_mask])
         else:
-            norm_reward_batch = (reward_batch - self.reward_mean) / self.reward_std
+            norm_reward_batch = self.reward_norm(reward_batch)
 
         norm_state_batch = self.normalize_state(state=state_batch)
         norm_next_state_batch = self.normalize_state(state=next_state_batch)

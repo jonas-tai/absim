@@ -200,6 +200,16 @@ class SimulationArgs:
                             default=False, help='if true, normalize reward for request types separately')
         parser.add_argument('--recalculate_reward_stats', action='store_true',
                             default=False, help='if true, recalculate the reward normalization at every retrain step with data in retrain memory')
+        parser.add_argument('--reward_function', nargs='?',
+                            type=str, default='latency', help='''(latency | exponential_latency | combined)
+                            latency: - latency
+                            exponential_latency: -e^(k * latency)
+                            combined: alpha * exponential_latency + (1 - alpha) * latency
+                            ''')
+        parser.add_argument('--combined_reward_function_alpha', nargs='?',
+                            type=float, default=0.5, help='Alpha balancing the weight of the reward function in combined reward')
+        parser.add_argument('--exp_latency_reward_k', nargs='?',
+                            type=float, default=1.0, help='k in -e^(k * latency) for exponential_latency reward function')
 
         parser.add_argument('--expert_replay_mem_size', nargs='?',
                             type=int, default=None, help='If set to int, downsamples the replay memory to the specified size')

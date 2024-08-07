@@ -10,7 +10,7 @@ from simulations.state import StateParser
 
 
 MODE = 'recalculate_norm'
-EXPERIMENT = 'end_to_end_test_2'  # 'short_long_reward_norm_model_and_adapt'
+EXPERIMENT = 'end_to_end_test_3'  # 'short_long_reward_norm_model_and_adapt'
 
 state_parser = StateParser(num_servers=5,
                            num_request_rates=3,
@@ -25,7 +25,7 @@ def get_directory_paths(folder_path):
 
 
 def run_plots():
-    for i in range(27, 36):
+    for i in range(50, 60):
         directories = get_directory_paths(f'/data1/outputs/{EXPERIMENT}/{i}/')
 
         # base_path = Path(
